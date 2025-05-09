@@ -39,7 +39,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
       </div>
       {douyinData.url && (
         <video
-          src={douyinData.url}
+          src={`/api/proxy?url=${encodeURIComponent(douyinData.url)}`}
           controls
           className="w-full rounded-lg mb-4"
           poster={douyinData.cover}
