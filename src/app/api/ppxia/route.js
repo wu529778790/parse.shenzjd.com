@@ -1,6 +1,5 @@
 export const runtime = "edge";
 
-const MAX_REDIRECTS = 10;
 const TIMEOUT = 5000;
 
 async function getRedirectUrl(url) {
