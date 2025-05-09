@@ -16,7 +16,10 @@ async function douyin(url) {
       }
     }
     if (!id) {
-      return { code: 400, msg: "无法解析视频 ID" };
+      return {
+        code: 400,
+        msg: "无法解析视频 ID：请确保链接格式正确且视频可访问",
+      };
     }
     const response = await fetch(
       `https://www.iesdouyin.com/share/video/${id}`,
@@ -26,11 +29,17 @@ async function douyin(url) {
     const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
     const matches = html.match(pattern);
     if (!matches || !matches[1]) {
-      return { code: 201, msg: "解析失败" };
+      return {
+        code: 201,
+        msg: "解析失败：无法获取视频数据，可能是视频不存在或已被删除",
+      };
     }
     const videoInfo = JSON.parse(matches[1].trim());
     if (!videoInfo.loaderData) {
-      return { code: 201, msg: "解析失败" };
+      return {
+        code: 201,
+        msg: "解析失败：视频数据结构异常，可能是抖音接口发生变化",
+      };
     }
     const videoResUrl = videoInfo.loaderData[
       "video_(id)/page"
@@ -71,8 +80,8 @@ async function douyin(url) {
         },
       },
     };
-  } catch {
-    return { code: 500, msg: "服务器错误" };
+  } catch (error) {
+    return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
   }
 }
 
