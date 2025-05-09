@@ -50,8 +50,8 @@ async function xhs(url) {
     } else {
       return output(400, "未找到 JSON 数据");
     }
-  } catch {
-    return output(500, "服务器错误");
+  } catch (error) {
+    return output(500, "服务器错误", error);
   }
 }
 
@@ -69,8 +69,8 @@ export async function GET(request) {
     return Response.json(result, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
-  } catch {
-    return Response.json(output(500, "服务器错误"), {
+  } catch (error) {
+    return Response.json(output(500, "服务器错误", error), {
       status: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
     });

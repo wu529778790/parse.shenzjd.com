@@ -68,8 +68,8 @@ async function getMusicInfo(url = "") {
     } else {
       return { msg: "没有找到相关音乐" };
     }
-  } catch {
-    return { msg: "解析失败" };
+  } catch (error) {
+    return { msg: "解析失败", error: error };
   }
 }
 
@@ -87,7 +87,10 @@ export async function GET(request) {
     return Response.json(result, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
-  } catch {
-    return output(500, "服务器错误");
+  } catch (error) {
+    return Response.json(
+      { code: 500, msg: "服务器错误", error: error },
+      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
   }
 }

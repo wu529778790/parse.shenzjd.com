@@ -103,8 +103,8 @@ export async function GET(request) {
         headers: { "Access-Control-Allow-Origin": "*" },
       });
     }
-  } catch {
-    return Response.json(formatResponse(500, "服务器错误"), {
+  } catch (error) {
+    return Response.json(formatResponse(500, "服务器错误", error), {
       status: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
     });

@@ -1,7 +1,6 @@
 export const runtime = "edge";
 
 async function douyin(url) {
-  // ... 保留原有 douyin 解析逻辑 ...
   try {
     const headers = {
       "User-Agent":
