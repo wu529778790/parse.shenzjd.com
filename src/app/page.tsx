@@ -38,7 +38,7 @@ export default function Home() {
             </div>
           )}
 
-          {result && result.code === 1 && (
+          {result && (result.code === 1 || result.code === 200) && (
             <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
               <div className="p-6">
                 {result.platform === "bilibili" && (

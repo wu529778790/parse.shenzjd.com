@@ -76,7 +76,7 @@ export default function VideoParserForm({
         `/api/${platform}?url=${encodeURIComponent(url)}`
       );
       const data: ApiResponse = await response.json();
-      if (data.code === 1) {
+      if (data.code === 1 || data.code === 200) {
         data.platform = platform;
         onResult(data, "");
       } else {

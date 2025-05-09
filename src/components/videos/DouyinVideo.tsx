@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import { ApiResponse, DouyinData } from "@/types/api";
 
 interface DouyinVideoProps {
@@ -16,15 +15,6 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
   return (
     <>
       <div className="flex items-center gap-4 mb-6">
-        {douyinData.avatar && (
-          <Image
-            src={douyinData.avatar}
-            alt={douyinData.author}
-            width={48}
-            height={48}
-            className="rounded-full"
-          />
-        )}
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             {douyinData.title}
@@ -36,15 +26,6 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
           )}
         </div>
       </div>
-      {douyinData.cover && (
-        <Image
-          src={douyinData.cover}
-          alt={douyinData.title || ""}
-          width={640}
-          height={360}
-          className="rounded-lg mb-6"
-        />
-      )}
       {douyinData.music && (
         <p className="text-gray-600 dark:text-gray-300 mb-2">
           配乐：
