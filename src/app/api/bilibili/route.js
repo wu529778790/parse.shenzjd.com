@@ -1,16 +1,11 @@
-const express = require("express");
-const axios = require("axios");
-const router = express.Router();
+import axios from "axios";
 
 function cleanUrlParameters(url) {
   try {
     const parsed = new URL(url);
-    // 移除认证信息
     parsed.username = "";
     parsed.password = "";
-    // 移除查询参数
     parsed.search = "";
-    // 移除末尾斜杠
     parsed.pathname = parsed.pathname.replace(/\/$/, "");
     return parsed.toString();
   } catch (error) {
@@ -39,7 +34,6 @@ async function getBilibiliVideoInfo(url) {
   try {
     const cleanUrl = cleanUrlParameters(url);
     const parsedUrl = new URL(cleanUrl);
-
     let bvid;
     if (parsedUrl.hostname === "b23.tv") {
       const response = await axios.get(url, { maxRedirects: 5 });
@@ -53,29 +47,23 @@ async function getBilibiliVideoInfo(url) {
     } else {
       return { code: -1, msg: "视频链接好像不太对！" };
     }
-
     if (!bvid.includes("/video/")) {
       return { code: -1, msg: "好像不是视频链接" };
     }
-
     bvid = bvid.replace("/video/", "");
-    const cookie = process.env.BILIBILI_COOKIE || ""; // 从环境变量获取cookie
+    const cookie = process.env.BILIBILI_COOKIE || "";
     const headers = { "Content-Type": "application/json;charset=UTF-8" };
     const userAgent =
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36";
-
-    // 获取视频信息
     const videoInfo = await bilibili(
       `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
       headers,
       userAgent,
       cookie
     );
-
     if (!videoInfo || videoInfo.code !== 0) {
       return { code: 0, msg: "解析失败！" };
     }
-
     const bilijson = [];
     for (const page of videoInfo.data.pages) {
       const playUrl = await bilibili(
@@ -84,7 +72,6 @@ async function getBilibiliVideoInfo(url) {
         userAgent,
         cookie
       );
-
       if (playUrl && playUrl.data) {
         bilijson.push({
           title: page.part,
@@ -99,7 +86,6 @@ async function getBilibiliVideoInfo(url) {
         });
       }
     }
-
     return {
       code: 1,
       msg: "解析成功！",
@@ -118,20 +104,24 @@ async function getBilibiliVideoInfo(url) {
   }
 }
 
-// API 路由
-router.get("/", async (req, res) => {
-  const url = req.query.url;
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const url = searchParams.get("url");
   if (!url) {
-    return res.status(400).json({ code: 201, msg: "链接不能为空！" });
+    return Response.json(
+      { code: 201, msg: "链接不能为空！" },
+      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
   }
-
   try {
     const result = await getBilibiliVideoInfo(url);
-    res.json(result);
+    return Response.json(result, {
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ code: 500, msg: "服务器错误" });
+    return Response.json(
+      { code: 500, msg: "服务器错误" },
+      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
   }
-});
-
-module.exports = router;
+}

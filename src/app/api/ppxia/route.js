@@ -1,12 +1,8 @@
-const express = require("express");
-const axios = require("axios");
-const router = express.Router();
+import axios from "axios";
 
-// 定义常量
 const MAX_REDIRECTS = 10;
 const TIMEOUT = 5000;
 
-// 获取重定向后的 URL
 async function getRedirectUrl(url) {
   try {
     const response = await axios.get(url, {
@@ -18,7 +14,6 @@ async function getRedirectUrl(url) {
     });
     return response.request.res.responseUrl;
   } catch (error) {
-    console.error("Error getting redirect URL:", error);
     throw new Error(`Error getting redirect URL: ${error.message}`);
   }
 }
@@ -27,24 +22,19 @@ async function pipixia(url) {
   try {
     const redirectUrl = await getRedirectUrl(url);
     const idMatch = redirectUrl.match(/item\/(.*)\?/);
-
     if (!idMatch || !idMatch[1]) {
       return { code: 404, msg: "无法从 URL 中提取视频 ID" };
     }
-
     const apiUrl = `https://h5.pipix.com/bds/cell/cell_h5_comment/?count=5&aid=1319&app_name=super&cell_id=${idMatch[1]}`;
     const response = await axios.get(apiUrl, {
       timeout: TIMEOUT,
     });
-
     const data = response.data;
     if (!data || !data.data?.cell_comments?.[1]?.comment_info?.item) {
       return { code: 404, msg: "解析失败，未找到所需数据" };
     }
-
     const item = data.data.cell_comments[1].comment_info.item;
     const videoUrl = item.video.video_high.url_list[0].url;
-
     return {
       code: 200,
       msg: "解析成功",
@@ -56,32 +46,29 @@ async function pipixia(url) {
         url: videoUrl,
       },
     };
-  } catch (error) {
-    console.error("Error:", error);
-    return { code: 404, msg: `解析过程中出现错误: ${error.message}` };
+  } catch {
+    return { code: 404, msg: `解析过程中出现错误` };
   }
 }
 
-// API 路由
-router.get("/", async (req, res) => {
-  const url = req.query.url;
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const url = searchParams.get("url");
   if (!url) {
-    return res.status(400).json({
-      code: 201,
-      msg: "链接不能为空！",
-    });
+    return Response.json(
+      { code: 201, msg: "链接不能为空！" },
+      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
   }
-
   try {
     const result = await pipixia(url);
-    res.json(result);
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({
-      code: 500,
-      msg: "服务器错误",
+    return Response.json(result, {
+      headers: { "Access-Control-Allow-Origin": "*" },
     });
+  } catch {
+    return Response.json(
+      { code: 500, msg: "服务器错误" },
+      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
   }
-});
-
-module.exports = router;
+}

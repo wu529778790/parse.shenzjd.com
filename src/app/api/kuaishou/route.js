@@ -1,8 +1,5 @@
-const express = require("express");
-const axios = require("axios");
-const router = express.Router();
+import axios from "axios";
 
-// 格式化响应数据的函数
 function formatResponse(code = 200, msg = "解析成功", data = []) {
   return {
     code,
@@ -13,17 +10,14 @@ function formatResponse(code = 200, msg = "解析成功", data = []) {
 
 async function kuaishou(url) {
   try {
-    // 定义请求头
     const headers = {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0",
     };
-
     const newurl = await getRedirectedUrl(url);
     let response = "";
     const shortVideoPattern = /short-video\/([^?]+)/;
     const photoPattern = /photo\/([^?]+)/;
-
     let id;
     if (shortVideoPattern.test(newurl)) {
       id = newurl.match(shortVideoPattern)[1];
@@ -35,18 +29,15 @@ async function kuaishou(url) {
         headers
       );
     }
-
     if (response) {
       const apolloStatePattern =
-        /window\.__APOLLO_STATE__\s*=\s*(.*?)\<\/script>/s;
+        /window\.__APOLLO_STATE__\s*=\s*(.*?)<\/script>/s;
       const matches = response.match(apolloStatePattern);
-
       if (matches) {
         let cleanedApolloState = matches[1]
           .replace(/function\s*\([^)]*\)\s*{[^}]*}/g, ":")
           .replace(/,\s*(?=}|])/g, "")
           .replace(/;(:());/g, "");
-
         const videoInfo = JSON.parse(cleanedApolloState)["defaultClient"];
         if (videoInfo) {
           const key = `VisionVideoDetailPhoto:${id}`;
@@ -62,8 +53,7 @@ async function kuaishou(url) {
       }
     }
     return null;
-  } catch (error) {
-    console.error("Error:", error);
+  } catch {
     return null;
   }
 }
@@ -77,8 +67,7 @@ async function getRedirectedUrl(url) {
       },
     });
     return response.request.res.responseUrl || url;
-  } catch (error) {
-    console.error("Error getting redirected URL:", error);
+  } catch {
     return url;
   }
 }
@@ -87,30 +76,36 @@ async function makeRequest(url, headers) {
   try {
     const response = await axios.get(url, { headers });
     return response.data;
-  } catch (error) {
-    console.error("Error making request:", error);
+  } catch {
     return null;
   }
 }
 
-// API 路由
-router.get("/", async (req, res) => {
-  const url = req.query.url;
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const url = searchParams.get("url");
   if (!url) {
-    return res.status(400).json(formatResponse(201, "链接不能为空！"));
+    return Response.json(formatResponse(201, "链接不能为空！"), {
+      status: 400,
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
   }
-
   try {
     const jsonData = await kuaishou(url);
     if (jsonData) {
-      res.json(jsonData);
+      return Response.json(jsonData, {
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
     } else {
-      res.status(404).json(formatResponse(404, "链接错误"));
+      return Response.json(formatResponse(404, "链接错误"), {
+        status: 404,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
     }
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json(formatResponse(500, "服务器错误"));
+  } catch {
+    return Response.json(formatResponse(500, "服务器错误"), {
+      status: 500,
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
   }
-});
-
-module.exports = router;
+}
