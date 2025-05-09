@@ -78,10 +78,22 @@ async function douyin(url) {
 
 async function extractId(url) {
   try {
-    const response = await axios.get(url, { maxRedirects: 5 });
-    const finalUrl = response.request.res.responseUrl || url;
-    const match = finalUrl.match(/[0-9]+/);
-    return match ? match[0] : null;
+    // Edge Runtime 下用 fetch
+    const response = await fetch(url, { redirect: "follow" });
+    const finalUrl = response.url || url;
+    // 优先从 URL 里找 video/1234567890
+    let match = finalUrl.match(/video\/(\d+)/);
+    if (match) return match[1];
+    // 其次尝试直接找数字串
+    match = finalUrl.match(/(\d{10,})/);
+    if (match) return match[1];
+    // 最后从 HTML 里找 canonical
+    const html = await response.text();
+    const canonicalMatch = html.match(
+      /href="https:\/\/www\\.iesdouyin\\.com\/share\/video\/(\d+)"/
+    );
+    if (canonicalMatch) return canonicalMatch[1];
+    return null;
   } catch (error) {
     console.error("Error extracting ID:", error);
     return null;
@@ -114,9 +126,9 @@ export async function GET(request) {
     return Response.json(response, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
-  } catch {
+  } catch (error) {
     return Response.json(
-      { code: 500, msg: "服务器错误" },
+      { code: 500, msg: "服务器错误", error: error },
       { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
     );
   }
