@@ -98,8 +98,7 @@ async function getBilibiliVideoInfo(url) {
         user_img: videoInfo.data.owner.face,
       },
     };
-  } catch (error) {
-    console.error("Error:", error);
+  } catch {
     return { code: 0, msg: "解析失败！" };
   }
 }
@@ -118,7 +117,7 @@ export async function GET(request) {
     return Response.json(result, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       { code: 500, msg: "服务器错误" },
       { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }

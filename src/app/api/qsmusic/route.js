@@ -1,6 +1,6 @@
 import axios from "axios";
 
-async function getMusicInfo(type = "json", url = "") {
+async function getMusicInfo(url = "") {
   try {
     let trackId;
     if (url.includes("qishui.douyin.com")) {
@@ -75,7 +75,6 @@ async function getMusicInfo(type = "json", url = "") {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
-  const type = searchParams.get("type") || "json";
   if (!url) {
     return Response.json(
       { code: 404, msg: "请补全参数" },
@@ -83,14 +82,11 @@ export async function GET(request) {
     );
   }
   try {
-    const result = await getMusicInfo(type, url);
+    const result = await getMusicInfo(url);
     return Response.json(result, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
   } catch {
-    return Response.json(
-      { code: 500, msg: "服务器错误" },
-      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
+    return output(500, "服务器错误");
   }
 }
