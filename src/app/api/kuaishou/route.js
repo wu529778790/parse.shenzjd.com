@@ -1,5 +1,4 @@
 export const runtime = "edge";
-import axios from "axios";
 
 function formatResponse(code = 200, msg = "解析成功", data = []) {
   return {
@@ -61,13 +60,10 @@ async function kuaishou(url) {
 
 async function getRedirectedUrl(url) {
   try {
-    const response = await axios.get(url, {
-      maxRedirects: 5,
-      validateStatus: function (status) {
-        return status >= 200 && status < 400;
-      },
+    const response = await fetch(url, {
+      redirect: "follow",
     });
-    return response.request.res.responseUrl || url;
+    return response.url || url;
   } catch {
     return url;
   }
@@ -75,8 +71,8 @@ async function getRedirectedUrl(url) {
 
 async function makeRequest(url, headers) {
   try {
-    const response = await axios.get(url, { headers });
-    return response.data;
+    const response = await fetch(url, { headers });
+    return await response.text();
   } catch {
     return null;
   }

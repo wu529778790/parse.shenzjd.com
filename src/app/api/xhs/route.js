@@ -1,5 +1,4 @@
 export const runtime = "edge";
-import axios from "axios";
 
 function output(code, msg, data = []) {
   return {
@@ -15,13 +14,14 @@ async function xhs(url) {
       "User-Agent":
         "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/122.0.0.0",
     };
-    const response = await axios.get(url, { headers });
-    if (!response.data) {
+    const response = await fetch(url, { headers });
+    const html = await response.text();
+    if (!html) {
       return output(400, "请求失败");
     }
     const pattern =
       /<script>\s*window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})<\/script>/is;
-    const matches = response.data.match(pattern);
+    const matches = html.match(pattern);
     if (matches) {
       let jsonData = matches[1];
       jsonData = jsonData.replace(/undefined/g, "null");

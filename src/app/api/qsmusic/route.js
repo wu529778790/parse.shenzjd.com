@@ -1,22 +1,21 @@
 export const runtime = "edge";
-import axios from "axios";
 
 async function getMusicInfo(url = "") {
   try {
     let trackId;
     if (url.includes("qishui.douyin.com")) {
-      const response = await axios.get(url, { maxRedirects: 5 });
-      const redirectUrl = response.request.res.responseUrl;
+      const response = await fetch(url, { redirect: "follow" });
+      const redirectUrl = response.url;
       const match = redirectUrl.match(/track_id=(\d+)/);
       trackId = match[1];
     } else {
       const match = url.match(/track_id=(\d+)/);
       trackId = match[1];
     }
-    const response = await axios.get(
+    const response = await fetch(
       `https://music.douyin.com/qishui/share/track?track_id=${trackId}`
     );
-    const html = response.data;
+    const html = await response.text();
     const ldJsonPattern =
       /<script data-react-helmet="true" type="application\/ld\+json">(.*?)<\/script>/s;
     const ldJsonMatch = html.match(ldJsonPattern);

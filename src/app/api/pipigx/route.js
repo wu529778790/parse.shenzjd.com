@@ -1,5 +1,4 @@
 export const runtime = "edge";
-import axios from "axios";
 
 function formatResponse(code = 200, msg = "解析成功", data = []) {
   return {
@@ -27,19 +26,21 @@ function extractParamsFromUrl(url) {
 
 async function sendPostRequest(apiurl, payload) {
   try {
-    const response = await axios.post(apiurl, payload, {
+    const response = await fetch(apiurl, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify(payload),
     });
     return {
       code: response.status,
-      response: response.data,
+      response: await response.json(),
     };
   } catch (error) {
     console.error("Error making request:", error);
     return {
-      code: error.response?.status || 500,
+      code: error.status || 500,
       msg: `请求发生错误: ${error.message}`,
     };
   }

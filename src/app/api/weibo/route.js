@@ -1,5 +1,4 @@
 export const runtime = "edge";
-import axios from "axios";
 
 async function weibo(url) {
   try {
@@ -38,19 +37,20 @@ async function weiboRequest(id) {
   try {
     const cookie = process.env.WEIBO_COOKIE || "";
     const postData = `data={\"Component_Play_Playinfo\":{\"oid\":\"${id}\"}}`;
-    const response = await axios.post(
+    const response = await fetch(
       `https://weibo.com/tv/api/component?page=/tv/show/${id}`,
-      postData,
       {
+        method: "POST",
         headers: {
           Cookie: cookie,
           Referer: `https://weibo.com/tv/show/${id}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        timeout: 5000,
+        body: postData,
+        signal: AbortSignal.timeout(5000),
       }
     );
-    return response.data;
+    return await response.json();
   } catch {
     return null;
   }

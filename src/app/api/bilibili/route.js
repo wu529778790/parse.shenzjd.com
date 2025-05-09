@@ -1,5 +1,4 @@
 export const runtime = "edge";
-import axios from "axios";
 
 function cleanUrlParameters(url) {
   try {
@@ -17,14 +16,14 @@ function cleanUrlParameters(url) {
 
 async function bilibili(url, headers, userAgent, cookie) {
   try {
-    const response = await axios.get(url, {
+    const response = await fetch(url, {
       headers: {
         ...headers,
         "User-Agent": userAgent,
         Cookie: cookie,
       },
     });
-    return response.data;
+    return await response.json();
   } catch (error) {
     console.error("Error making bilibili request:", error);
     return null;
@@ -37,8 +36,8 @@ async function getBilibiliVideoInfo(url) {
     const parsedUrl = new URL(cleanUrl);
     let bvid;
     if (parsedUrl.hostname === "b23.tv") {
-      const response = await axios.get(url, { maxRedirects: 5 });
-      const redirectUrl = new URL(response.request.res.responseUrl);
+      const response = await fetch(url, { redirect: "follow" });
+      const redirectUrl = new URL(response.url);
       bvid = redirectUrl.pathname;
     } else if (
       parsedUrl.hostname === "www.bilibili.com" ||

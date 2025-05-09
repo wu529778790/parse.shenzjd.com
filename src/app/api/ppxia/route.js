@@ -1,19 +1,15 @@
 export const runtime = "edge";
-import axios from "axios";
 
 const MAX_REDIRECTS = 10;
 const TIMEOUT = 5000;
 
 async function getRedirectUrl(url) {
   try {
-    const response = await axios.get(url, {
-      maxRedirects: MAX_REDIRECTS,
-      timeout: TIMEOUT,
-      validateStatus: function (status) {
-        return status >= 200 && status < 400;
-      },
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(TIMEOUT),
     });
-    return response.request.res.responseUrl;
+    return response.url;
   } catch (error) {
     throw new Error(`Error getting redirect URL: ${error.message}`);
   }
@@ -27,10 +23,10 @@ async function pipixia(url) {
       return { code: 404, msg: "无法从 URL 中提取视频 ID" };
     }
     const apiUrl = `https://h5.pipix.com/bds/cell/cell_h5_comment/?count=5&aid=1319&app_name=super&cell_id=${idMatch[1]}`;
-    const response = await axios.get(apiUrl, {
-      timeout: TIMEOUT,
+    const response = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(TIMEOUT),
     });
-    const data = response.data;
+    const data = await response.json();
     if (!data || !data.data?.cell_comments?.[1]?.comment_info?.item) {
       return { code: 404, msg: "解析失败，未找到所需数据" };
     }
