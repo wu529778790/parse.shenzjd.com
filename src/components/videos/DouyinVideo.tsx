@@ -57,13 +57,12 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
         <span>UID：{douyinData.uid}</span>
       </div>
       {douyinData.url && (
-        <a
-          href={douyinData.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-          打开原视频
-        </a>
+        <video
+          src={douyinData.url}
+          controls
+          className="w-full rounded-lg mb-4"
+          poster={douyinData.cover}
+        />
       )}
     </>
   );
