@@ -1,3 +1,4 @@
+export const runtime = "edge";
 import axios from "axios";
 
 function cleanUrlParameters(url) {

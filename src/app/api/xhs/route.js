@@ -1,3 +1,4 @@
+export const runtime = "edge";
 import axios from "axios";
 
 function output(code, msg, data = []) {

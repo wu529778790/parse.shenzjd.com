@@ -1,3 +1,4 @@
+export const runtime = "edge";
 import axios from "axios";
 
 const MAX_REDIRECTS = 10;

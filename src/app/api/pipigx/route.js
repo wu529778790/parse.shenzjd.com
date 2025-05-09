@@ -1,3 +1,4 @@
+export const runtime = "edge";
 import axios from "axios";
 
 function formatResponse(code = 200, msg = "解析成功", data = []) {
