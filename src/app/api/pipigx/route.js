@@ -96,9 +96,9 @@ export async function GET(request) {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
   } catch {
-    return {
-      code: 500,
-      msg: `请求发生错误`,
-    };
+    return Response.json(
+      { code: 500, msg: `请求发生错误` },
+      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
   }
 }
