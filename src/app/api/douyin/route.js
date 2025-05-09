@@ -1,5 +1,4 @@
 export const runtime = "edge";
-import axios from "axios";
 
 async function douyin(url) {
   // ... 保留原有 douyin 解析逻辑 ...
@@ -10,8 +9,9 @@ async function douyin(url) {
     };
     let id = await extractId(url);
     if (!id) {
-      const response = await axios.get(url, { headers });
-      const redirectUrl = getRedirectUrl(response.data);
+      const response = await fetch(url, { headers });
+      const html = await response.text();
+      const redirectUrl = getRedirectUrl(html);
       if (redirectUrl) {
         id = await extractId(redirectUrl);
       }
@@ -19,12 +19,13 @@ async function douyin(url) {
     if (!id) {
       return { code: 400, msg: "无法解析视频 ID" };
     }
-    const response = await axios.get(
+    const response = await fetch(
       `https://www.iesdouyin.com/share/video/${id}`,
       { headers }
     );
+    const html = await response.text();
     const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
-    const matches = response.data.match(pattern);
+    const matches = html.match(pattern);
     if (!matches || !matches[1]) {
       return { code: 201, msg: "解析失败" };
     }
