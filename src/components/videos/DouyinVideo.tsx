@@ -28,6 +28,12 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
           />
         </div>
       )}
+      <a
+        href={`/api/proxy?url=${encodeURIComponent(douyinData.url)}`}
+        download={`${douyinData.title}.mp4`}
+        className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mt-2">
+        下载视频
+      </a>
     </>
   );
 }
