@@ -26,79 +26,6 @@ function extractUrl(text: string): string | null {
   return null;
 }
 
-// 定义抖音原始数据类型
-interface DouyinRawData {
-  author: {
-    nickname: string;
-    unique_id: string;
-    avatar_medium: { url_list: string[] };
-  };
-  statistics: { digg_count: number };
-  create_time: number;
-  desc: string;
-  video: {
-    cover: { url_list: string[] };
-    play_addr: { url_list: string[] };
-  };
-  music: {
-    author: string;
-    cover_large: { url_list: string[] };
-    title: string;
-  };
-}
-
-// 前端抖音解析
-async function parseDouyinVideo(url: string) {
-  // 先跟随短链
-  const resp = await fetch(url, { credentials: "include" });
-  // const realUrl = resp.url || url; // 未使用，移除
-  const html = await resp.text();
-
-  // 提取 window._ROUTER_DATA
-  const pattern = /window\._ROUTER_DATA\s*=\s*([\s\S]*?)<\/script>/;
-  const matches = html.match(pattern);
-  if (!matches || !matches[1]) {
-    throw new Error(
-      "未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除"
-    );
-  }
-  let videoInfo: unknown;
-  try {
-    videoInfo = JSON.parse(matches[1].trim());
-  } catch {
-    throw new Error("视频数据解析失败，可能是页面结构变化");
-  }
-  const data = (
-    videoInfo as {
-      loaderData: {
-        [key: string]: { videoInfoRes: { item_list: DouyinRawData[] } };
-      };
-    }
-  )?.loaderData?.["video_(id)/page"]?.videoInfoRes?.item_list?.[0];
-  if (!data) throw new Error("视频数据结构异常，可能是抖音接口发生变化");
-
-  return {
-    code: 200,
-    msg: "解析成功",
-    data: {
-      author: data.author.nickname,
-      uid: data.author.unique_id,
-      avatar: data.author.avatar_medium.url_list[0],
-      like: data.statistics.digg_count,
-      time: data.create_time,
-      title: data.desc,
-      cover: data.video.cover.url_list[0],
-      url: data.video.play_addr.url_list[0].replace("playwm", "play"),
-      music: {
-        author: data.music.author,
-        avatar: data.music.cover_large.url_list[0],
-        title: data.music.title,
-      },
-    },
-    platform: "douyin" as const,
-  };
-}
-
 export default function VideoParserForm({
   onResult,
   setLoading,
@@ -145,31 +72,18 @@ export default function VideoParserForm({
     onResult(null, "");
 
     try {
-      let data: ApiResponse;
-      if (platform === "douyin") {
-        data = await parseDouyinVideo(url);
-        if (data.code === 200) {
-          onResult(data, "");
-        } else {
-          onResult(null, data.msg || "解析失败");
-        }
-      } else {
-        const response = await fetch(
-          `/api/${platform}?url=${encodeURIComponent(url)}`
-        );
-        data = await response.json();
-        if (data.code === 1 || data.code === 200) {
-          data.platform = platform;
-          onResult(data, "");
-        } else {
-          onResult(null, data.msg || "解析失败");
-        }
-      }
-    } catch (err: unknown) {
-      onResult(
-        null,
-        err instanceof Error ? err.message : "请求失败，请稍后重试"
+      const response = await fetch(
+        `/api/${platform}?url=${encodeURIComponent(url)}`
       );
+      const data: ApiResponse = await response.json();
+      if (data.code === 1 || data.code === 200) {
+        data.platform = platform;
+        onResult(data, "");
+      } else {
+        onResult(null, data.msg || "解析失败");
+      }
+    } catch {
+      onResult(null, "请求失败，请稍后重试");
     } finally {
       setLoading(false);
     }
