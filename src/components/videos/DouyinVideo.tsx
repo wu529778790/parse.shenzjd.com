@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { ApiResponse, DouyinData } from "@/types/api";
 
 interface DouyinVideoProps {
@@ -15,12 +16,17 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
   return (
     <>
       {douyinData.url && (
-        <video
-          src={`/api/proxy?url=${encodeURIComponent(douyinData.url)}`}
-          controls
-          className="w-full rounded-lg mb-4"
-          poster={douyinData.cover}
-        />
+        <div
+          className="w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden flex items-center justify-center"
+          style={{ maxWidth: 800 }} // 可根据需要调整最大宽度
+        >
+          <video
+            src={`/api/proxy?url=${encodeURIComponent(douyinData.url)}`}
+            controls
+            className="w-full h-full object-cover"
+            poster={douyinData.cover}
+          />
+        </div>
       )}
     </>
   );
