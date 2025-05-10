@@ -52,7 +52,7 @@ async function douyin(url) {
       console.log("No _ROUTER_DATA found in HTML");
       return {
         code: 201,
-        msg: "解析失败：无法获取视频数据，可能是视频不存在或已被删除",
+        msg: "解析失败：未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除",
       };
     }
     const videoInfo = JSON.parse(matches[1].trim());
