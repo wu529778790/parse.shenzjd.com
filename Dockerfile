@@ -13,8 +13,11 @@ COPY package.json pnpm-lock.yaml ./
 # 安装依赖
 RUN pnpm install
 
-# 复制项目文件
-COPY . .
+# 只复制必要的文件
+COPY next.config.ts ./
+COPY tsconfig.json ./
+COPY public ./public
+COPY src ./src
 
 # 构建应用
 RUN pnpm build
