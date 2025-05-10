@@ -14,29 +14,6 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
 
   return (
     <>
-      <div className="flex items-center gap-4 mb-6">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {douyinData.title}
-          </h2>
-          {douyinData.author && (
-            <p className="text-gray-600 dark:text-gray-300">
-              {douyinData.author}
-            </p>
-          )}
-        </div>
-      </div>
-      {douyinData.music && (
-        <p className="text-gray-600 dark:text-gray-300 mb-2">
-          配乐：
-          {douyinData.music.author ? `${douyinData.music.author} - ` : ""}
-          {douyinData.music.title || ""}
-        </p>
-      )}
-      <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-300 mb-4">
-        <span>点赞：{douyinData.like}</span>
-        <span>UID：{douyinData.uid}</span>
-      </div>
       {douyinData.url && (
         <video
           src={`/api/proxy?url=${encodeURIComponent(douyinData.url)}`}
