@@ -22,6 +22,19 @@ async function douyin(url) {
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": "same-origin",
       "Sec-Fetch-User": "?1",
+      Host: "www.iesdouyin.com",
+      TE: "Trailers",
+      Pragma: "no-cache",
+      DNT: "1",
+      "sec-ch-ua-arch": '"arm"',
+      "sec-ch-ua-full-version-list":
+        '"Chromium";v="120.0.6099.224", "Not_A Brand";v="99.0.0.0"',
+      "sec-ch-ua-model": '"iPhone"',
+      "sec-ch-ua-platform-version": '"16.6.0"',
+      "sec-ch-ua-bitness": '"64"',
+      "sec-ch-ua-wow64": "?0",
+      "X-Forwarded-For": "36.112.123.123",
+      "X-Real-IP": "36.112.123.123",
       Cookie:
         "msToken=abcdefghijklmnopqrstuvwxyz123456; odin_tt=abcdefghijklmnopqrstuvwxyz123456",
     };
