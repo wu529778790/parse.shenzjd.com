@@ -23,9 +23,25 @@ async function douyin(url) {
     }
     const response = await fetch(
       `https://www.iesdouyin.com/share/video/${id}`,
-      { headers }
+      {
+        headers: {
+          ...headers,
+          "Accept-Language": "zh-CN,zh;q=0.9",
+          Referer: "https://www.douyin.com/",
+          Origin: "https://www.douyin.com",
+        },
+      }
     );
     const html = await response.text();
+
+    // 检查是否被重定向到国际版
+    if (html.includes("tiktok.com") || html.includes("访问受限")) {
+      return {
+        code: 403,
+        msg: "解析失败：当前服务器IP无法访问抖音，请使用代理服务器或更换部署区域",
+      };
+    }
+
     const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
     const matches = html.match(pattern);
     if (!matches || !matches[1]) {
