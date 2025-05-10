@@ -55,7 +55,7 @@ async function parseDouyinVideo(url: string) {
   const html = await resp.text();
 
   // 提取 window._ROUTER_DATA
-  const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
+  const pattern = /window\._ROUTER_DATA\s*=\s*([\s\S]*?)<\/script>/;
   const matches = html.match(pattern);
   if (!matches || !matches[1]) {
     throw new Error(
