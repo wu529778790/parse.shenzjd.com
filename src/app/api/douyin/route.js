@@ -4,12 +4,22 @@ async function douyin(url) {
   try {
     const headers = {
       "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/122.0.0.0",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "Accept-Encoding": "gzip, deflate, br",
+      Connection: "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
+      "Cache-Control": "max-age=0",
+      Referer: "https://www.douyin.com/",
+      Origin: "https://www.douyin.com",
     };
     let id = await extractId(url);
     if (!id) {
       const response = await fetch(url, { headers });
       const html = await response.text();
+      console.log("Initial HTML response:", html.substring(0, 500));
       const redirectUrl = getRedirectUrl(html);
       if (redirectUrl) {
         id = await extractId(redirectUrl);
@@ -23,16 +33,10 @@ async function douyin(url) {
     }
     const response = await fetch(
       `https://www.iesdouyin.com/share/video/${id}`,
-      {
-        headers: {
-          ...headers,
-          "Accept-Language": "zh-CN,zh;q=0.9",
-          Referer: "https://www.douyin.com/",
-          Origin: "https://www.douyin.com",
-        },
-      }
+      { headers }
     );
     const html = await response.text();
+    console.log("Final HTML response:", html.substring(0, 500));
 
     // 检查是否被重定向到国际版
     if (html.includes("tiktok.com") || html.includes("访问受限")) {
@@ -45,6 +49,7 @@ async function douyin(url) {
     const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
     const matches = html.match(pattern);
     if (!matches || !matches[1]) {
+      console.log("No _ROUTER_DATA found in HTML");
       return {
         code: 201,
         msg: "解析失败：无法获取视频数据，可能是视频不存在或已被删除",
