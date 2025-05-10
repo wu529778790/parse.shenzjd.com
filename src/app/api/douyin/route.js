@@ -6,7 +6,7 @@ async function douyin(url) {
       "User-Agent":
         "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
       Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
       "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
       "Accept-Encoding": "gzip, deflate, br",
       Connection: "keep-alive",
@@ -14,10 +14,24 @@ async function douyin(url) {
       "Cache-Control": "max-age=0",
       Referer: "https://www.douyin.com/",
       Origin: "https://www.douyin.com",
+      "sec-ch-ua":
+        '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      "sec-ch-ua-mobile": "?1",
+      "sec-ch-ua-platform": '"iOS"',
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-User": "?1",
+      Cookie:
+        "msToken=abcdefghijklmnopqrstuvwxyz123456; odin_tt=abcdefghijklmnopqrstuvwxyz123456",
     };
     let id = await extractId(url);
     if (!id) {
-      const response = await fetch(url, { headers });
+      const response = await fetch(url, {
+        headers,
+        redirect: "follow",
+        credentials: "include",
+      });
       const html = await response.text();
       console.log("Initial HTML response:", html.substring(0, 500));
       const redirectUrl = getRedirectUrl(html);
