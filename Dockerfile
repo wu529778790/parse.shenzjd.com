@@ -24,9 +24,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 安装 puppeteer 运行所需依赖
+# 安装 puppeteer 运行所需依赖（不安装chromium包）
 RUN apk add --no-cache \
-    chromium \
     nss \
     freetype \
     harfbuzz \
@@ -35,10 +34,11 @@ RUN apk add --no-cache \
     nodejs \
     yarn
 
-# 设置环境变量，指定 Chromium 路径
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    NODE_ENV=production
+# 手动下载 puppeteer 官方 Chromium
+RUN npx puppeteer browsers install chrome
+
+# 设置环境变量
+ENV NODE_ENV=production
 
 # 复制 node_modules 和构建产物
 COPY --from=builder /app/node_modules ./node_modules
