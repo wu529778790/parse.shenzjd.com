@@ -1,82 +1,58 @@
-export const runtime = "edge";
+export const runtime = "nodejs";
+
+import puppeteer from "puppeteer";
 
 async function douyin(url) {
   try {
-    const headers = {
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-      "Accept-Encoding": "gzip, deflate, br",
-      Connection: "keep-alive",
-      "Upgrade-Insecure-Requests": "1",
-      "Cache-Control": "max-age=0",
-      Referer: "https://www.douyin.com/",
-      Origin: "https://www.douyin.com",
-      "sec-ch-ua":
-        '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-      "sec-ch-ua-mobile": "?1",
-      "sec-ch-ua-platform": '"iOS"',
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-User": "?1",
-      Host: "www.iesdouyin.com",
-      TE: "Trailers",
-      Pragma: "no-cache",
-      DNT: "1",
-      "sec-ch-ua-arch": '"arm"',
-      "sec-ch-ua-full-version-list":
-        '"Chromium";v="120.0.6099.224", "Not_A Brand";v="99.0.0.0"',
-      "sec-ch-ua-model": '"iPhone"',
-      "sec-ch-ua-platform-version": '"16.6.0"',
-      "sec-ch-ua-bitness": '"64"',
-      "sec-ch-ua-wow64": "?0",
-      "X-Forwarded-For": "36.112.123.123",
-      "X-Real-IP": "36.112.123.123",
-      Cookie:
-        "msToken=abcdefghijklmnopqrstuvwxyz123456; odin_tt=abcdefghijklmnopqrstuvwxyz123456",
-    };
-    let id = await extractId(url);
+    const browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      headless: true,
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+    );
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    const finalUrl = page.url();
+    // 优先从 URL 里找 video/1234567890
+    let match = finalUrl.match(/video\/(\d+)/);
+    let id = match ? match[1] : null;
     if (!id) {
-      const response = await fetch(url, {
-        headers,
-        redirect: "follow",
-        credentials: "include",
-      });
-      const html = await response.text();
-      console.log("Complete HTML response:", html);
-      const redirectUrl = getRedirectUrl(html);
-      if (redirectUrl) {
-        id = await extractId(redirectUrl);
-      }
+      // 其次尝试直接找数字串
+      match = finalUrl.match(/(\d{10,})/);
+      if (match) id = match[1];
     }
     if (!id) {
+      // 最后从 HTML 里找 canonical
+      const html = await page.content();
+      const canonicalMatch = html.match(
+        /href=\"https:\/\/www\\.iesdouyin\\.com\/share\/video\/(\d+)\"/
+      );
+      if (canonicalMatch) id = canonicalMatch[1];
+    }
+    if (!id) {
+      await browser.close();
       return {
         code: 400,
         msg: "无法解析视频 ID：请确保链接格式正确且视频可访问",
       };
     }
-    const response = await fetch(
-      `https://www.iesdouyin.com/share/video/${id}`,
-      { headers }
-    );
-    const html = await response.text();
-    console.log("Complete HTML response:", html);
-
+    // 访问视频详情页
+    const videoUrl = `https://www.iesdouyin.com/share/video/${id}`;
+    await page.goto(videoUrl, { waitUntil: "networkidle2", timeout: 30000 });
+    const html = await page.content();
     // 检查是否被重定向到国际版
     if (html.includes("tiktok.com") || html.includes("访问受限")) {
+      await browser.close();
       return {
         code: 403,
         msg: "解析失败：当前服务器IP无法访问抖音，请使用代理服务器或更换部署区域",
       };
     }
-
     const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
     const matches = html.match(pattern);
     if (!matches || !matches[1]) {
-      console.log("No _ROUTER_DATA found in HTML");
+      await browser.close();
       return {
         code: 201,
         msg: "解析失败：未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除",
@@ -84,6 +60,7 @@ async function douyin(url) {
     }
     const videoInfo = JSON.parse(matches[1].trim());
     if (!videoInfo.loaderData) {
+      await browser.close();
       return {
         code: 201,
         msg: "解析失败：视频数据结构异常，可能是抖音接口发生变化",
@@ -95,7 +72,7 @@ async function douyin(url) {
       "playwm",
       "play"
     );
-    return {
+    const result = {
       code: 200,
       msg: "解析成功",
       data: {
@@ -128,39 +105,11 @@ async function douyin(url) {
         },
       },
     };
+    await browser.close();
+    return result;
   } catch (error) {
     return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
   }
-}
-
-async function extractId(url) {
-  try {
-    // Edge Runtime 下用 fetch
-    const response = await fetch(url, { redirect: "follow" });
-    const finalUrl = response.url || url;
-    // 优先从 URL 里找 video/1234567890
-    let match = finalUrl.match(/video\/(\d+)/);
-    if (match) return match[1];
-    // 其次尝试直接找数字串
-    match = finalUrl.match(/(\d{10,})/);
-    if (match) return match[1];
-    // 最后从 HTML 里找 canonical
-    const html = await response.text();
-    const canonicalMatch = html.match(
-      /href="https:\/\/www\\.iesdouyin\\.com\/share\/video\/(\d+)"/
-    );
-    if (canonicalMatch) return canonicalMatch[1];
-    return null;
-  } catch (error) {
-    console.error("Error extracting ID:", error);
-    return null;
-  }
-}
-
-function getRedirectUrl(html) {
-  const pattern = /<link data-react-helmet="true" rel="canonical" href="(.*?)"/;
-  const match = html.match(pattern);
-  return match ? match[1] : null;
 }
 
 export async function GET(request) {
