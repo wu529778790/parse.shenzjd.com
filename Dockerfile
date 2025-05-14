@@ -16,6 +16,8 @@ COPY tsconfig.json ./
 COPY public ./public
 COPY src ./src
 
+# 清除缓存
+RUN rm -rf .next
 # 构建
 RUN pnpm build
 
