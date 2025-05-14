@@ -13,7 +13,7 @@ RUN pnpm install
 # 复制源码
 COPY next.config.ts ./
 COPY tsconfig.json ./
-COPY public ./public
+# COPY public ./public
 COPY src ./src
 
 # 清除缓存
