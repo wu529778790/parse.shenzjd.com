@@ -21,6 +21,19 @@ RUN rm -rf .next
 # 构建
 RUN pnpm build
 
+# 安装 puppeteer 运行所需依赖（不安装chromium包）
+RUN apk add --no-cache \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    udev \
+    dumb-init
+
+# 手动下载 puppeteer 官方 Chromium
+RUN npx puppeteer browsers install chrome
+
 # ---- 生产阶段 ----
 FROM node:20-alpine
 
@@ -33,11 +46,11 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    nodejs \
-    yarn
+    udev \
+    dumb-init
 
-# 手动下载 puppeteer 官方 Chromium
-RUN npx puppeteer browsers install chrome
+# 复制 puppeteer 的 Chromium
+COPY --from=builder /root/.cache/puppeteer /root/.cache/puppeteer
 
 # 设置环境变量
 ENV NODE_ENV=production
