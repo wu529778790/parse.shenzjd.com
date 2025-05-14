@@ -49,6 +49,9 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/src ./src
 
+# 安装 pnpm
+RUN npm install -g pnpm
+
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
