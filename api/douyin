@@ -130,6 +130,10 @@ function curl($url, $header = null, $data = null)
     return $result;
 }
 // 使用空合并运算符检查 url 参数
+// 日志记录
+$logMsg = sprintf("[%s] IP: %s url: %s\n", date('Y-m-d H:i:s'), $_SERVER['REMOTE_ADDR']??'unknown', $_GET['url']??'');
+file_put_contents(__DIR__ . '/douyin_access.log', $logMsg, FILE_APPEND);
+
 $url = $_GET['url']?? '';
 if (empty($url)) {
     echo json_encode(['code' => 201, 'msg' => 'url为空'], 480);
