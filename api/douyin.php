@@ -34,6 +34,8 @@ function douyin($url)
 
     // 发送请求获取视频信息
     $response = curl('https://www.iesdouyin.com/share/video/' . $id, $header);
+    // 打印$response
+    echo $response;
     $pattern = '/window\._ROUTER_DATA\s*=\s*(.*?)\<\/script>/s';
     preg_match($pattern, $response, $matches);
 
@@ -130,10 +132,6 @@ function curl($url, $header = null, $data = null)
     return $result;
 }
 // 使用空合并运算符检查 url 参数
-// 日志记录
-$logMsg = sprintf("[%s] IP: %s url: %s\n", date('Y-m-d H:i:s'), $_SERVER['REMOTE_ADDR']??'unknown', $_GET['url']??'');
-file_put_contents(__DIR__ . '/douyin_access.log', $logMsg, FILE_APPEND);
-
 $url = $_GET['url']?? '';
 if (empty($url)) {
     echo json_encode(['code' => 201, 'msg' => 'url为空'], 480);
