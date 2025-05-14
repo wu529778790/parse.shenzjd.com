@@ -34,8 +34,6 @@ function douyin($url)
 
     // 发送请求获取视频信息
     $response = curl('https://www.iesdouyin.com/share/video/' . $id, $header);
-    // 打印$response
-    echo $response;
     $pattern = '/window\._ROUTER_DATA\s*=\s*(.*?)\<\/script>/s';
     preg_match($pattern, $response, $matches);
 
