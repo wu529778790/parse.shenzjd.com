@@ -24,9 +24,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build project
-        run: pnpm run build
-
       - name: Update version and commit
         id: version
         run: |
@@ -45,10 +42,14 @@ jobs:
           # 检查是否有更改可提交
           if [ "$(git diff --cached --name-only)" ]; then
             git commit -m "chore(release): $NEW_VERSION [skip ci]"
+            git push
           else
             echo "No changes to commit."
           fi
         if: ${{ always() }}
+
+      - name: Build project
+        run: pnpm run build
 
       - name: Set Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -69,9 +70,4 @@ jobs:
           tags: |
             wu529778790/parse.shenzjd.com:${{ env.new-version }}
             wu529778790/parse.shenzjd.com:latest
-        if: ${{ always() }}
-
-      - name: Push Git changes
-        run: |
-          git push --force
         if: ${{ always() }}
