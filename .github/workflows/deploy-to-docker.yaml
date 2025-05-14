@@ -26,6 +26,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
+          no-cache: true
           push: true
           tags: |
             wu529778790/parse.shenzjd.com:latest
