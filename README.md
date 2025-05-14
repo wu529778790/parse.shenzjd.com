@@ -1,6 +1,6 @@
 # ParseShort API Docker 部署说明
 
-本项目的 `/api` 目录下包含多个 PHP API 脚本，以下为 Docker 部署与使用方法。
+本项目的 `api` 目录下包含多个 PHP API 脚本，Docker 部署后可直接通过端口访问各个脚本。
 
 ## 构建镜像
 
@@ -17,7 +17,7 @@ docker run -d -p 8080:8080 --name parse-short-api parse-short-api
 
 ## 访问 API
 
-容器启动后，可通过如下方式访问各个 API 脚本：
+容器启动后，可通过如下方式访问各个 API 脚本（无需 /api 前缀）：
 
 | API 文件      | 访问地址                          |
 |---------------|-----------------------------------|
@@ -34,4 +34,5 @@ docker run -d -p 8080:8080 --name parse-short-api parse-short-api
 将对应的 API 文件名添加到访问地址后即可访问。
 
 ---
-如需自定义端口或其他参数，请自行修改 Dockerfile 或运行命令。
+
+如需自定义端口，请修改 Dockerfile 中的 `EXPOSE` 和 `CMD`，或在运行容器时调整 `-p` 参数。
