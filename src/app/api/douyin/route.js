@@ -46,7 +46,6 @@ async function douyin(url) {
         credentials: "include",
       });
       const html = await response.text();
-      console.log("Complete HTML response:", html);
       const redirectUrl = getRedirectUrl(html);
       if (redirectUrl) {
         id = await extractId(redirectUrl);
@@ -63,7 +62,6 @@ async function douyin(url) {
       { headers }
     );
     const html = await response.text();
-    console.log("Complete HTML response:", html);
 
     // 检查是否被重定向到国际版
     if (html.includes("tiktok.com") || html.includes("访问受限")) {
