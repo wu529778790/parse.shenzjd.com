@@ -97,6 +97,19 @@ export default function VideoParserForm({
     }
   };
 
+  // 检查是否包含有效的视频平台URL
+  const hasValidVideoUrl = (text: string): boolean => {
+    const supportedPlatforms = [
+      "douyin.com",
+      "kuaishou.com",
+      "weibo.com",
+      "xiaohongshu.com",
+      "bilibili.com",
+    ];
+
+    return supportedPlatforms.some((platform) => text.includes(platform));
+  };
+
   // 页面加载时自动读取剪贴板
   useEffect(() => {
     const autoReadClipboard = async () => {
@@ -109,8 +122,11 @@ export default function VideoParserForm({
 
         const text = await navigator.clipboard.readText();
         if (text && text.trim()) {
-          setInput(text);
-          processInputText(text);
+          // 只有在包含有效的视频平台URL时才自动粘贴
+          if (hasValidVideoUrl(text)) {
+            setInput(text);
+            processInputText(text);
+          }
         }
       } catch (error) {
         // 静默处理错误，不显示给用户，因为这是自动行为
