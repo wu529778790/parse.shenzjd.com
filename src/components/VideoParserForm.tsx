@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ApiResponse } from "@/types/api";
 
 interface VideoParserFormProps {
@@ -96,6 +96,33 @@ export default function VideoParserForm({
       }
     }
   };
+
+  // 页面加载时自动读取剪贴板
+  useEffect(() => {
+    const autoReadClipboard = async () => {
+      try {
+        // 检查是否支持剪贴板API
+        if (!navigator.clipboard || !navigator.clipboard.readText) {
+          console.log("浏览器不支持剪贴板API");
+          return;
+        }
+
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          setInput(text);
+          processInputText(text);
+        }
+      } catch (error) {
+        // 静默处理错误，不显示给用户，因为这是自动行为
+        console.log("自动读取剪贴板失败:", error);
+      }
+    };
+
+    // 延迟一点执行，确保页面完全加载
+    const timer = setTimeout(autoReadClipboard, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
@@ -234,12 +261,9 @@ export default function VideoParserForm({
                   />
                 </svg>
                 <span className="text-sm text-green-700 dark:text-green-400 font-medium">
-                  已检测到链接:
+                  已检测到链接:{url}
                 </span>
               </div>
-              <p className="text-sm text-green-600 dark:text-green-300 mt-1 break-all">
-                {url}
-              </p>
             </div>
           )}
         </div>
