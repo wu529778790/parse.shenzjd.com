@@ -261,7 +261,7 @@ export default function VideoParserForm({
             className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[120px] resize-none"
           />
 
-          {url && (
+          {/* {url && (
             <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
               <div className="flex items-center">
                 <svg
@@ -281,7 +281,7 @@ export default function VideoParserForm({
                 </span>
               </div>
             </div>
-          )}
+          )} */}
         </div>
 
         {/* 平台选择和解析按钮 */}
