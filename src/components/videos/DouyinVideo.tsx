@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from "react";
+import React from "react";
+import Image from "next/image";
 import { ApiResponse, DouyinData } from "@/types/api";
 
 interface DouyinVideoProps {
@@ -7,58 +8,43 @@ interface DouyinVideoProps {
 }
 
 export default function DouyinVideo({ data }: DouyinVideoProps) {
-  const [isDownloading, setIsDownloading] = useState(false);
-
   if (!data.data) {
     return null;
   }
 
   const douyinData = data.data as DouyinData;
 
-  const handleDownload = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    setIsDownloading(true);
-
-    try {
-      const response = await fetch(
-        `/api/proxy?url=${encodeURIComponent(douyinData.url)}`
-      );
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${douyinData.title}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("下载失败:", error);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   return (
     <>
       {douyinData.url && (
-        <div
-          className="w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden flex items-center justify-center"
+        <a
+          href={douyinData.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"
           style={{ maxWidth: 800 }}>
-          <video
-            src={`/api/proxy?url=${encodeURIComponent(douyinData.url)}`}
-            controls
-            className="w-full h-full object-cover"
-            poster={douyinData.cover}
+          <Image
+            src={douyinData.cover}
+            alt={douyinData.title || "视频封面"}
+            fill
+            sizes="(max-width: 800px) 100vw, 800px"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            unoptimized
           />
-        </div>
+          <div className="absolute inset-0 flex items-center justify-center group-hover:bg-opacity-10 transition-all">
+            <svg
+              className="w-20 h-20 text-white opacity-70 group-hover:opacity-90 transition-opacity drop-shadow-lg"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+              xmlns="http://www.w3.org/2000/svg">
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                clipRule="evenodd"></path>
+            </svg>
+          </div>
+        </a>
       )}
-      <button
-        onClick={handleDownload}
-        disabled={isDownloading}
-        className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mt-2 disabled:bg-blue-400 disabled:cursor-not-allowed">
-        {isDownloading ? "下载中..." : "下载视频"}
-      </button>
     </>
   );
 }
