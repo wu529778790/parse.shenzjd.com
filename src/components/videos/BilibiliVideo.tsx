@@ -24,7 +24,9 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
             {data.title}
           </h2>
           {data.user?.name && (
-            <p className="text-gray-600 dark:text-gray-300">{data.user.name}</p>
+            <p className="text-gray-600 dark:text-gray-300 text-left">
+              {data.user.name}
+            </p>
           )}
         </div>
       </div>
@@ -37,26 +39,12 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
           className="rounded-lg mb-6"
         />
       )}
-      {data.desc && (
-        <p className="text-gray-600 dark:text-gray-300 mb-6">{data.desc}</p>
-      )}
       {data.data && Array.isArray(data.data) && data.data.length > 0 && (
         <div className="space-y-4">
           {(data.data as VideoItem[]).map((item, index) => (
             <div
               key={index}
               className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                {item.title}
-              </h3>
-              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
-                {item.durationFormat && (
-                  <span>时长: {item.durationFormat}</span>
-                )}
-                {item.accept && item.accept.length > 0 && (
-                  <span>清晰度: {item.accept.join(", ")}</span>
-                )}
-              </div>
               <a
                 href={item.video_url}
                 target="_blank"
