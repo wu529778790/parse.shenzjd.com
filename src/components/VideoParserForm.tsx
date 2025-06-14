@@ -34,8 +34,8 @@ export default function VideoParserForm({
   const [input, setInput] = useState("");
   const [url, setUrl] = useState("");
   const [platform, setPlatform] = useState<
-    "bilibili" | "douyin" | "kuaishou" | "weibo" | "xhs"
-  >("bilibili");
+    "douyin" | "bilibili" | "kuaishou" | "weibo" | "xhs"
+  >("douyin");
 
   // 自动解析函数
   const autoParseVideo = async (url: string, platform: string) => {
@@ -51,8 +51,8 @@ export default function VideoParserForm({
       const data: ApiResponse = await response.json();
       if (data.code === 1 || data.code === 200) {
         data.platform = platform as
-          | "bilibili"
           | "douyin"
+          | "bilibili"
           | "kuaishou"
           | "weibo"
           | "xhs";
@@ -304,8 +304,8 @@ export default function VideoParserForm({
                   )
                 }
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                <option value="bilibili">🅱️ 哔哩哔哩</option>
                 <option value="douyin">🎵 抖音</option>
+                <option value="bilibili">🅱️ 哔哩哔哩</option>
                 <option value="kuaishou">⚡ 快手</option>
                 <option value="weibo">📱 微博</option>
                 <option value="xhs">📝 小红书</option>

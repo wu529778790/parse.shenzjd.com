@@ -35,7 +35,8 @@ export default function RootLayout({
           name="keywords"
           content="视频解析, 抖音解析, 快手解析, 视频下载, 视频解析工具, ParseShort"
         />
-        <meta name="author" content="ShenZJD" />
+        <link rel="icon" href="/logo.jpg" />
+        <meta name="author" content="shenzjd.com" />
         <meta name="robots" content="index, follow" />
         <meta name="googlebot" content="index, follow" />
         <meta name="bingbot" content="index, follow" />
