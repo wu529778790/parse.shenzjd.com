@@ -37,6 +37,36 @@ export default function VideoParserForm({
     "bilibili" | "douyin" | "kuaishou" | "weibo" | "xhs"
   >("bilibili");
 
+  // 自动解析函数
+  const autoParseVideo = async (url: string, platform: string) => {
+    if (loading) return; // 如果正在加载中，不重复解析
+
+    setLoading(true);
+    onResult(null, "");
+
+    try {
+      const response = await fetch(
+        `/api/${platform}?url=${encodeURIComponent(url)}`
+      );
+      const data: ApiResponse = await response.json();
+      if (data.code === 1 || data.code === 200) {
+        data.platform = platform as
+          | "bilibili"
+          | "douyin"
+          | "kuaishou"
+          | "weibo"
+          | "xhs";
+        onResult(data, "");
+      } else {
+        onResult(null, data.msg || "解析失败");
+      }
+    } catch {
+      onResult(null, "请求失败，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setInput(text);
@@ -58,6 +88,14 @@ export default function VideoParserForm({
     const extractedUrl = extractUrl(text);
     if (extractedUrl) {
       setUrl(extractedUrl);
+
+      // 如果检测到抖音链接，自动开始解析
+      if (text.includes("douyin.com")) {
+        // 使用 setTimeout 确保状态更新完成后再执行
+        setTimeout(() => {
+          autoParseVideo(extractedUrl, "douyin");
+        }, 100);
+      }
     }
   };
 
