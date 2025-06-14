@@ -29,6 +29,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
             fill
             sizes="(max-width: 800px) 100vw, 800px"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
+            priority
             unoptimized
           />
           <div className="absolute inset-0 flex items-center justify-center group-hover:bg-opacity-10 transition-all">
