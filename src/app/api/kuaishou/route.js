@@ -250,14 +250,54 @@ async function parseVideoInfo(response, id) {
       if (match) {
         let videoUrl = match[1];
         // 处理转义字符
-        videoUrl = videoUrl.replace(/\\u002F/g, "/").replace(/\\\//g, "/");
+        videoUrl = videoUrl
+          .replace(/\\u002F/g, "/")
+          .replace(/\\\//g, "/")
+          .replace(/\\/g, "");
         if (videoUrl.startsWith("http")) {
           console.log("通过正则表达式找到视频URL:", videoUrl);
-          return formatResponse(200, "解析成功", {
-            title: "快手视频",
-            cover: "",
-            url: videoUrl,
-          });
+
+          // 尝试从响应中提取更多相关信息
+          const contextData = {
+            photoUrl: videoUrl,
+            source: "regex-match",
+          };
+
+          // 在视频URL附近查找其他相关信息
+          const contextMatch = response.match(
+            new RegExp(
+              `[\\s\\S]{0,500}"photoUrl":\\s*"[^"]*${
+                videoUrl.split("/").pop().split("?")[0]
+              }[^"]*"[\\s\\S]{0,500}`
+            )
+          );
+          if (contextMatch) {
+            const context = contextMatch[0];
+
+            // 提取标题
+            const captionMatch = context.match(/"caption":\s*"([^"]+)"/);
+            if (captionMatch) contextData.caption = captionMatch[1];
+
+            // 提取封面
+            const coverMatch = context.match(/"coverUrl":\s*"([^"]+)"/);
+            if (coverMatch) contextData.coverUrl = coverMatch[1];
+
+            // 提取作者信息
+            const authorMatch = context.match(/"name":\s*"([^"]+)"/);
+            if (authorMatch) contextData.authorName = authorMatch[1];
+
+            // 提取点赞数
+            const likeMatch = context.match(/"likeCount":\s*(\d+)/);
+            if (likeMatch) contextData.likeCount = parseInt(likeMatch[1]);
+
+            // 提取时长
+            const durationMatch = context.match(/"duration":\s*(\d+)/);
+            if (durationMatch)
+              contextData.duration = parseInt(durationMatch[1]);
+          }
+
+          console.log("正则匹配提取的完整数据:", contextData);
+          return formatResponse(200, "解析成功", contextData);
         }
       }
     }
@@ -315,14 +355,9 @@ function extractVideoDataFromObject(obj) {
     obj.photoUrl || obj.playUrl || obj.videoUrl || obj.mp4Url || obj.src;
 
   if (videoUrl && typeof videoUrl === "string" && videoUrl.startsWith("http")) {
-    const coverUrl = obj.coverUrl || obj.poster || obj.cover || obj.thumbnail;
-    const title = obj.caption || obj.title || obj.name || obj.content;
-
-    return formatResponse(200, "解析成功", {
-      title: title || "快手视频",
-      cover: coverUrl || "",
-      url: videoUrl,
-    });
+    // 返回原始数据对象，不进行封装
+    console.log("找到的原始视频数据对象:", JSON.stringify(obj, null, 2));
+    return formatResponse(200, "解析成功", obj); // 直接返回原始对象
   }
 
   return null;
@@ -365,10 +400,10 @@ function extractFromHtml(html) {
       const match = html.match(pattern);
       if (match && match[1].startsWith("http")) {
         console.log("从meta标签找到视频URL:", match[1]);
+        // 返回简化的对象，因为从meta标签获取的信息有限
         return formatResponse(200, "解析成功", {
-          title: "快手视频",
-          cover: "",
-          url: match[1],
+          videoUrl: match[1],
+          source: "meta-tag",
         });
       }
     }
@@ -393,11 +428,22 @@ function extractFromHtml(html) {
           videoUrl = videoUrl.replace(/\\u002F/g, "/").replace(/\\\//g, "/");
           if (videoUrl.startsWith("http")) {
             console.log("从script标签找到视频URL:", videoUrl);
-            return formatResponse(200, "解析成功", {
-              title: "快手视频",
-              cover: "",
-              url: videoUrl,
-            });
+            // 尝试从script内容中提取更多信息
+            const titleMatch = scriptContent.match(/"caption":\s*"([^"]+)"/);
+            const coverMatch = scriptContent.match(/"coverUrl":\s*"([^"]+)"/);
+            const authorMatch = scriptContent.match(/"name":\s*"([^"]+)"/);
+
+            const extractedData = {
+              photoUrl: videoUrl,
+              source: "script-tag",
+            };
+
+            if (titleMatch) extractedData.caption = titleMatch[1];
+            if (coverMatch) extractedData.coverUrl = coverMatch[1];
+            if (authorMatch) extractedData.authorName = authorMatch[1];
+
+            console.log("从script标签提取的数据:", extractedData);
+            return formatResponse(200, "解析成功", extractedData);
           }
         }
       }
