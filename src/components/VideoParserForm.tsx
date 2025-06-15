@@ -76,7 +76,10 @@ export default function VideoParserForm({
       setPlatform("kuaishou");
     } else if (text.includes("weibo.com")) {
       setPlatform("weibo");
-    } else if (text.includes("xiaohongshu.com")) {
+    } else if (
+      text.includes("xiaohongshu.com") ||
+      text.includes("xhslink.com")
+    ) {
       setPlatform("xhs");
     } else if (text.includes("bilibili.com")) {
       setPlatform("bilibili");
@@ -95,7 +98,10 @@ export default function VideoParserForm({
         detectedPlatform = "kuaishou";
       } else if (text.includes("weibo.com")) {
         detectedPlatform = "weibo";
-      } else if (text.includes("xiaohongshu.com")) {
+      } else if (
+        text.includes("xiaohongshu.com") ||
+        text.includes("xhslink.com")
+      ) {
         detectedPlatform = "xhs";
       } else if (text.includes("bilibili.com")) {
         detectedPlatform = "bilibili";
@@ -115,6 +121,7 @@ export default function VideoParserForm({
       "kuaishou.com",
       "weibo.com",
       "xiaohongshu.com",
+      "xhslink.com",
       "bilibili.com",
     ];
 
