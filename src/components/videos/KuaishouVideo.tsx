@@ -92,18 +92,6 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
           </div>
         </div>
       )}
-
-      {/* 数据来源标识 */}
-      <div className="text-center">
-        <span className="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-          快手
-        </span>
-        {kuaishouData.source && (
-          <span className="inline-block ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-            {kuaishouData.source}
-          </span>
-        )}
-      </div>
     </>
   );
 }
