@@ -5,6 +5,7 @@ function formatResponse(code = 200, msg = "解析成功", data = []) {
     code,
     msg,
     data,
+    platform: "kuaishou",
   };
 }
 

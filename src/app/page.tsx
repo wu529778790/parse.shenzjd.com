@@ -3,6 +3,7 @@ import { useState } from "react";
 import VideoParserForm from "@/components/VideoParserForm";
 import BilibiliVideo from "@/components/videos/BilibiliVideo";
 import DouyinVideo from "@/components/videos/DouyinVideo";
+import KuaishouVideo from "@/components/videos/KuaishouVideo";
 import { ApiResponse } from "@/types/api";
 
 export default function Home() {
@@ -41,6 +42,9 @@ export default function Home() {
                   <BilibiliVideo data={result} />
                 )}
                 {result.platform === "douyin" && <DouyinVideo data={result} />}
+                {result.platform === "kuaishou" && (
+                  <KuaishouVideo data={result} />
+                )}
                 {/* 其他平台的组件将在后续添加 */}
               </div>
             </div>
