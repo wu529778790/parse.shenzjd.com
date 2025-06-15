@@ -38,6 +38,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
           )}
         </div>
       </div>
+
       {xhsData.desc && (
         <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
           <p className="text-gray-700 dark:text-gray-300 text-sm">
@@ -45,7 +46,9 @@ export default function XhsVideo({ data }: XhsVideoProps) {
           </p>
         </div>
       )}
-      {xhsData.url && (
+
+      {/* 视频内容 */}
+      {xhsData.url && xhsData.type !== "image" && (
         <a
           href={xhsData.url}
           target="_blank"
@@ -74,6 +77,55 @@ export default function XhsVideo({ data }: XhsVideoProps) {
             </svg>
           </div>
         </a>
+      )}
+
+      {/* 图片内容 */}
+      {xhsData.type === "image" && xhsData.images && (
+        <div className="grid gap-4" style={{ maxWidth: 800 }}>
+          {xhsData.images.length === 1 ? (
+            <div className="relative w-full aspect-square rounded-lg overflow-hidden">
+              <Image
+                src={xhsData.images[0]}
+                alt={xhsData.title || "图片"}
+                fill
+                sizes="(max-width: 800px) 100vw, 800px"
+                className="object-cover"
+                priority
+                unoptimized
+              />
+            </div>
+          ) : (
+            <div
+              className={`grid gap-2 ${
+                xhsData.images.length === 2
+                  ? "grid-cols-2"
+                  : xhsData.images.length === 3
+                  ? "grid-cols-3"
+                  : xhsData.images.length === 4
+                  ? "grid-cols-2"
+                  : "grid-cols-3"
+              }`}>
+              {xhsData.images.map((imageUrl, index) => (
+                <div
+                  key={index}
+                  className={`relative aspect-square rounded-lg overflow-hidden ${
+                    xhsData.images!.length === 4 && index >= 2
+                      ? "col-span-1"
+                      : ""
+                  }`}>
+                  <Image
+                    src={imageUrl}
+                    alt={`${xhsData.title || "图片"} ${index + 1}`}
+                    fill
+                    sizes="(max-width: 800px) 50vw, 400px"
+                    className="object-cover hover:scale-105 transition-transform duration-300"
+                    unoptimized
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </>
   );

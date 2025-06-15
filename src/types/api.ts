@@ -77,7 +77,9 @@ export interface XhsData {
   desc: string;
   avatar: string;
   cover: string;
-  url: string;
+  url?: string; // 视频URL，对于图片内容可能为空
+  images?: string[]; // 图片URL数组
+  type?: "video" | "image"; // 内容类型
 }
 
 // QQ音乐数据类型
