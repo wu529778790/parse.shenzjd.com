@@ -434,10 +434,21 @@ function extractVideoDataFromObject(obj) {
     // 添加其他可用字段
     if (obj.caption) result.caption = obj.caption;
     if (obj.title) result.title = obj.title;
-    if (obj.coverUrl) result.coverUrl = obj.coverUrl;
-    if (obj.poster) result.poster = obj.poster;
-    if (obj.cover) result.cover = obj.cover;
-    if (obj.thumbnail) result.thumbnail = obj.thumbnail;
+
+    // 封面提取 - 优先级排序，避免头像
+    if (obj.coverUrl) {
+      result.coverUrl = obj.coverUrl;
+    } else if (obj.cover) {
+      result.coverUrl = obj.cover;
+    } else if (obj.poster) {
+      result.coverUrl = obj.poster;
+    } else if (obj.thumbnail) {
+      result.coverUrl = obj.thumbnail;
+    } else if (obj.previewUrl) {
+      result.coverUrl = obj.previewUrl;
+    }
+
+    // 作者信息
     if (obj.name) result.authorName = obj.name;
     if (obj.author) result.author = obj.author;
     if (obj.headUrl) result.authorAvatar = obj.headUrl;
@@ -515,22 +526,21 @@ function extractFromHtml(html) {
             const titleMatch = scriptContent.match(/"caption":\s*"([^"]+)"/);
             if (titleMatch) extractedData.caption = titleMatch[1];
 
-            // 提取封面 - 尝试多种字段
+            // 提取封面 - 优先级排序，避免使用头像
             const coverPatterns = [
+              // 高优先级：明确的封面字段
               /"coverUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
               /"cover":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
               /"poster":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
               /"thumbnail":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
-              // 扩展更多可能的封面字段
-              /"headUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
-              /"imageUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
               /"previewUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
-              // 不限制文件扩展名的更广泛搜索
+              /"imageUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              // 不限制文件扩展名的搜索（但排除头像相关字段）
               /"coverUrl":\s*"([^"]+)"/,
               /"cover":\s*"([^"]+)"/,
               /"poster":\s*"([^"]+)"/,
               /"thumbnail":\s*"([^"]+)"/,
-              /"headUrl":\s*"([^"]+)"/,
+              /"previewUrl":\s*"([^"]+)"/,
               /"imageUrl":\s*"([^"]+)"/,
             ];
 
@@ -566,16 +576,35 @@ function extractFromHtml(html) {
               const allImageMatches = scriptContent.matchAll(
                 /https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:[^"'\s]*)?/gi
               );
+
+              const candidateImages = [];
               for (const imageMatch of allImageMatches) {
                 const imageUrl = imageMatch[0]
                   .replace(/\\u002F/g, "/")
                   .replace(/\\\//g, "/");
-                // 优先选择包含cover、thumb、image等关键词的图片
+
+                // 排除明显的头像URL
+                if (
+                  imageUrl.includes("head") ||
+                  imageUrl.includes("avatar") ||
+                  imageUrl.includes("profile") ||
+                  imageUrl.includes("user")
+                ) {
+                  console.log("跳过头像URL:", imageUrl);
+                  continue;
+                }
+
+                candidateImages.push(imageUrl);
+              }
+
+              // 优先选择包含封面关键词的图片
+              for (const imageUrl of candidateImages) {
                 if (
                   imageUrl.includes("cover") ||
                   imageUrl.includes("thumb") ||
                   imageUrl.includes("poster") ||
-                  imageUrl.includes("preview")
+                  imageUrl.includes("preview") ||
+                  imageUrl.includes("snapshot")
                 ) {
                   extractedData.coverUrl = imageUrl;
                   console.log("通过广泛搜索找到封面:", imageUrl);
@@ -583,20 +612,13 @@ function extractFromHtml(html) {
                 }
               }
 
-              // 如果还是没找到，取第一个找到的图片
-              if (!extractedData.coverUrl) {
-                const firstImageMatch = scriptContent.match(
-                  /https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:[^"'\s]*)?/i
+              // 如果还是没找到，取第一个候选图片（已排除头像）
+              if (!extractedData.coverUrl && candidateImages.length > 0) {
+                extractedData.coverUrl = candidateImages[0];
+                console.log(
+                  "使用第一个候选图片作为封面:",
+                  extractedData.coverUrl
                 );
-                if (firstImageMatch) {
-                  extractedData.coverUrl = firstImageMatch[0]
-                    .replace(/\\u002F/g, "/")
-                    .replace(/\\\//g, "/");
-                  console.log(
-                    "使用第一个找到的图片作为封面:",
-                    extractedData.coverUrl
-                  );
-                }
               }
             }
 
