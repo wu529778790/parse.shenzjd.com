@@ -219,7 +219,9 @@ export default function VideoParserForm({
           视频解析工具
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
-          支持抖音、快手、B站、微博、小红书等平台视频解析
+          支持抖音、快手、B站、
+          {/* 微博、 */}
+          小红书等平台视频解析
         </p>
       </div>
 
