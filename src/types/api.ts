@@ -17,9 +17,25 @@ export interface ApiResponse {
   title?: string;
   imgurl?: string;
   desc?: string;
-  data?: VideoItem[] | DouyinData;
+  data?:
+    | VideoItem[]
+    | DouyinData
+    | KuaishouData
+    | WeiboData
+    | XhsData
+    | QsMusicData
+    | PipigxData
+    | PpxiaData;
   user?: User;
-  platform?: "bilibili" | "douyin" | "kuaishou" | "weibo" | "xhs";
+  platform?:
+    | "bilibili"
+    | "douyin"
+    | "kuaishou"
+    | "weibo"
+    | "xhs"
+    | "qsmusic"
+    | "pipigx"
+    | "ppxia";
 }
 
 export interface DouyinData {
@@ -31,5 +47,59 @@ export interface DouyinData {
   time: number;
   title: string;
   uid: string;
+  url: string;
+}
+
+// 快手数据类型
+export interface KuaishouData {
+  title: string;
+  cover: string;
+  url: string;
+}
+
+// 微博数据类型
+export interface WeiboData {
+  author: string;
+  avatar: string;
+  time: string;
+  title: string;
+  cover: string;
+  url: string;
+}
+
+// 小红书数据类型
+export interface XhsData {
+  author: string;
+  authorID: string;
+  title: string;
+  desc: string;
+  avatar: string;
+  cover: string;
+  url: string;
+}
+
+// QQ音乐数据类型
+export interface QsMusicData {
+  name: string;
+  url: string;
+  cover: string;
+  lyrics: string;
+  core: string;
+  copyright: string;
+}
+
+// 皮皮虾数据类型（pipigx）
+export interface PipigxData {
+  title: string;
+  cover: string;
+  video: string;
+}
+
+// 皮皮虾数据类型（ppxia）
+export interface PpxiaData {
+  author: string;
+  avatar: string;
+  title: string;
+  cover: string;
   url: string;
 }
