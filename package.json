@@ -1,6 +1,11 @@
 {
   "name": "tiny-wind-3b79",
   "version": "0.1.18",
+  "description": "这是一个基于Node.js的短视频解析API服务，支持多个平台的视频解析。",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -10,6 +15,7 @@
   },
   "dependencies": {
     "axios": "^1.9.0",
+    "linkedom": "^0.18.11",
     "next": "15.3.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
