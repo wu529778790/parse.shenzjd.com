@@ -12,48 +12,400 @@ async function kuaishou(url) {
   try {
     const headers = {
       "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "Accept-Encoding": "gzip, deflate, br",
+      Connection: "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
     };
+
+    console.log("原始URL:", url);
+
+    // 获取重定向后的URL
     const newurl = await getRedirectedUrl(url);
+    console.log("重定向后的URL:", newurl);
+
     let response = "";
-    const shortVideoPattern = /short-video\/([^?]+)/;
-    const photoPattern = /photo\/([^?]+)/;
-    let id;
-    if (shortVideoPattern.test(newurl)) {
-      id = newurl.match(shortVideoPattern)[1];
-      response = await makeRequest(url, headers);
-    } else if (photoPattern.test(newurl)) {
-      id = newurl.match(photoPattern)[1];
-      response = await makeRequest(
-        `https://www.kuaishou.com/short-video/${id}`,
-        headers
-      );
+    let id = "";
+
+    // 支持多种URL格式
+    const patterns = [
+      {
+        name: "short-video",
+        regex: /short-video\/([^?]+)/,
+        template: (videoId) =>
+          `https://www.kuaishou.com/short-video/${videoId}`,
+      },
+      {
+        name: "photo",
+        regex: /photo\/([^?]+)/,
+        template: (videoId) =>
+          `https://www.kuaishou.com/short-video/${videoId}`,
+      },
+      { name: "f-format", regex: /\/f\/([^?]+)/, template: () => newurl }, // 使用重定向后的URL
+      { name: "profile", regex: /profile\/([^?]+)/, template: () => newurl },
+      { name: "video", regex: /video\/([^?]+)/, template: () => newurl },
+    ];
+
+    let matchedPattern = null;
+    let requestUrl = newurl;
+
+    // 尝试匹配不同的URL格式
+    for (const pattern of patterns) {
+      const match = url.match(pattern.regex) || newurl.match(pattern.regex);
+      if (match) {
+        id = match[1];
+        requestUrl = pattern.template(id);
+        matchedPattern = pattern.name;
+        console.log(
+          `匹配到${pattern.name}格式，ID: ${id}, 请求URL: ${requestUrl}`
+        );
+        break;
+      }
     }
+
+    if (!matchedPattern) {
+      console.log("未匹配到任何已知格式，使用重定向URL");
+      requestUrl = newurl;
+    }
+
+    // 请求页面内容
+    response = await makeRequest(requestUrl, headers);
+
+    if (!response) {
+      console.log("第一次请求失败，尝试原始URL");
+      response = await makeRequest(url, headers);
+    }
+
     if (response) {
-      const apolloStatePattern =
-        /window\.__APOLLO_STATE__\s*=\s*(.*?)<\/script>/s;
-      const matches = response.match(apolloStatePattern);
-      if (matches) {
-        let cleanedApolloState = matches[1]
-          .replace(/function\s*\([^)]*\)\s*{[^}]*}/g, ":")
-          .replace(/,\s*(?=}|])/g, "")
-          .replace(/;(:());/g, "");
-        const videoInfo = JSON.parse(cleanedApolloState)["defaultClient"];
-        if (videoInfo) {
-          const key = `VisionVideoDetailPhoto:${id}`;
-          const json = videoInfo[key];
-          if (json) {
+      console.log("获取到页面内容，长度:", response.length);
+
+      // 尝试解析视频信息
+      const result = await parseVideoInfo(response, id);
+
+      if (result) {
+        return result;
+      }
+
+      // 如果解析失败，尝试其他方法
+      console.log("标准解析失败，尝试其他方法");
+
+      // 方法1：查找JSON数据
+      const jsonMatch = response.match(/"photoUrl":"([^"]+)"/);
+      if (jsonMatch) {
+        const photoUrl = jsonMatch[1].replace(/\\u002F/g, "/");
+        console.log("通过JSON匹配找到视频URL:", photoUrl);
+
+        return formatResponse(200, "解析成功", {
+          title: "快手视频",
+          cover: "",
+          url: photoUrl,
+        });
+      }
+
+      // 方法2：查找其他视频URL格式
+      const videoUrlPatterns = [
+        /"playUrl":"([^"]+)"/,
+        /"videoUrl":"([^"]+)"/,
+        /"mp4Url":"([^"]+)"/,
+        /video['"]\s*:\s*['"](https?:\/\/[^'"]+)/,
+      ];
+
+      for (const pattern of videoUrlPatterns) {
+        const match = response.match(pattern);
+        if (match) {
+          const videoUrl = match[1].replace(/\\u002F/g, "/").replace(/\\/g, "");
+          console.log("通过模式匹配找到视频URL:", videoUrl);
+
+          return formatResponse(200, "解析成功", {
+            title: "快手视频",
+            cover: "",
+            url: videoUrl,
+          });
+        }
+      }
+    } else {
+      console.log("未获取到页面内容");
+    }
+
+    return null;
+  } catch (error) {
+    console.log("kuaishou函数错误:", error);
+    return null;
+  }
+}
+
+async function parseVideoInfo(response, id) {
+  try {
+    console.log("=== 开始解析视频信息 ===");
+
+    // 方法1：解析APOLLO_STATE
+    const apolloStatePattern =
+      /window\.__APOLLO_STATE__\s*=\s*({[\s\S]*?})(?:\s*;|\s*<\/script>)/;
+    const matches = response.match(apolloStatePattern);
+
+    if (matches) {
+      console.log("找到APOLLO_STATE");
+      try {
+        let apolloStateStr = matches[1];
+        console.log("原始APOLLO_STATE长度:", apolloStateStr.length);
+
+        // 更强大的JSON清理逻辑
+        apolloStateStr = cleanJsonString(apolloStateStr);
+        console.log("清理后APOLLO_STATE长度:", apolloStateStr.length);
+
+        const apolloState = JSON.parse(apolloStateStr);
+        const defaultClient = apolloState.defaultClient || apolloState;
+
+        if (defaultClient) {
+          console.log("成功解析APOLLO_STATE，查找视频数据...");
+
+          // 查找视频数据的多种可能key
+          const possibleKeys = Object.keys(defaultClient).filter(
+            (key) =>
+              key.includes("Photo") ||
+              key.includes("Video") ||
+              key.includes("Detail") ||
+              (id && key.includes(id))
+          );
+
+          console.log("可能的视频数据keys:", possibleKeys.slice(0, 10)); // 只显示前10个
+
+          for (const key of possibleKeys) {
+            const videoData = defaultClient[key];
+            if (videoData && typeof videoData === "object") {
+              const result = extractVideoDataFromObject(videoData);
+              if (result) {
+                console.log("从APOLLO_STATE找到视频数据，key:", key);
+                return result;
+              }
+            }
+          }
+
+          // 如果没有找到特定key，尝试遍历所有数据
+          console.log("在APOLLO_STATE中进行深度搜索...");
+          const deepResult = findVideoDataDeep(defaultClient);
+          if (deepResult) {
+            console.log("通过深度搜索找到视频数据");
+            return deepResult;
+          }
+        }
+      } catch (parseError) {
+        console.log("解析APOLLO_STATE失败:", parseError.message);
+        console.log("JSON字符串开头:", matches[1].substring(0, 200));
+      }
+    } else {
+      console.log("未找到APOLLO_STATE");
+    }
+
+    // 方法2：直接从HTML中提取视频信息
+    console.log("尝试从HTML中直接提取视频信息...");
+    const htmlResult = extractFromHtml(response);
+    if (htmlResult) {
+      console.log("从HTML中找到视频数据");
+      return htmlResult;
+    }
+
+    // 方法3：查找其他可能的数据结构
+    console.log("尝试查找其他数据结构...");
+    const dataPatterns = [
+      /window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/,
+      /window\.__NUXT__\s*=\s*({[\s\S]*?});/,
+      /"videoDetail":\s*({[\s\S]*?})/,
+      /"photoInfo":\s*({[\s\S]*?})/,
+    ];
+
+    for (const pattern of dataPatterns) {
+      const match = response.match(pattern);
+      if (match) {
+        try {
+          const data = JSON.parse(match[1]);
+          console.log("找到其他数据结构");
+          const deepResult = findVideoDataDeep(data);
+          if (deepResult) {
+            console.log("从其他数据结构找到视频数据");
+            return deepResult;
+          }
+        } catch (e) {
+          console.log("解析其他数据结构失败:", e.message);
+        }
+      }
+    }
+
+    // 方法4：正则表达式直接匹配
+    console.log("尝试正则表达式直接匹配...");
+    const regexPatterns = [
+      /"photoUrl":\s*"([^"]+)"/,
+      /"playUrl":\s*"([^"]+)"/,
+      /"videoUrl":\s*"([^"]+)"/,
+      /"mp4Url":\s*"([^"]+)"/,
+      /photoUrl['"]\s*:\s*['"]([^'"]+)['"]/,
+      /playUrl['"]\s*:\s*['"]([^'"]+)['"]/,
+    ];
+
+    for (const pattern of regexPatterns) {
+      const match = response.match(pattern);
+      if (match) {
+        let videoUrl = match[1];
+        // 处理转义字符
+        videoUrl = videoUrl.replace(/\\u002F/g, "/").replace(/\\\//g, "/");
+        if (videoUrl.startsWith("http")) {
+          console.log("通过正则表达式找到视频URL:", videoUrl);
+          return formatResponse(200, "解析成功", {
+            title: "快手视频",
+            cover: "",
+            url: videoUrl,
+          });
+        }
+      }
+    }
+
+    console.log("所有解析方法都失败了");
+    return null;
+  } catch (error) {
+    console.log("parseVideoInfo错误:", error);
+    return null;
+  }
+}
+
+function cleanJsonString(jsonStr) {
+  try {
+    // 移除函数定义
+    jsonStr = jsonStr.replace(
+      /function\s*\([^)]*\)\s*{[^{}]*(?:{[^{}]*}[^{}]*)*}/g,
+      "null"
+    );
+
+    // 移除undefined
+    jsonStr = jsonStr.replace(/:\s*undefined/g, ":null");
+    jsonStr = jsonStr.replace(/,\s*undefined/g, ",null");
+
+    // 移除注释
+    jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, "");
+    jsonStr = jsonStr.replace(/\/\/.*$/gm, "");
+
+    // 处理末尾逗号
+    jsonStr = jsonStr.replace(/,\s*(?=})/g, "");
+    jsonStr = jsonStr.replace(/,\s*(?=])/g, "");
+
+    // 处理一些特殊的快手特有格式
+    jsonStr = jsonStr.replace(/new\s+Date\([^)]*\)/g, "null");
+    jsonStr = jsonStr.replace(/Symbol\([^)]*\)/g, "null");
+
+    // 处理特殊的函数调用
+    jsonStr = jsonStr.replace(/[a-zA-Z_$][a-zA-Z0-9_$]*\s*\([^)]*\)/g, "null");
+
+    // 尝试修复一些常见的JSON格式问题
+    jsonStr = jsonStr.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":');
+
+    return jsonStr;
+  } catch (error) {
+    console.log("JSON清理失败:", error);
+    return jsonStr;
+  }
+}
+
+function extractVideoDataFromObject(obj) {
+  if (!obj || typeof obj !== "object") return null;
+
+  // 查找视频URL
+  const videoUrl =
+    obj.photoUrl || obj.playUrl || obj.videoUrl || obj.mp4Url || obj.src;
+
+  if (videoUrl && typeof videoUrl === "string" && videoUrl.startsWith("http")) {
+    const coverUrl = obj.coverUrl || obj.poster || obj.cover || obj.thumbnail;
+    const title = obj.caption || obj.title || obj.name || obj.content;
+
+    return formatResponse(200, "解析成功", {
+      title: title || "快手视频",
+      cover: coverUrl || "",
+      url: videoUrl,
+    });
+  }
+
+  return null;
+}
+
+function findVideoDataDeep(obj, depth = 0) {
+  if (depth > 6) return null; // 防止无限递归
+  if (!obj || typeof obj !== "object") return null;
+
+  // 直接检查当前对象
+  const directResult = extractVideoDataFromObject(obj);
+  if (directResult) return directResult;
+
+  // 递归搜索
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      try {
+        const result = findVideoDataDeep(obj[key], depth + 1);
+        if (result) return result;
+      } catch {
+        // 忽略递归中的错误，继续搜索
+        continue;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractFromHtml(html) {
+  try {
+    // 查找meta标签中的视频信息
+    const metaPatterns = [
+      /<meta[^>]*property=['"]og:video['"][^>]*content=['"]([^'"]+)['"]/i,
+      /<meta[^>]*name=['"]twitter:player:stream['"][^>]*content=['"]([^'"]+)['"]/i,
+      /<meta[^>]*property=['"]video:secure_url['"][^>]*content=['"]([^'"]+)['"]/i,
+    ];
+
+    for (const pattern of metaPatterns) {
+      const match = html.match(pattern);
+      if (match && match[1].startsWith("http")) {
+        console.log("从meta标签找到视频URL:", match[1]);
+        return formatResponse(200, "解析成功", {
+          title: "快手视频",
+          cover: "",
+          url: match[1],
+        });
+      }
+    }
+
+    // 查找script标签中的视频URL
+    const scriptMatches = html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
+    for (const match of scriptMatches) {
+      const scriptContent = match[1];
+
+      // 在script内容中查找视频URL
+      const urlPatterns = [
+        /"photoUrl":\s*"([^"]+\.(?:mp4|m3u8|flv)[^"]*)"/,
+        /"playUrl":\s*"([^"]+\.(?:mp4|m3u8|flv)[^"]*)"/,
+        /"videoUrl":\s*"([^"]+\.(?:mp4|m3u8|flv)[^"]*)"/,
+        /https?:\/\/[^"'\s]+\.(?:mp4|m3u8|flv)(?:\?[^"'\s]*)?/g,
+      ];
+
+      for (const pattern of urlPatterns) {
+        const urlMatch = scriptContent.match(pattern);
+        if (urlMatch) {
+          let videoUrl = urlMatch[1] || urlMatch[0];
+          videoUrl = videoUrl.replace(/\\u002F/g, "/").replace(/\\\//g, "/");
+          if (videoUrl.startsWith("http")) {
+            console.log("从script标签找到视频URL:", videoUrl);
             return formatResponse(200, "解析成功", {
-              title: json.caption,
-              cover: json.coverUrl,
-              url: json.photoUrl,
+              title: "快手视频",
+              cover: "",
+              url: videoUrl,
             });
           }
         }
       }
     }
+
     return null;
-  } catch {
+  } catch (error) {
+    console.log("从HTML提取失败:", error);
     return null;
   }
 }
@@ -62,18 +414,45 @@ async function getRedirectedUrl(url) {
   try {
     const response = await fetch(url, {
       redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+      },
+      signal: AbortSignal.timeout(10000),
     });
+    console.log("重定向响应状态:", response.status);
     return response.url || url;
-  } catch {
+  } catch (error) {
+    console.log("获取重定向URL失败:", error);
     return url;
   }
 }
 
 async function makeRequest(url, headers) {
   try {
-    const response = await fetch(url, { headers });
-    return await response.text();
-  } catch {
+    console.log("请求URL:", url);
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(15000), // 15秒超时
+    });
+
+    console.log("响应状态:", response.status);
+    console.log("响应头:", Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      console.log("请求失败，状态码:", response.status);
+      if (response.status === 403) {
+        console.log("403错误，可能被反爬虫拦截");
+      }
+      return null;
+    }
+
+    const text = await response.text();
+    console.log("响应内容长度:", text.length);
+
+    return text;
+  } catch (error) {
+    console.log("请求错误:", error.message);
     return null;
   }
 }
@@ -87,20 +466,32 @@ export async function GET(request) {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
   }
+
+  console.log("=== 开始处理快手URL ===");
+  console.log("原始URL:", url);
+
   try {
     const jsonData = await kuaishou(url);
+    console.log("jsonData", jsonData);
     if (jsonData) {
+      console.log("=== 解析成功 ===");
       return Response.json(jsonData, {
         headers: { "Access-Control-Allow-Origin": "*" },
       });
     } else {
-      return Response.json(formatResponse(404, "链接错误"), {
-        status: 404,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
+      console.log("=== 解析失败 ===");
+      return Response.json(
+        formatResponse(404, "解析失败，可能是链接格式不支持或内容无法访问"),
+        {
+          status: 404,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        }
+      );
     }
   } catch (error) {
-    return Response.json(formatResponse(500, "服务器错误", error), {
+    console.log("=== API处理错误 ===");
+    console.log("错误详情:", error);
+    return Response.json(formatResponse(500, "服务器错误", error.message), {
       status: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
     });
