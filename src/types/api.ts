@@ -52,9 +52,11 @@ export interface DouyinData {
 
 // 快手数据类型
 export interface KuaishouData {
-  title: string;
-  cover: string;
-  url: string;
+  photoUrl: string;
+  caption: string;
+  coverUrl: string;
+  source?: string;
+  authorName?: string;
 }
 
 // 微博数据类型

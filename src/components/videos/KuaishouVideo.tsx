@@ -16,16 +16,26 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
 
   return (
     <>
-      {kuaishouData.url && (
+      {/* 视频标题 */}
+      {kuaishouData.caption && (
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            {kuaishouData.caption}
+          </h2>
+        </div>
+      )}
+
+      {/* 视频封面和播放链接 */}
+      {kuaishouData.photoUrl && (
         <a
-          href={kuaishouData.url}
+          href={kuaishouData.photoUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"
           style={{ maxWidth: 800 }}>
           <Image
-            src={kuaishouData.cover}
-            alt={kuaishouData.title || "视频封面"}
+            src={kuaishouData.coverUrl || "/placeholder-cover.jpg"}
+            alt={kuaishouData.caption || "快手视频封面"}
             fill
             sizes="(max-width: 800px) 100vw, 800px"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -46,13 +56,32 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
           </div>
         </a>
       )}
-      {kuaishouData.title && (
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {kuaishouData.title}
-          </h3>
+
+      {/* 作者信息（如果有的话） */}
+      {kuaishouData.authorName && (
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-yellow-400 to-red-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">快</span>
+            </div>
+            <span className="text-gray-600 dark:text-gray-300 text-sm">
+              {kuaishouData.authorName}
+            </span>
+          </div>
         </div>
       )}
+
+      {/* 数据来源标识 */}
+      <div className="text-center">
+        <span className="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
+          快手
+        </span>
+        {kuaishouData.source && (
+          <span className="inline-block ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+            {kuaishouData.source}
+          </span>
+        )}
+      </div>
     </>
   );
 }
