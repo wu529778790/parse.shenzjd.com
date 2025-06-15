@@ -87,13 +87,24 @@ export default function VideoParserForm({
     if (extractedUrl) {
       setUrl(extractedUrl);
 
-      // 如果检测到抖音链接，自动开始解析
+      // 自动检测平台并开始解析
+      let detectedPlatform = "douyin"; // 默认平台
       if (text.includes("douyin.com")) {
-        // 使用 setTimeout 确保状态更新完成后再执行
-        setTimeout(() => {
-          autoParseVideo(extractedUrl, "douyin");
-        }, 100);
+        detectedPlatform = "douyin";
+      } else if (text.includes("kuaishou.com")) {
+        detectedPlatform = "kuaishou";
+      } else if (text.includes("weibo.com")) {
+        detectedPlatform = "weibo";
+      } else if (text.includes("xiaohongshu.com")) {
+        detectedPlatform = "xhs";
+      } else if (text.includes("bilibili.com")) {
+        detectedPlatform = "bilibili";
       }
+
+      // 使用 setTimeout 确保状态更新完成后再执行自动解析
+      setTimeout(() => {
+        autoParseVideo(extractedUrl, detectedPlatform);
+      }, 100);
     }
   };
 
