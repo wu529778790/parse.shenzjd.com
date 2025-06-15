@@ -257,46 +257,113 @@ async function parseVideoInfo(response, id) {
         if (videoUrl.startsWith("http")) {
           console.log("通过正则表达式找到视频URL:", videoUrl);
 
-          // 尝试从响应中提取更多相关信息
+          // 尝试提取更多信息
           const contextData = {
             photoUrl: videoUrl,
             source: "regex-match",
           };
 
-          // 在视频URL附近查找其他相关信息
-          const contextMatch = response.match(
-            new RegExp(
-              `[\\s\\S]{0,500}"photoUrl":\\s*"[^"]*${
-                videoUrl.split("/").pop().split("?")[0]
-              }[^"]*"[\\s\\S]{0,500}`
-            )
-          );
-          if (contextMatch) {
-            const context = contextMatch[0];
+          // 简单的封面提取尝试
+          const coverPatterns = [
+            /"coverUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            /"cover":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            /"poster":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            /"thumbnail":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            // 扩展更多可能的封面字段
+            /"headUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            /"imageUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            /"previewUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+            // 不限制文件扩展名的更广泛搜索
+            /"coverUrl":\s*"([^"]+)"/,
+            /"cover":\s*"([^"]+)"/,
+            /"poster":\s*"([^"]+)"/,
+            /"thumbnail":\s*"([^"]+)"/,
+            /"headUrl":\s*"([^"]+)"/,
+            /"imageUrl":\s*"([^"]+)"/,
+          ];
 
-            // 提取标题
-            const captionMatch = context.match(/"caption":\s*"([^"]+)"/);
-            if (captionMatch) contextData.caption = captionMatch[1];
-
-            // 提取封面
-            const coverMatch = context.match(/"coverUrl":\s*"([^"]+)"/);
-            if (coverMatch) contextData.coverUrl = coverMatch[1];
-
-            // 提取作者信息
-            const authorMatch = context.match(/"name":\s*"([^"]+)"/);
-            if (authorMatch) contextData.authorName = authorMatch[1];
-
-            // 提取点赞数
-            const likeMatch = context.match(/"likeCount":\s*(\d+)/);
-            if (likeMatch) contextData.likeCount = parseInt(likeMatch[1]);
-
-            // 提取时长
-            const durationMatch = context.match(/"duration":\s*(\d+)/);
-            if (durationMatch)
-              contextData.duration = parseInt(durationMatch[1]);
+          for (const coverPattern of coverPatterns) {
+            const coverMatch = response.match(coverPattern);
+            if (coverMatch) {
+              let coverUrl = coverMatch[1]
+                .replace(/\\u002F/g, "/")
+                .replace(/\\\//g, "/")
+                .replace(/\\/g, "");
+              // 检查是否是有效的图片URL
+              if (
+                coverUrl.startsWith("http") &&
+                (coverUrl.includes(".jpg") ||
+                  coverUrl.includes(".jpeg") ||
+                  coverUrl.includes(".png") ||
+                  coverUrl.includes(".webp") ||
+                  coverUrl.includes("image") ||
+                  coverUrl.includes("cover") ||
+                  coverUrl.includes("thumb"))
+              ) {
+                contextData.coverUrl = coverUrl;
+                console.log("找到封面图片:", coverUrl);
+                break;
+              }
+            }
           }
 
-          console.log("正则匹配提取的完整数据:", contextData);
+          // 如果还没找到封面，尝试更广泛的搜索
+          if (!contextData.coverUrl) {
+            console.log("尝试更广泛的封面搜索...");
+            // 搜索所有可能的图片URL
+            const allImageMatches = response.matchAll(
+              /https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:[^"'\s]*)?/gi
+            );
+            for (const imageMatch of allImageMatches) {
+              const imageUrl = imageMatch[0]
+                .replace(/\\u002F/g, "/")
+                .replace(/\\\//g, "/");
+              // 优先选择包含cover、thumb、image等关键词的图片
+              if (
+                imageUrl.includes("cover") ||
+                imageUrl.includes("thumb") ||
+                imageUrl.includes("poster") ||
+                imageUrl.includes("preview")
+              ) {
+                contextData.coverUrl = imageUrl;
+                console.log("通过广泛搜索找到封面:", imageUrl);
+                break;
+              }
+            }
+
+            // 如果还是没找到，取第一个找到的图片
+            if (!contextData.coverUrl) {
+              const firstImageMatch = response.match(
+                /https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:[^"'\s]*)?/i
+              );
+              if (firstImageMatch) {
+                contextData.coverUrl = firstImageMatch[0]
+                  .replace(/\\u002F/g, "/")
+                  .replace(/\\\//g, "/");
+                console.log(
+                  "使用第一个找到的图片作为封面:",
+                  contextData.coverUrl
+                );
+              }
+            }
+          }
+
+          // 提取标题
+          const captionMatch = response.match(/"caption":\s*"([^"]+)"/);
+          if (captionMatch) {
+            contextData.caption = captionMatch[1];
+          }
+
+          // 提取作者
+          const authorMatch = response.match(/"name":\s*"([^"]+)"/);
+          if (authorMatch && !authorMatch[1].includes("原声")) {
+            contextData.authorName = authorMatch[1];
+          }
+
+          console.log(
+            "正则匹配提取的数据:",
+            JSON.stringify(contextData, null, 2)
+          );
           return formatResponse(200, "解析成功", contextData);
         }
       }
@@ -355,9 +422,37 @@ function extractVideoDataFromObject(obj) {
     obj.photoUrl || obj.playUrl || obj.videoUrl || obj.mp4Url || obj.src;
 
   if (videoUrl && typeof videoUrl === "string" && videoUrl.startsWith("http")) {
-    // 返回原始数据对象，不进行封装
+    // 返回完整的原始数据对象，包含所有可用字段
     console.log("找到的原始视频数据对象:", JSON.stringify(obj, null, 2));
-    return formatResponse(200, "解析成功", obj); // 直接返回原始对象
+
+    // 提取关键信息
+    const result = {
+      photoUrl: videoUrl,
+      source: "apollo-state",
+    };
+
+    // 添加其他可用字段
+    if (obj.caption) result.caption = obj.caption;
+    if (obj.title) result.title = obj.title;
+    if (obj.coverUrl) result.coverUrl = obj.coverUrl;
+    if (obj.poster) result.poster = obj.poster;
+    if (obj.cover) result.cover = obj.cover;
+    if (obj.thumbnail) result.thumbnail = obj.thumbnail;
+    if (obj.name) result.authorName = obj.name;
+    if (obj.author) result.author = obj.author;
+    if (obj.headUrl) result.authorAvatar = obj.headUrl;
+    if (obj.avatar) result.avatar = obj.avatar;
+    if (obj.likeCount !== undefined) result.likeCount = obj.likeCount;
+    if (obj.like !== undefined) result.like = obj.like;
+    if (obj.commentCount !== undefined) result.commentCount = obj.commentCount;
+    if (obj.shareCount !== undefined) result.shareCount = obj.shareCount;
+    if (obj.playCount !== undefined) result.playCount = obj.playCount;
+    if (obj.duration !== undefined) result.duration = obj.duration;
+    if (obj.createTime !== undefined) result.createTime = obj.createTime;
+    if (obj.timestamp !== undefined) result.timestamp = obj.timestamp;
+
+    console.log("提取的结构化数据:", JSON.stringify(result, null, 2));
+    return formatResponse(200, "解析成功", result);
   }
 
   return null;
@@ -389,26 +484,7 @@ function findVideoDataDeep(obj, depth = 0) {
 
 function extractFromHtml(html) {
   try {
-    // 查找meta标签中的视频信息
-    const metaPatterns = [
-      /<meta[^>]*property=['"]og:video['"][^>]*content=['"]([^'"]+)['"]/i,
-      /<meta[^>]*name=['"]twitter:player:stream['"][^>]*content=['"]([^'"]+)['"]/i,
-      /<meta[^>]*property=['"]video:secure_url['"][^>]*content=['"]([^'"]+)['"]/i,
-    ];
-
-    for (const pattern of metaPatterns) {
-      const match = html.match(pattern);
-      if (match && match[1].startsWith("http")) {
-        console.log("从meta标签找到视频URL:", match[1]);
-        // 返回简化的对象，因为从meta标签获取的信息有限
-        return formatResponse(200, "解析成功", {
-          videoUrl: match[1],
-          source: "meta-tag",
-        });
-      }
-    }
-
-    // 查找script标签中的视频URL
+    // 查找script标签中的视频URL和其他信息
     const scriptMatches = html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
     for (const match of scriptMatches) {
       const scriptContent = match[1];
@@ -428,19 +504,106 @@ function extractFromHtml(html) {
           videoUrl = videoUrl.replace(/\\u002F/g, "/").replace(/\\\//g, "/");
           if (videoUrl.startsWith("http")) {
             console.log("从script标签找到视频URL:", videoUrl);
-            // 尝试从script内容中提取更多信息
-            const titleMatch = scriptContent.match(/"caption":\s*"([^"]+)"/);
-            const coverMatch = scriptContent.match(/"coverUrl":\s*"([^"]+)"/);
-            const authorMatch = scriptContent.match(/"name":\s*"([^"]+)"/);
 
+            // 提取完整的视频信息
             const extractedData = {
               photoUrl: videoUrl,
               source: "script-tag",
             };
 
+            // 提取标题
+            const titleMatch = scriptContent.match(/"caption":\s*"([^"]+)"/);
             if (titleMatch) extractedData.caption = titleMatch[1];
-            if (coverMatch) extractedData.coverUrl = coverMatch[1];
-            if (authorMatch) extractedData.authorName = authorMatch[1];
+
+            // 提取封面 - 尝试多种字段
+            const coverPatterns = [
+              /"coverUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              /"cover":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              /"poster":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              /"thumbnail":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              // 扩展更多可能的封面字段
+              /"headUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              /"imageUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              /"previewUrl":\s*"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+              // 不限制文件扩展名的更广泛搜索
+              /"coverUrl":\s*"([^"]+)"/,
+              /"cover":\s*"([^"]+)"/,
+              /"poster":\s*"([^"]+)"/,
+              /"thumbnail":\s*"([^"]+)"/,
+              /"headUrl":\s*"([^"]+)"/,
+              /"imageUrl":\s*"([^"]+)"/,
+            ];
+
+            for (const coverPattern of coverPatterns) {
+              const coverMatch = scriptContent.match(coverPattern);
+              if (coverMatch) {
+                let coverUrl = coverMatch[1]
+                  .replace(/\\u002F/g, "/")
+                  .replace(/\\\//g, "/")
+                  .replace(/\\/g, "");
+                // 检查是否是有效的图片URL
+                if (
+                  coverUrl.startsWith("http") &&
+                  (coverUrl.includes(".jpg") ||
+                    coverUrl.includes(".jpeg") ||
+                    coverUrl.includes(".png") ||
+                    coverUrl.includes(".webp") ||
+                    coverUrl.includes("image") ||
+                    coverUrl.includes("cover") ||
+                    coverUrl.includes("thumb"))
+                ) {
+                  extractedData.coverUrl = coverUrl;
+                  console.log("找到封面图片:", coverUrl);
+                  break;
+                }
+              }
+            }
+
+            // 如果还没找到封面，尝试更广泛的搜索
+            if (!extractedData.coverUrl) {
+              console.log("尝试更广泛的封面搜索...");
+              // 搜索所有可能的图片URL
+              const allImageMatches = scriptContent.matchAll(
+                /https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:[^"'\s]*)?/gi
+              );
+              for (const imageMatch of allImageMatches) {
+                const imageUrl = imageMatch[0]
+                  .replace(/\\u002F/g, "/")
+                  .replace(/\\\//g, "/");
+                // 优先选择包含cover、thumb、image等关键词的图片
+                if (
+                  imageUrl.includes("cover") ||
+                  imageUrl.includes("thumb") ||
+                  imageUrl.includes("poster") ||
+                  imageUrl.includes("preview")
+                ) {
+                  extractedData.coverUrl = imageUrl;
+                  console.log("通过广泛搜索找到封面:", imageUrl);
+                  break;
+                }
+              }
+
+              // 如果还是没找到，取第一个找到的图片
+              if (!extractedData.coverUrl) {
+                const firstImageMatch = scriptContent.match(
+                  /https?:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:[^"'\s]*)?/i
+                );
+                if (firstImageMatch) {
+                  extractedData.coverUrl = firstImageMatch[0]
+                    .replace(/\\u002F/g, "/")
+                    .replace(/\\\//g, "/");
+                  console.log(
+                    "使用第一个找到的图片作为封面:",
+                    extractedData.coverUrl
+                  );
+                }
+              }
+            }
+
+            // 提取作者
+            const authorMatch = scriptContent.match(/"name":\s*"([^"]+)"/);
+            if (authorMatch && !authorMatch[1].includes("原声"))
+              extractedData.authorName = authorMatch[1];
 
             console.log("从script标签提取的数据:", extractedData);
             return formatResponse(200, "解析成功", extractedData);
