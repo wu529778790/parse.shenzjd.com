@@ -1,9 +1,16 @@
 "use client";
 import { useState } from "react";
 import VideoParserForm from "@/components/VideoParserForm";
-import BilibiliVideo from "@/components/videos/BilibiliVideo";
-import DouyinVideo from "@/components/videos/DouyinVideo";
-import KuaishouVideo from "@/components/videos/KuaishouVideo";
+import {
+  BilibiliVideo,
+  DouyinVideo,
+  KuaishouVideo,
+  WeiboVideo,
+  XhsVideo,
+  QsMusicVideo,
+  PipigxVideo,
+  PpxiaVideo,
+} from "@/components/videos";
 import { ApiResponse } from "@/types/api";
 
 export default function Home() {
@@ -45,7 +52,13 @@ export default function Home() {
                 {result.platform === "kuaishou" && (
                   <KuaishouVideo data={result} />
                 )}
-                {/* 其他平台的组件将在后续添加 */}
+                {result.platform === "weibo" && <WeiboVideo data={result} />}
+                {result.platform === "xhs" && <XhsVideo data={result} />}
+                {result.platform === "qsmusic" && (
+                  <QsMusicVideo data={result} />
+                )}
+                {result.platform === "pipigx" && <PipigxVideo data={result} />}
+                {result.platform === "ppxia" && <PpxiaVideo data={result} />}
               </div>
             </div>
           )}
