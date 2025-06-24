@@ -39,6 +39,11 @@ npm start
 
 服务器将在 <http://localhost:3000> 上运行。
 
+## Docker部署
+```
+docker run -d -p 3030:3000 --name parse wu529778790/parse.shenzjd.com:latest
+```
+
 ## API使用说明
 
 所有API都接受GET请求，需要提供`url`参数。
