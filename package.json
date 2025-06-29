@@ -1,6 +1,6 @@
 {
   "name": "tiny-wind-3b79",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "这是一个基于Node.js的短视频解析API服务，支持多个平台的视频解析。",
   "main": "index.js",
   "keywords": [],
