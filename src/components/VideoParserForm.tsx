@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ApiResponse } from "@/types/api";
 
 interface VideoParserFormProps {
@@ -37,82 +37,88 @@ export default function VideoParserForm({
     "douyin" | "bilibili" | "kuaishou" | "weibo" | "xhs"
   >("douyin");
 
-  // 自动解析函数
-  const autoParseVideo = async (url: string, platform: string) => {
-    if (loading) return; // 如果正在加载中，不重复解析
+  // 自动解析函数（稳定引用）
+  const autoParseVideo = useCallback(
+    async (url: string, platform: string) => {
+      if (loading) return; // 如果正在加载中，不重复解析
 
-    setLoading(true);
-    onResult(null, "");
+      setLoading(true);
+      onResult(null, "");
 
-    try {
-      const response = await fetch(
-        `/api/${platform}?url=${encodeURIComponent(url)}`
-      );
-      const data: ApiResponse = await response.json();
-      if (data.code === 1 || data.code === 200) {
-        data.platform = platform as
-          | "douyin"
-          | "bilibili"
-          | "kuaishou"
-          | "weibo"
-          | "xhs";
-        onResult(data, "");
-      } else {
-        onResult(null, data.msg || "解析失败");
+      try {
+        const response = await fetch(
+          `/api/${platform}?url=${encodeURIComponent(url)}`
+        );
+        const data: ApiResponse = await response.json();
+        if (data.code === 1 || data.code === 200) {
+          data.platform = platform as
+            | "douyin"
+            | "bilibili"
+            | "kuaishou"
+            | "weibo"
+            | "xhs";
+          onResult(data, "");
+        } else {
+          onResult(null, data.msg || "解析失败");
+        }
+      } catch {
+        onResult(null, "请求失败，请稍后重试");
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      onResult(null, "请求失败，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [loading, onResult, setLoading]
+  );
 
   // 处理输入内容的函数
-  const processInputText = (text: string) => {
-    // 自动检测平台
-    if (text.includes("douyin.com")) {
-      setPlatform("douyin");
-    } else if (text.includes("kuaishou.com")) {
-      setPlatform("kuaishou");
-    } else if (text.includes("weibo.com")) {
-      setPlatform("weibo");
-    } else if (
-      text.includes("xiaohongshu.com") ||
-      text.includes("xhslink.com")
-    ) {
-      setPlatform("xhs");
-    } else if (text.includes("bilibili.com")) {
-      setPlatform("bilibili");
-    }
-
-    // 提取URL
-    const extractedUrl = extractUrl(text);
-    if (extractedUrl) {
-      setUrl(extractedUrl);
-
-      // 自动检测平台并开始解析
-      let detectedPlatform = "douyin"; // 默认平台
+  const processInputText = useCallback(
+    (text: string) => {
+      // 自动检测平台
       if (text.includes("douyin.com")) {
-        detectedPlatform = "douyin";
+        setPlatform("douyin");
       } else if (text.includes("kuaishou.com")) {
-        detectedPlatform = "kuaishou";
+        setPlatform("kuaishou");
       } else if (text.includes("weibo.com")) {
-        detectedPlatform = "weibo";
+        setPlatform("weibo");
       } else if (
         text.includes("xiaohongshu.com") ||
         text.includes("xhslink.com")
       ) {
-        detectedPlatform = "xhs";
+        setPlatform("xhs");
       } else if (text.includes("bilibili.com")) {
-        detectedPlatform = "bilibili";
+        setPlatform("bilibili");
       }
 
-      // 使用 setTimeout 确保状态更新完成后再执行自动解析
-      setTimeout(() => {
-        autoParseVideo(extractedUrl, detectedPlatform);
-      }, 100);
-    }
-  };
+      // 提取URL
+      const extractedUrl = extractUrl(text);
+      if (extractedUrl) {
+        setUrl(extractedUrl);
+
+        // 自动检测平台并开始解析
+        let detectedPlatform = "douyin"; // 默认平台
+        if (text.includes("douyin.com")) {
+          detectedPlatform = "douyin";
+        } else if (text.includes("kuaishou.com")) {
+          detectedPlatform = "kuaishou";
+        } else if (text.includes("weibo.com")) {
+          detectedPlatform = "weibo";
+        } else if (
+          text.includes("xiaohongshu.com") ||
+          text.includes("xhslink.com")
+        ) {
+          detectedPlatform = "xhs";
+        } else if (text.includes("bilibili.com")) {
+          detectedPlatform = "bilibili";
+        }
+
+        // 使用 setTimeout 确保状态更新完成后再执行自动解析
+        setTimeout(() => {
+          autoParseVideo(extractedUrl, detectedPlatform);
+        }, 100);
+      }
+    },
+    [autoParseVideo]
+  );
 
   // 检查是否包含有效的视频平台URL
   const hasValidVideoUrl = (text: string): boolean => {
@@ -156,7 +162,7 @@ export default function VideoParserForm({
     const timer = setTimeout(autoReadClipboard, 500);
 
     return () => clearTimeout(timer);
-  }, [processInputText]);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
