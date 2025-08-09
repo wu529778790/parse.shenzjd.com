@@ -28,7 +28,11 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
       {/* 视频封面和播放链接 */}
       {kuaishouData.photoUrl && (
         <a
-          href={kuaishouData.photoUrl}
+          href={`/api/proxy?url=${encodeURIComponent(
+            kuaishouData.photoUrl
+          )}&filename=${encodeURIComponent(
+            kuaishouData.caption || "kuaishou"
+          )}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"

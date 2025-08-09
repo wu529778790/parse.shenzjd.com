@@ -50,7 +50,9 @@ export default function XhsVideo({ data }: XhsVideoProps) {
       {/* 视频内容 */}
       {xhsData.url && xhsData.type !== "image" && (
         <a
-          href={xhsData.url}
+          href={`/api/proxy?url=${encodeURIComponent(
+            xhsData.url
+          )}&filename=${encodeURIComponent(xhsData.title || "xhs")}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"

@@ -40,7 +40,9 @@ export default function PpxiaVideo({ data }: PpxiaVideoProps) {
       </div>
       {ppxiaData.url && (
         <a
-          href={ppxiaData.url}
+          href={`/api/proxy?url=${encodeURIComponent(
+            ppxiaData.url
+          )}&filename=${encodeURIComponent(ppxiaData.title || "ppxia")}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"

@@ -25,7 +25,9 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
       )}
       {pipigxData.video && (
         <a
-          href={pipigxData.video}
+          href={`/api/proxy?url=${encodeURIComponent(
+            pipigxData.video
+          )}&filename=${encodeURIComponent(pipigxData.title || "pipigx")}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"

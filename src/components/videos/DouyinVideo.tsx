@@ -46,6 +46,19 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
           </div>
         </a>
       )}
+      {douyinData.url && (
+        <div className="mt-2">
+          <a
+            href={`/api/proxy?url=${encodeURIComponent(
+              douyinData.url
+            )}&filename=${encodeURIComponent(douyinData.title || "douyin")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            下载视频
+          </a>
+        </div>
+      )}
     </>
   );
 }

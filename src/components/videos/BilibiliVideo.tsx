@@ -67,7 +67,11 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               key={index}
               className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <a
-                href={item.video_url}
+                href={`/api/proxy?url=${encodeURIComponent(
+                  item.video_url
+                )}&filename=${encodeURIComponent(
+                  (data.title || "bilibili") + `-${index + 1}`
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-2 inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">

@@ -45,7 +45,9 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
       </div>
       {weiboData.url && (
         <a
-          href={weiboData.url}
+          href={`/api/proxy?url=${encodeURIComponent(
+            weiboData.url
+          )}&filename=${encodeURIComponent(weiboData.title || "weibo")}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"
