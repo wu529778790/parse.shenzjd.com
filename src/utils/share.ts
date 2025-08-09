@@ -8,41 +8,21 @@ export type Platform =
 
 // 提取文本中的第一个 URL（包含常见分享文案里的 URL）
 export function extractUrl(text: string): string | null {
-  const urlToken = /(https?:\/\/[^\s，。？！、,.!?:;'"“”‘’()（）<>《》【】]+)/; // 排除常见中英文标点
-  const urlPatterns: RegExp[] = [
-    urlToken, // 基本URL
-    new RegExp(`${urlToken.source}\\s*复制此链接`), // 抖音格式
-    new RegExp(`${urlToken.source}\\s*打开[^\\s]+搜索`), // 通用格式
-  ];
-
-  for (const pattern of urlPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      let candidate = match[1].trim();
-      // 再保险：若 URL 后仍有连接的标点或说明文字，切到首个分隔符
-      const splitIndex = candidate.search(
-        /[，。？！、,.!?:;'"“”‘’()（）<>《》【】\s]/
-      );
-      if (splitIndex > -1) {
-        candidate = candidate.slice(0, splitIndex);
-      }
-      return candidate;
-    }
+  // 1) 标准 http(s) URL：允许域名中的点和路径的常见字符，仅以空白或中文标点作为边界
+  const httpUrl = text.match(
+    /(https?:\/\/[^\s\u3000\u00A0，。！？、；：【】（）《》“”‘’]+)/
+  );
+  if (httpUrl && httpUrl[1]) {
+    // 去掉末尾英文标点（逗号、句号等）或中文标点
+    return httpUrl[1].replace(/[，。！？、；：.,!?;]+$/, "");
   }
 
   // 支持无协议的短链（如 v.douyin.com/xxxx）
   const bareUrlMatch = text.match(
-    /(?:^|\s)((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/[^\s，。？！、,.!?:;'"“”‘’()（）<>《》【】]+)/
+    /(?:^|\s)((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/[^\s\u3000\u00A0，。！？、；：【】（）《》“”‘’]+)/
   );
   if (bareUrlMatch && bareUrlMatch[1]) {
-    let candidate = bareUrlMatch[1].trim();
-    const splitIndex = candidate.search(
-      /[，。？！、,.!?:;'"“”‘’()（）<>《》【】\s]/
-    );
-    if (splitIndex > -1) {
-      candidate = candidate.slice(0, splitIndex);
-    }
-    return candidate;
+    return bareUrlMatch[1].replace(/[，。！？、；：.,!?;]+$/, "");
   }
 
   return null;
