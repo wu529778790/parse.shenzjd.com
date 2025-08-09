@@ -8,26 +8,41 @@ export type Platform =
 
 // 提取文本中的第一个 URL（包含常见分享文案里的 URL）
 export function extractUrl(text: string): string | null {
+  const urlToken = /(https?:\/\/[^\s，。？！、,.!?:;'"“”‘’()（）<>《》【】]+)/; // 排除常见中英文标点
   const urlPatterns: RegExp[] = [
-    /(https?:\/\/[^\s]+)/, // 基本URL
-    /(https?:\/\/[^\s]+)\s*复制此链接/, // 抖音格式
-    /(https?:\/\/[^\s]+)\s*打开[^\s]+搜索/, // 通用格式
+    urlToken, // 基本URL
+    new RegExp(`${urlToken.source}\\s*复制此链接`), // 抖音格式
+    new RegExp(`${urlToken.source}\\s*打开[^\\s]+搜索`), // 通用格式
   ];
 
   for (const pattern of urlPatterns) {
     const match = text.match(pattern);
     if (match && match[1]) {
-      // 去除末尾可能跟随的中文/英文标点
-      return match[1].replace(/[，。！？,.!?:;]+$/, "").trim();
+      let candidate = match[1].trim();
+      // 再保险：若 URL 后仍有连接的标点或说明文字，切到首个分隔符
+      const splitIndex = candidate.search(
+        /[，。？！、,.!?:;'"“”‘’()（）<>《》【】\s]/
+      );
+      if (splitIndex > -1) {
+        candidate = candidate.slice(0, splitIndex);
+      }
+      return candidate;
     }
   }
 
   // 支持无协议的短链（如 v.douyin.com/xxxx）
   const bareUrlMatch = text.match(
-    /(?:^|\s)((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/[^\s]+)/
+    /(?:^|\s)((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/[^\s，。？！、,.!?:;'"“”‘’()（）<>《》【】]+)/
   );
   if (bareUrlMatch && bareUrlMatch[1]) {
-    return bareUrlMatch[1].replace(/[，。！？,.!?:;]+$/, "").trim();
+    let candidate = bareUrlMatch[1].trim();
+    const splitIndex = candidate.search(
+      /[，。？！、,.!?:;'"“”‘’()（）<>《》【】\s]/
+    );
+    if (splitIndex > -1) {
+      candidate = candidate.slice(0, splitIndex);
+    }
+    return candidate;
   }
 
   return null;
@@ -52,16 +67,18 @@ export function hasValidVideoUrl(text: string): boolean {
 
 // 根据文本粗略检测平台（用于前端自动选择）
 export function detectPlatform(text: string): Platform {
-  if (text.includes("douyin.com") || text.includes("snssdk.com"))
-    return "douyin";
-  if (text.includes("kuaishou.com") || text.includes("v.kuaishou.com"))
-    return "kuaishou";
-  if (text.includes("weibo.com") || text.includes("video.weibo.com"))
-    return "weibo";
-  if (text.includes("xiaohongshu.com") || text.includes("xhslink.com"))
-    return "xhs";
-  if (text.includes("bilibili.com") || text.includes("b23.tv"))
+  const firstUrl = extractUrl(text) || "";
+  const lower = firstUrl.toLowerCase();
+  if (lower.includes("music.douyin.com")) return "qsmusic";
+  if (lower.includes("b23.tv") || lower.includes("bilibili.com"))
     return "bilibili";
-  if (text.includes("music.douyin.com")) return "qsmusic";
+  if (lower.includes("v.kuaishou.com") || lower.includes("kuaishou.com"))
+    return "kuaishou";
+  if (lower.includes("video.weibo.com") || lower.includes("weibo.com"))
+    return "weibo";
+  if (lower.includes("xhslink.com") || lower.includes("xiaohongshu.com"))
+    return "xhs";
+  if (lower.includes("snssdk.com") || lower.includes("douyin.com"))
+    return "douyin";
   return "douyin"; // 默认平台
 }
