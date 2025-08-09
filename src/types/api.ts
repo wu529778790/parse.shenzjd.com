@@ -43,7 +43,7 @@ export interface DouyinData {
   avatar: string;
   cover: string;
   like: number;
-  music: { author: string; title: string };
+  music: { author: string; avatar: string };
   time: number;
   title: string;
   uid: string;
