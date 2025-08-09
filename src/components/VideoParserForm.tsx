@@ -156,7 +156,7 @@ export default function VideoParserForm({
     const timer = setTimeout(autoReadClipboard, 500);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [processInputText]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
