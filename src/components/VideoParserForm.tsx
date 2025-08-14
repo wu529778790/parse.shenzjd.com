@@ -121,7 +121,7 @@ export default function VideoParserForm({
   );
 
   // 检查是否包含有效的视频平台URL
-  const hasValidVideoUrl = (text: string): boolean => {
+  const hasValidVideoUrl = useCallback((text: string): boolean => {
     const supportedPlatforms = [
       "douyin.com",
       "kuaishou.com",
@@ -132,7 +132,7 @@ export default function VideoParserForm({
     ];
 
     return supportedPlatforms.some((platform) => text.includes(platform));
-  };
+  }, []);
 
   // 页面加载时自动读取剪贴板
   useEffect(() => {
@@ -162,7 +162,7 @@ export default function VideoParserForm({
     const timer = setTimeout(autoReadClipboard, 500);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [processInputText, hasValidVideoUrl]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;

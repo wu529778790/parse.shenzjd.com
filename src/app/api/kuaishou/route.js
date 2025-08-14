@@ -1,19 +1,6 @@
-// 尝试导入linkedom，如果失败则使用fallback
-let DOMParser = null;
-
+// DOM 解析在 Edge 环境下禁用，直接走正则/字符串解析逻辑，避免引入可选依赖
 async function initDOMParser() {
-  if (DOMParser !== null) return DOMParser;
-
-  try {
-    const linkedom = await import("linkedom");
-    DOMParser = linkedom.DOMParser;
-    console.log("linkedom导入成功");
-    return DOMParser;
-  } catch (error) {
-    console.log("linkedom导入失败，将使用正则表达式fallback:", error.message);
-    DOMParser = false; // 设置为false表示已尝试导入但失败
-    return null;
-  }
+  return null;
 }
 
 export const runtime = "edge";
