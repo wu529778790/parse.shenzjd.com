@@ -1,128 +1,77 @@
-# 短视频解析API
+# Parse 短视频解析站点
 
-这是一个基于Node.js的短视频解析API服务，支持多个平台的视频解析。
+一个即开即用的短视频/音乐一站式解析与下载站点。开箱即用、极速部署、支持多平台，适合个人站长、内容创作者、公众号/社群引流场景与商业落地页搭建。
 
-## 支持的平台
+— 打造你的“解析门户”，为流量转化与品牌曝光加速。
 
-- 抖音 (douyin)
-- 快手 (kuaishou)
-- 微博 (weibo)
-- 哔哩哔哩 (bilibili)
-- 皮皮虾 (pipigx)
-- 小红书 (xhs)
-- QQ音乐 (qsmusic)
-- 皮皮虾 (ppxia)
+## 特点
 
-## 安装
+- 高转化着陆页：简洁表单、即贴即得，降低用户流失
+- 多平台覆盖：抖音/快手/微博/哔哩哔哩/小红书/QQ音乐/皮皮虾 等
+- 轻维护低成本：静态资源+Serverless/容器均可部署
+- SEO 友好：Next.js 架构，天然利于索引与收录
+- 可私有化：一键 Docker 部署，独立域名与数据可控
 
-1. 确保已安装Node.js (推荐v14.0.0或更高版本)
-2. 克隆项目到本地
-3. 进入项目目录
-4. 安装依赖：
+## 一键部署
+
+> 推荐优先使用 Vercel（最省心），或 Docker（最稳定可控）。
+
+### Vercel（推荐）
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com&project-name=parse&repository-name=parse.shenzjd.com)
+
+部署要点：
+
+- Framework Preset: Next.js
+- Install Command: `pnpm install`
+- Build Command: `pnpm build`
+- Output: 自动识别（Next.js）
+
+### Cloudflare（Pages）
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com)
+
+部署要点：
+
+- 构建系统：Pages（选择 Git 集成）
+- Framework Preset: Next.js
+- Install: `pnpm install`
+- Build: `pnpm build`
+- Output Directory: 自动或根据提示配置
+
+提示：如需更强 SSR/Edge 支持，可按需集成 `next-on-pages` 适配器。
+
+### Docker（私有化/服务器）
+
+快速启动：
 
 ```bash
-npm install
+docker run -d \
+  --name parse \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  ghcr.io/wu529778790/parse.shenzjd.com:latest
 ```
 
-## 配置
-
-某些API可能需要配置cookie才能正常工作：
-
-- 微博API: 设置环境变量 `WEIBO_COOKIE`
-- 哔哩哔哩API: 设置环境变量 `BILIBILI_COOKIE`
-
-## 运行
+或使用已发布镜像：
 
 ```bash
-npm start
+docker run -d -p 3000:3000 --name parse wu529778790/parse.shenzjd.com:latest
 ```
 
-服务器将在 <http://localhost:3000> 上运行。
+Docker Compose：
 
-## Docker部署
+```yaml
+version: "3.8"
+services:
+  app:
+    image: ghcr.io/wu529778790/parse.shenzjd.com:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
 ```
-docker run -d -p 3030:3000 --name parse wu529778790/parse.shenzjd.com:latest
-```
-
-## API使用说明
-
-所有API都接受GET请求，需要提供`url`参数。
-
-### 抖音视频解析
-
-```
-GET /api/douyin?url=视频链接
-```
-
-### 快手视频解析
-
-```
-GET /api/kuaishou?url=视频链接
-```
-
-### 微博视频解析
-
-```
-GET /api/weibo?url=视频链接
-```
-
-### 哔哩哔哩视频解析
-
-```
-GET /api/bilibili?url=视频链接
-```
-
-### 皮皮虾视频解析
-
-```
-GET /api/pipigx?url=视频链接
-```
-
-### 小红书视频解析
-
-```
-GET /api/xhs?url=视频链接
-```
-
-### QQ音乐解析
-
-```
-GET /api/qsmusic?url=音乐链接&type=json
-```
-
-### 皮皮虾视频解析
-
-```
-GET /api/ppxia?url=视频链接
-```
-
-## 响应格式
-
-所有API都返回JSON格式的响应，基本格式如下：
-
-```json
-{
-    "code": 200,
-    "msg": "解析成功",
-    "data": {
-        // 具体数据字段
-    }
-}
-```
-
-## 错误处理
-
-- code: 200 - 成功
-- code: 201 - 参数错误
-- code: 404 - 解析失败
-- code: 500 - 服务器错误
-
-## 注意事项
-
-1. 请确保遵守各平台的使用条款和API使用规范
-2. 建议在生产环境中使用HTTPS
-3. 可能需要定期更新cookie以保持API的正常工作
-4. 建议添加适当的请求频率限制以防止滥用
 
 ## 许可证
 
