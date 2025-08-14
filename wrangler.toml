@@ -1,4 +1,4 @@
-name = "parse-shenzjd-worker"
+name = "parse-shenzjd-com"
 main = "src/worker.js"
 compatibility_date = "2025-08-14"
 workers_dev = true
