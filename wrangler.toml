@@ -1,10 +1,13 @@
 name = "parse-shenzjd-com"
-main = ".output/server/index.mjs"
+main = ".vercel/output/static/_worker.js"
 compatibility_date = "2025-08-14"
 compatibility_flags = ["nodejs_compat"]
 
+[build]
+command = "pnpm dlx @cloudflare/next-on-pages@1"
+
 [assets]
-directory = ".output/public"
+directory = ".vercel/output/static"
 binding = "ASSETS"
 
 
