@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ApiResponse } from "@/types/api";
 
 interface VideoParserFormProps {
@@ -134,33 +134,26 @@ export default function VideoParserForm({
     return supportedPlatforms.some((platform) => text.includes(platform));
   }, []);
 
-  // 页面加载时自动读取剪贴板
+  // 页面加载时自动读取剪贴板（仅执行一次，避免重复触发解析）
+  const hasAutoReadRef = useRef(false);
   useEffect(() => {
+    if (hasAutoReadRef.current) return;
+    hasAutoReadRef.current = true;
+
     const autoReadClipboard = async () => {
       try {
-        // 检查是否支持剪贴板API
-        if (!navigator.clipboard || !navigator.clipboard.readText) {
-          console.log("浏览器不支持剪贴板API");
-          return;
-        }
-
+        if (!navigator.clipboard || !navigator.clipboard.readText) return;
         const text = await navigator.clipboard.readText();
-        if (text && text.trim()) {
-          // 只有在包含有效的视频平台URL时才自动粘贴
-          if (hasValidVideoUrl(text)) {
-            setInput(text);
-            processInputText(text);
-          }
+        if (text && text.trim() && hasValidVideoUrl(text)) {
+          setInput(text);
+          processInputText(text);
         }
       } catch (error) {
-        // 静默处理错误，不显示给用户，因为这是自动行为
         console.log("自动读取剪贴板失败:", error);
       }
     };
 
-    // 延迟一点执行，确保页面完全加载
     const timer = setTimeout(autoReadClipboard, 500);
-
     return () => clearTimeout(timer);
   }, [processInputText, hasValidVideoUrl]);
 
