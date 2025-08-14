@@ -1,18 +1,5 @@
-// DOM 解析在 Edge 环境下禁用，直接走正则/字符串解析逻辑，避免引入可选依赖
-async function initDOMParser() {
-  return null;
-}
-
+import { parseKuaishou, formatResponse } from "@/lib/kuaishouCore";
 export const runtime = "edge";
-
-export function formatResponse(code = 200, msg = "解析成功", data = []) {
-  return {
-    code,
-    msg,
-    data,
-    platform: "kuaishou",
-  };
-}
 
 class KuaishouParser {
   constructor() {
@@ -1356,9 +1343,10 @@ class KuaishouParser {
   }
 }
 
-export async function kuaishou(url) {
-  const parser = new KuaishouParser();
-  return await parser.parse(url);
+void KuaishouParser;
+
+async function runKuaishou(url) {
+  return await parseKuaishou(url);
 }
 
 export async function GET(request) {
@@ -1376,7 +1364,7 @@ export async function GET(request) {
   console.log("原始URL:", url);
 
   try {
-    const jsonData = await kuaishou(url);
+    const jsonData = await runKuaishou(url);
     console.log("解析结果:", jsonData);
 
     if (jsonData) {

@@ -1,8 +1,8 @@
 // Cloudflare Workers entry for /api/kuaishou
-import { kuaishou, formatResponse } from "./app/api/kuaishou/route.js";
+import { parseKuaishou, formatResponse } from "./lib/kuaishouCore.js";
 
-export default {
-  async fetch(request, env, ctx) {
+const worker = {
+  async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname !== "/api/kuaishou") {
       return new Response("Not Found", { status: 404 });
@@ -15,7 +15,7 @@ export default {
       });
     }
     try {
-      const data = await kuaishou(target);
+      const data = await parseKuaishou(target);
       if (data) {
         return Response.json(data, {
           headers: { "Access-Control-Allow-Origin": "*" },
@@ -36,3 +36,5 @@ export default {
     }
   },
 };
+
+export default worker;
