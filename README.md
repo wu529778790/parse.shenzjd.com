@@ -18,8 +18,6 @@
 
 ## 一键部署
 
-> 推荐优先使用 Vercel（最省心），或 Docker（最稳定可控）。
-
 ### Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com&project-name=parse&repository-name=parse.shenzjd.com)
