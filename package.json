@@ -9,13 +9,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "next build && next export",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "wrk:dev": "npx -y wrangler@4.29.1 dev --local",
-    "wrk:deploy": "npx -y wrangler@4.29.1 deploy"
+    "wrk:dev": "npx -y wrangler@4.30.0 dev --local",
+    "wrk:deploy": "npx -y wrangler@4.30.0 deploy"
   },
   "dependencies": {
     "axios": "^1.9.0",

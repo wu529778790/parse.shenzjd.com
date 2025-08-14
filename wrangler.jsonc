@@ -1,9 +1,6 @@
 {
-    // Cloudflare Workers 静态站点部署配置
-    // 若目录不同，请将 assets.directory 改为你的静态产物目录（如 ".vercel/output/static" 或自定义）
+    // Cloudflare Workers：混合模式（API + 静态页面）
     "name": "parse-shenzjd-com",
     "compatibility_date": "2025-08-14",
-    "assets": {
-        "directory": "out"
-    }
+    "main": "src/worker.js"
 }
