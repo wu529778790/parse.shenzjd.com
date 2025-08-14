@@ -1,10 +1,10 @@
 # Parse 短视频解析站点
 
-一个即开即用的短视频/音乐一站式解析与下载站点。
+一个开箱即用的短视频/音乐一站式解析与下载站点。
 
-开箱即用、极速部署、支持多平台，适合个人站长、内容创作者、公众号/社群引流场景与商业落地页搭建。
+在线体验：<https://parse.shenzjd.com>
 
-— 打造你的“解析门户”，为流量转化与品牌曝光加速。
+> 免责声明：本项目仅用于技术学习与搜索聚合演示，不存储、不传播任何受版权保护的内容。请勿用于商业或侵权用途。
 
 ## 特点
 
@@ -36,36 +36,16 @@
 
 提示：如需更强 SSR/Edge 支持，可按需集成 `next-on-pages` 适配器。
 
-### Docker（私有化/服务器）
-
-快速启动：
+### Docker
 
 ```bash
-docker run -d \
-  --name parse \
-  -p 3000:3000 \
-  -e NODE_ENV=production \
-  ghcr.io/wu529778790/parse.shenzjd.com:latest
-```
+# GHCR
+docker pull ghcr.io/wu529778790/parse.shenzjd.com:latest
+docker run --name parse -p 3000:3000 -d ghcr.io/wu529778790/parse.shenzjd.com:latest
 
-或使用已发布镜像：
-
-```bash
-docker run -d -p 3000:3000 --name parse wu529778790/parse.shenzjd.com:latest
-```
-
-Docker Compose：
-
-```yaml
-version: "3.8"
-services:
-  app:
-    image: ghcr.io/wu529778790/parse.shenzjd.com:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-    restart: unless-stopped
+# Docker Hub
+docker pull docker.io/wu529778790/parse.shenzjd.com:latest
+docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:latest
 ```
 
 ## 许可证
