@@ -22,19 +22,17 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com&project-name=parse&repository-name=parse.shenzjd.com)
 
-### Cloudflare（Pages）
+### Cloudflare（Workers）
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com)
+支持将核心 API 路由以 Workers 形式部署（适合全局加速与更低时延）。
 
-部署要点：
+已内置 `wrangler.toml` 与 `src/worker.js`
 
-- 构建系统：Pages（选择 Git 集成）
-- Framework Preset: Next.js
-- Install: `pnpm install`
-- Build: `pnpm build`
-- Output Directory: 自动或根据提示配置
+部署到 Workers：
 
-提示：如需更强 SSR/Edge 支持，可按需集成 `next-on-pages` 适配器。
+```bash
+pnpm run wrk:deploy
+```
 
 ### Docker
 

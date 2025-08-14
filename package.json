@@ -13,7 +13,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "wrk:dev": "wrangler dev --local",
+    "wrk:deploy": "wrangler deploy"
   },
   "dependencies": {
     "axios": "^1.9.0",
@@ -30,6 +32,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
+    "@cloudflare/next-on-pages": "^1.14.0",
+    "wrangler": "^4.29.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^2.0.5"

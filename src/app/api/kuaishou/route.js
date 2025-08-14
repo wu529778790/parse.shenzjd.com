@@ -5,7 +5,7 @@ async function initDOMParser() {
 
 export const runtime = "edge";
 
-function formatResponse(code = 200, msg = "解析成功", data = []) {
+export function formatResponse(code = 200, msg = "解析成功", data = []) {
   return {
     code,
     msg,
@@ -1356,7 +1356,7 @@ class KuaishouParser {
   }
 }
 
-async function kuaishou(url) {
+export async function kuaishou(url) {
   const parser = new KuaishouParser();
   return await parser.parse(url);
 }

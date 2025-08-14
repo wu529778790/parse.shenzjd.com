@@ -1,0 +1,10 @@
+name = "parse-shenzjd-worker"
+main = "src/worker.js"
+compatibility_date = "2025-08-14"
+
+[routes]
+# 可选：自定义绑定到你的域名路由（按需在仪表盘配置）
+# pattern = "example.com/*"
+# zone_id = "YOUR_ZONE_ID"
+
+
