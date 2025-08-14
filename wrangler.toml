@@ -1,6 +1,6 @@
-name = "panhub-shenzjd-com"
+name = "parse-shenzjd-com"
 main = ".output/server/index.mjs"
-compatibility_date = "2025-07-15"
+compatibility_date = "2025-08-14"
 compatibility_flags = ["nodejs_compat"]
 
 [assets]

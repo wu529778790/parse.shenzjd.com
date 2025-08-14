@@ -1,6 +1,0 @@
-{
-    // Cloudflare Workers：混合模式（API + 静态页面）
-    "name": "parse-shenzjd-com",
-    "compatibility_date": "2025-08-14",
-    "main": "src/worker.js"
-}
