@@ -1,0 +1,59 @@
+name: Sync upstream (merge from fixed upstream)
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 每天 03:00 UTC 运行
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      # 固定上游仓库与分支（按需改动）
+      UPSTREAM_REPO: wu529778790/parse.shenzjd.com
+      UPSTREAM_BRANCH: main
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/${UPSTREAM_REPO}.git || git remote set-url upstream https://github.com/${UPSTREAM_REPO}.git
+          git fetch upstream --tags --prune
+
+      - name: Determine branches
+        id: b
+        run: |
+          local_default="${DEFAULT_BRANCH:-main}"
+          # 兜底：若无 origin/HEAD，尝试识别 main/master
+          if ! git rev-parse --verify "origin/$local_default" >/dev/null 2>&1; then
+            if git rev-parse --verify origin/main >/dev/null 2>&1; then local_default=main; else local_default=master; fi
+          fi
+          echo "local_default=$local_default" >> $GITHUB_OUTPUT
+          echo "upstream_default=${UPSTREAM_BRANCH}" >> $GITHUB_OUTPUT
+
+      - name: Merge upstream -> fork (no fast-forward)
+        run: |
+          set -e
+          git checkout "${{ steps.b.outputs.local_default }}"
+          # 保留 fork 的提交，合并上游最新提交
+          git merge --no-edit "upstream/${{ steps.b.outputs.upstream_default }}"
+          git push origin "${{ steps.b.outputs.local_default }}"
+
+      - name: Sync tags
+        run: git push --tags origin
