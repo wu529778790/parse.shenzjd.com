@@ -16,6 +16,7 @@ on:
         "vitest.config.ts",
         "package.json",
         "pnpm-lock.yaml",
+        "tailwind.config.ts",
       ]
   workflow_dispatch:
 
@@ -82,8 +83,14 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
+      - name: Read version from package.json
+        id: ver
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata for GHCR
+        id: meta_ghcr
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
@@ -91,26 +98,9 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha
+            type=raw,value=${{ steps.ver.outputs.version }}
 
-      - name: Read version from package.json
-        id: ver
-        run: |
-          VER=$(node -p "require('./package.json').version")
-          echo "version=$VER" >> $GITHUB_OUTPUT
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.version }}
-            ghcr.io/${{ github.repository }}:latest
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Extract metadata (tags, labels) for Docker Hub
+      - name: Extract metadata for Docker Hub
         id: meta_dh
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/metadata-action@v5
@@ -120,16 +110,19 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha
+            type=raw,value=${{ steps.ver.outputs.version }}
 
-      - name: Build and push (Docker Hub)
+      - name: Build and push
         uses: docker/build-push-action@v6
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
+            ${{ steps.meta_ghcr.outputs.tags }}
             ${{ steps.meta_dh.outputs.tags }}
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.ver.outputs.version }}
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
-          labels: ${{ steps.meta_dh.outputs.labels }}
+          labels: |
+            ${{ steps.meta_ghcr.outputs.labels }}
+            ${{ steps.meta_dh.outputs.labels }}
