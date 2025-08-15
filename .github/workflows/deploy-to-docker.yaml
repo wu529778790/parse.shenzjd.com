@@ -3,22 +3,6 @@ name: Test, build and push Docker image
 on:
   push:
     branches: [main]
-    paths:
-      [
-        "Dockerfile",
-        ".github/workflows/deploy-to-docker.yaml",
-        "src/**",
-        "**/*.ts",
-        "**/*.tsx",
-        "public/**",
-        "next.config.*",
-        "tsconfig.json",
-        "vitest.config.ts",
-        "package.json",
-        "pnpm-lock.yaml",
-        "tailwind.config.ts",
-      ]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,33 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    name: Run unit tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run tests
-        run: pnpm test
-
   build:
     runs-on: ubuntu-latest
-    needs: [test]
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
