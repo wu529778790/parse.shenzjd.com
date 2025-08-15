@@ -18,7 +18,7 @@ const nextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ["@tailwindcss/postcss"],
+    optimizePackageImports: ["tailwindcss"],
   },
 };
 
