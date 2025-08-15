@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   images: {
     remotePatterns: [
       {
@@ -15,6 +16,9 @@ const nextConfig = {
         hostname: "i0.hdslb.com",
       },
     ],
+  },
+  experimental: {
+    optimizePackageImports: ["@tailwindcss/postcss"],
   },
 };
 
