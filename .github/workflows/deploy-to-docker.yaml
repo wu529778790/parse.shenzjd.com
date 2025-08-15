@@ -3,6 +3,21 @@ name: Test, build and push Docker image
 on:
   push:
     branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/deploy-to-docker.yaml"
+      - "src/**"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "public/**"
+      - "next.config.*"
+      - "tsconfig.json"
+      - "vitest.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "tailwind.config.ts"
+      - "postcss.config.mjs"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,8 +28,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
+
   build:
     runs-on: ubuntu-latest
+    needs: [test]
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -59,18 +99,20 @@ jobs:
             type=ref,event=tag
             type=sha
             type=raw,value=${{ steps.ver.outputs.version }}
+            type=raw,value=latest
 
       - name: Extract metadata for Docker Hub
         id: meta_dh
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/metadata-action@v5
         with:
-          images: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+          images: ${{ env.DOCKERHUB_USERNAME }}/parse.shenzjd.com
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
+            type=ref,event=tag  
             type=sha
             type=raw,value=${{ steps.ver.outputs.version }}
+            type=raw,value=latest
 
       - name: Build and push to GHCR
         uses: docker/build-push-action@v6
@@ -82,9 +124,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
           sbom: false
-          tags: |
-            ${{ steps.meta_ghcr.outputs.tags }}
-            ghcr.io/${{ github.repository }}:latest
+          tags: ${{ steps.meta_ghcr.outputs.tags }}
           labels: ${{ steps.meta_ghcr.outputs.labels }}
 
       - name: Build and push to Docker Hub
@@ -97,7 +137,5 @@ jobs:
           cache-from: type=gha
           provenance: false
           sbom: false
-          tags: |
-            ${{ steps.meta_dh.outputs.tags }}
-            docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
+          tags: ${{ steps.meta_dh.outputs.tags }}
           labels: ${{ steps.meta_dh.outputs.labels }}

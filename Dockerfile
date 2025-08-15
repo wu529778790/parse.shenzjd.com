@@ -25,19 +25,22 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# 安装 pnpm
+RUN npm install -g pnpm
+
 # 创建非 root 用户
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # 复制构建产物
-COPY --from=base /app/public ./public
-
-# 复制 Next.js standalone 输出
-COPY --from=base /app/.next/standalone ./
-COPY --from=base /app/.next/static ./.next/static
-
-# 复制 package.json 用于运行时
 COPY --from=base /app/package.json ./package.json
+COPY --from=base /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=base /app/next.config.mjs ./next.config.mjs
+COPY --from=base /app/public ./public
+COPY --from=base /app/.next ./.next
+
+# 安装生产依赖
+RUN pnpm install --prod --frozen-lockfile
 
 # 设置正确的权限
 RUN chown -R nextjs:nodejs /app
@@ -50,4 +53,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # 启动应用
-CMD ["node", "server.js"] 
+CMD ["pnpm", "start"]
