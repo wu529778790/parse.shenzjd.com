@@ -88,6 +88,7 @@ jobs:
         run: |
           VER=$(node -p "require('./package.json').version")
           echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "Version: $VER"
 
       - name: Extract metadata for GHCR
         id: meta_ghcr
@@ -112,7 +113,7 @@ jobs:
             type=sha
             type=raw,value=${{ steps.ver.outputs.version }}
 
-      - name: Build and push
+      - name: Build and push to GHCR
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -120,9 +121,24 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
           tags: |
             ${{ steps.meta_ghcr.outputs.tags }}
+            ghcr.io/${{ github.repository }}:latest
+          labels: ${{ steps.meta_ghcr.outputs.labels }}
+
+      - name: Build and push to Docker Hub
+        uses: docker/build-push-action@v6
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          provenance: false
+          sbom: false
+          tags: |
             ${{ steps.meta_dh.outputs.tags }}
-          labels: |
-            ${{ steps.meta_ghcr.outputs.labels }}
-            ${{ steps.meta_dh.outputs.labels }}
+            docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
+          labels: ${{ steps.meta_dh.outputs.labels }}
