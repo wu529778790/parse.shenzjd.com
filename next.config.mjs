@@ -19,14 +19,12 @@ const nextConfig = {
       },
     ],
   },
-  experimental: {
-    optimizePackageImports: ["tailwindcss"],
-  },
   // 确保输出模式适用于 Docker 部署
   output:
     process.env.DEPLOYMENT_TARGET === "cloudflare" ? "export" : "standalone",
-  // 确保 CSS 优化在生产环境中启用
-  optimizeCss: true,
+  experimental: {
+    optimizePackageImports: ["tailwindcss"],
+  },
 };
 
 export default nextConfig;

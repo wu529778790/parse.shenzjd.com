@@ -38,21 +38,24 @@ FROM base AS runner
 # 设置运行环境
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 # 创建非 root 用户
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# 仅安装生产依赖
+# 首先复制 package.json 文件（仅生产依赖）
+COPY --from=builder /app/package.json ./package.json
+
+# 安装生产依赖
 RUN pnpm install --prod --frozen-lockfile
 
 # 复制构建产物 - Next.js standalone 输出
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# 更改文件所有者
-RUN chown -R nextjs:nodejs /app
 USER nextjs
 
 # 暴露端口
