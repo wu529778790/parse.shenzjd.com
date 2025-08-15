@@ -48,16 +48,12 @@ RUN corepack enable && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# 复制构建产物和配置文件
+# 复制构建产物和运行时文件
 COPY --from=base --chown=nextjs:nodejs /app/package.json ./
 COPY --from=base --chown=nextjs:nodejs /app/next.config.mjs ./
 COPY --from=base --chown=nextjs:nodejs /app/public ./public
 COPY --from=base --chown=nextjs:nodejs /app/.next ./.next
-
-# 安装只运行时需要的生产依赖
-RUN pnpm install --prod --frozen-lockfile && \
-    pnpm store prune && \
-    rm -rf ~/.local/share/pnpm/store
+COPY --from=base --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 USER nextjs
 
