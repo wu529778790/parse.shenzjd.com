@@ -126,7 +126,6 @@ jobs:
           sbom: false
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-            DEPLOYMENT_TARGET=docker
           tags: ${{ steps.meta_ghcr.outputs.tags }}
           labels: ${{ steps.meta_ghcr.outputs.labels }}
 
@@ -142,6 +141,5 @@ jobs:
           sbom: false
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-            DEPLOYMENT_TARGET=docker
           tags: ${{ steps.meta_dh.outputs.tags }}
           labels: ${{ steps.meta_dh.outputs.labels }}

@@ -19,9 +19,6 @@ const nextConfig = {
       },
     ],
   },
-  // 确保输出模式适用于 Docker 部署
-  output:
-    process.env.DEPLOYMENT_TARGET === "cloudflare" ? "export" : "standalone",
   experimental: {
     optimizePackageImports: ["tailwindcss"],
   },
