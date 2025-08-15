@@ -22,6 +22,24 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["tailwindcss"],
   },
+  // 处理代理后的 HTTPS
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: "upgrade-insecure-requests",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

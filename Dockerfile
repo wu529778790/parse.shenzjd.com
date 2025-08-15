@@ -22,5 +22,9 @@ RUN pnpm build
 # 暴露端口
 EXPOSE 3000
 
+# 设置环境变量以支持代理后的 HTTPS
+ENV HOSTNAME="0.0.0.0"
+ENV NODE_ENV=production
+
 # 启动应用
 CMD ["pnpm", "start"]
