@@ -24,15 +24,14 @@
 
 ### Cloudflare（Workers）
 
-支持将核心 API 路由以 Workers 形式部署（适合全局加速与更低时延）。
+## 一键部署到 Cloudflare Workers
 
-已内置 `wrangler.toml` 与 `src/worker.js`
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wu529778790/parse.shenzjd.com)
 
-部署到 Workers：
+- 点击上方按钮，按向导授权并创建项目即可自动构建与发布。
+- 若你已 fork 本仓库，点击后可在向导中选择你的 fork 进行部署。
 
-```bash
-pnpm run wrk:deploy
-```
+---
 
 ### Docker
 
