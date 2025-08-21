@@ -87,9 +87,14 @@ async function douyin(url) {
         msg: "解析失败：视频数据结构异常，可能是抖音接口发生变化",
       };
     }
-    const videoResUrl = videoInfo.loaderData[
-      "video_(id)/page"
-    ].videoInfoRes.item_list[0].video.play_addr.url_list[0].replace(
+    const videoData = videoInfo.loaderData["video_(id)/page"]?.videoInfoRes?.item_list?.[0];
+    if (!videoData) {
+      return {
+        code: 201,
+        msg: "解析失败：无法从数据中找到视频信息",
+      };
+    }
+    const videoResUrl = videoData.video.play_addr.url_list[0].replace(
       "playwm",
       "play"
     );
@@ -97,32 +102,17 @@ async function douyin(url) {
       code: 200,
       msg: "解析成功",
       data: {
-        author:
-          videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-            .author.nickname,
-        uid: videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-          .author.unique_id,
-        avatar:
-          videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-            .author.avatar_medium.url_list[0],
-        like: videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-          .statistics.digg_count,
-        time: videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-          .create_time,
-        title:
-          videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-            .desc,
-        cover:
-          videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-            .video.cover.url_list[0],
+        author: videoData.author.nickname,
+        uid: videoData.author.unique_id,
+        avatar: videoData.author.avatar_medium.url_list[0],
+        like: videoData.statistics.digg_count,
+        time: videoData.create_time,
+        title: videoData.desc,
+        cover: videoData.video.cover.url_list[0],
         url: videoResUrl,
         music: {
-          author:
-            videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-              .music.author,
-          avatar:
-            videoInfo.loaderData["video_(id)/page"].videoInfoRes.item_list[0]
-              .music.cover_large.url_list[0],
+          author: videoData.music.author,
+          avatar: videoData.music.cover_large.url_list[0],
         },
       },
     };
