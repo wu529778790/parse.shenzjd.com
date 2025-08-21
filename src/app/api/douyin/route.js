@@ -81,41 +81,65 @@ async function douyin(url) {
       };
     }
     const videoInfo = JSON.parse(matches[1].trim());
+    console.log("videoInfo:", JSON.stringify(videoInfo, null, 2));
     if (!videoInfo.loaderData) {
       return {
         code: 201,
         msg: "解析失败：视频数据结构异常，可能是抖音接口发生变化",
       };
     }
-    const videoData = videoInfo.loaderData["video_(id)/page"]?.videoInfoRes?.item_list?.[0];
-    if (!videoData) {
+    try {
+      const videoData =
+        videoInfo.loaderData["video_(id)/page"]?.videoInfoRes?.item_list?.[0];
+      if (!videoData) {
+        return {
+          code: 201,
+          msg: "解析失败：无法从数据中找到视频信息",
+        };
+      }
+
+      // 检查必要字段是否存在
+      if (!videoData.author) {
+        return {
+          code: 201,
+          msg: "解析失败：视频作者信息缺失",
+        };
+      }
+
+      if (!videoData.video?.play_addr?.url_list?.[0]) {
+        return {
+          code: 201,
+          msg: "解析失败：视频播放地址缺失",
+        };
+      }
+
+      const videoResUrl = videoData.video.play_addr.url_list[0].replace(
+        "playwm",
+        "play"
+      );
+
       return {
-        code: 201,
-        msg: "解析失败：无法从数据中找到视频信息",
-      };
-    }
-    const videoResUrl = videoData.video.play_addr.url_list[0].replace(
-      "playwm",
-      "play"
-    );
-    return {
-      code: 200,
-      msg: "解析成功",
-      data: {
-        author: videoData.author.nickname,
-        uid: videoData.author.unique_id,
-        avatar: videoData.author.avatar_medium.url_list[0],
-        like: videoData.statistics.digg_count,
-        time: videoData.create_time,
-        title: videoData.desc,
-        cover: videoData.video.cover.url_list[0],
-        url: videoResUrl,
-        music: {
-          author: videoData.music.author,
-          avatar: videoData.music.cover_large.url_list[0],
+        code: 200,
+        msg: "解析成功",
+        data: {
+          author: videoData.author.nickname || "未知作者",
+          uid: videoData.author.unique_id || "",
+          avatar: videoData.author.avatar_medium?.url_list?.[0] || "",
+          like: videoData.statistics?.digg_count || 0,
+          time: videoData.create_time || 0,
+          title: videoData.desc || "无标题",
+          cover: videoData.video.cover?.url_list?.[0] || "",
+          url: videoResUrl,
+          music: {
+            author: videoData.music?.author || "未知音乐作者",
+            avatar: videoData.music?.cover_large?.url_list?.[0] || "",
+          },
         },
-      },
-    };
+      };
+    } catch (error) {
+      console.error("Error parsing video data:", error);
+      return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
+    }
   } catch (error) {
     return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
   }
