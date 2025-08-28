@@ -1,6 +1,5 @@
 "use client";
-import React from "react";
-import Image from "next/image";
+import React, { useState } from "react";
 import { ApiResponse, PipigxData } from "@/types/api";
 
 interface PipigxVideoProps {
@@ -8,11 +7,24 @@ interface PipigxVideoProps {
 }
 
 export default function PipigxVideo({ data }: PipigxVideoProps) {
+  const [videoError, setVideoError] = useState<string | null>(null);
+
   if (!data.data) {
     return null;
   }
 
   const pipigxData = data.data as PipigxData;
+
+  const handleVideoError = (
+    e: React.SyntheticEvent<HTMLVideoElement, Event>
+  ) => {
+    const video = e.currentTarget;
+    setVideoError(`视频加载失败: ${video.error?.message || "网络错误"}`);
+  };
+
+  const handleVideoLoad = () => {
+    setVideoError(null);
+  };
 
   return (
     <>
@@ -24,42 +36,63 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
         </div>
       )}
       {pipigxData.video && (
-        <a
-          href={`/api/proxy?url=${encodeURIComponent(
-            pipigxData.video
-          )}&filename=${encodeURIComponent(pipigxData.title || "pipigx")}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block relative w-full aspect-video bg-black rounded-lg mb-4 overflow-hidden group cursor-pointer"
-          style={{ maxWidth: 800 }}>
-          <Image
-            src={pipigxData.cover}
-            alt={pipigxData.title || "视频封面"}
-            fill
-            sizes="(max-width: 800px) 100vw, 800px"
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            priority
-            unoptimized
-          />
-          <div className="absolute inset-0 flex items-center justify-center group-hover:bg-opacity-10 transition-all">
-            <svg
-              className="w-20 h-20 text-white opacity-70 group-hover:opacity-90 transition-opacity drop-shadow-lg"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-              xmlns="http://www.w3.org/2000/svg">
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                clipRule="evenodd"></path>
-            </svg>
+        <div className="space-y-4">
+          <div
+            className="relative w-full rounded-lg overflow-hidden"
+            style={{ maxWidth: 800 }}>
+            <video
+              controls
+              poster={pipigxData.cover}
+              className="w-full h-auto bg-black rounded-lg"
+              preload="none"
+              playsInline
+              crossOrigin="anonymous"
+              onError={handleVideoError}
+              onLoadedData={handleVideoLoad}>
+              <source
+                src={`/api/proxy?url=${encodeURIComponent(
+                  pipigxData.video
+                )}&disposition=inline`}
+                type="video/mp4"
+              />
+              <p className="text-center text-gray-500 p-4">
+                您的浏览器不支持视频播放
+              </p>
+            </video>
+
+            {videoError && (
+              <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+                <div className="text-center text-white p-4">
+                  <p className="mb-4">{videoError}</p>
+                  <a
+                    href={pipigxData.video}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                    在新窗口打开
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
-        </a>
+
+          {/* 下载按钮 */}
+          <div className="flex items-center justify-between">
+            <a
+              href={`/api/proxy?url=${encodeURIComponent(
+                pipigxData.video
+              )}&filename=${encodeURIComponent(pipigxData.title || "pipigx")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+              下载视频
+            </a>
+            <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+              皮皮虾
+            </span>
+          </div>
+        </div>
       )}
-      <div className="text-center">
-        <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-          皮皮虾
-        </span>
-      </div>
     </>
   );
 }

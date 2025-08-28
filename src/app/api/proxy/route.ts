@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
   }
 
   const DEFAULT_UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  const MOBILE_UA =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
 
   function guessRefererByHost(hostname: string): string | undefined {
@@ -84,6 +86,44 @@ export async function GET(req: NextRequest) {
     return undefined;
   }
 
+  // 抖音视频特殊处理函数
+  async function fetchDouyinVideo(url: string) {
+    const headers = {
+      "User-Agent": MOBILE_UA,
+      Referer: "https://www.douyin.com/",
+    };
+
+    try {
+      const response = await fetch(url, {
+        headers,
+        redirect: "follow",
+      });
+
+      if (response.status === 200 || response.status === 206) {
+        return response;
+      }
+
+      // 如果是302重定向，跟踪重定向
+      if (response.status === 302) {
+        const location = response.headers.get("location");
+        if (location) {
+          return await fetch(location, {
+            headers,
+            redirect: "follow",
+          });
+        }
+      }
+
+      return response;
+    } catch {
+      // 出错时返回基本请求
+      return await fetch(url, {
+        headers,
+        redirect: "follow",
+      });
+    }
+  }
+
   const upstreamHeaders: Record<string, string> = {
     "User-Agent": customUA || req.headers.get("user-agent") || DEFAULT_UA,
   };
@@ -92,15 +132,41 @@ export async function GET(req: NextRequest) {
   const refererToUse = customReferer || guessRefererByHost(parsed.hostname);
   if (refererToUse) upstreamHeaders["Referer"] = refererToUse;
 
-  const upstreamResp = await fetch(targetUrl, {
-    headers: upstreamHeaders,
-    redirect: "follow",
-  });
+  let upstreamResp: Response;
+
+  // 检查是否为抖音视频，使用专门的处理逻辑
+  if (
+    parsed.hostname.includes("snssdk") ||
+    parsed.hostname.includes("douyinvod") ||
+    parsed.hostname.includes("aweme")
+  ) {
+    upstreamResp = await fetchDouyinVideo(targetUrl);
+  } else {
+    upstreamResp = await fetch(targetUrl, {
+      headers: upstreamHeaders,
+      redirect: "follow",
+    });
+  }
 
   const contentType =
     overrideContentType ||
     upstreamResp.headers.get("content-type") ||
     "application/octet-stream";
+
+  // 为抖音视频强制设置正确的Content-Type
+  let finalContentType = contentType;
+  if (
+    parsed.hostname.includes("snssdk") ||
+    parsed.hostname.includes("douyinvod") ||
+    parsed.hostname.includes("aweme")
+  ) {
+    if (
+      contentType === "application/octet-stream" ||
+      !contentType.includes("video")
+    ) {
+      finalContentType = "video/mp4";
+    }
+  }
 
   // 生成文件名
   const urlPathname = decodeURIComponent(parsed.pathname || "/");
@@ -114,7 +180,7 @@ export async function GET(req: NextRequest) {
 
   const respHeaders: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
-    "Content-Type": contentType,
+    "Content-Type": finalContentType,
   };
   const contentLength = upstreamResp.headers.get("content-length");
   if (contentLength) respHeaders["Content-Length"] = contentLength;

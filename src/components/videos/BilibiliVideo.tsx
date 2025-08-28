@@ -1,4 +1,5 @@
 "use client";
+import React, { useState } from "react";
 import Image from "next/image";
 import { ApiResponse, VideoItem } from "@/types/api";
 
@@ -7,6 +8,18 @@ interface BilibiliVideoProps {
 }
 
 export default function BilibiliVideo({ data }: BilibiliVideoProps) {
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  const handleVideoError = (
+    e: React.SyntheticEvent<HTMLVideoElement, Event>
+  ) => {
+    const video = e.currentTarget;
+    setVideoError(`视频加载失败: ${video.error?.message || "网络错误"}`);
+  };
+
+  const handleVideoLoad = () => {
+    setVideoError(null);
+  };
   return (
     <>
       <div className="flex items-center gap-4 mb-6">
@@ -34,31 +47,42 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
         data.data &&
         Array.isArray(data.data) &&
         data.data.length > 0 && (
-          <a
-            href={(data.data as VideoItem[])[0].video_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="relative inline-block group cursor-pointer">
-            <Image
-              src={data.imgurl}
-              alt={data.title || ""}
-              width={640}
-              height={360}
-              className="rounded-lg mb-6 transition-transform duration-300 group-hover:scale-105"
-            />
-            <div className="absolute inset-0 flex items-center justify-center group-hover:bg-opacity-10 transition-all">
-              <svg
-                className="w-20 h-20 text-white opacity-70 group-hover:opacity-90 transition-opacity drop-shadow-lg"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-                xmlns="http://www.w3.org/2000/svg">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                  clipRule="evenodd"></path>
-              </svg>
-            </div>
-          </a>
+          <div className="relative w-full rounded-lg mb-6 overflow-hidden">
+            <video
+              controls
+              poster={data.imgurl}
+              className="w-full h-auto bg-black rounded-lg"
+              preload="none"
+              playsInline
+              crossOrigin="anonymous"
+              onError={handleVideoError}
+              onLoadedData={handleVideoLoad}>
+              <source
+                src={`/api/proxy?url=${encodeURIComponent(
+                  (data.data as VideoItem[])[0].video_url
+                )}&disposition=inline`}
+                type="video/mp4"
+              />
+              <p className="text-center text-gray-500 p-4">
+                您的浏览器不支持视频播放
+              </p>
+            </video>
+
+            {videoError && (
+              <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+                <div className="text-center text-white p-4">
+                  <p className="mb-4">{videoError}</p>
+                  <a
+                    href={(data.data as VideoItem[])[0].video_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                    在新窗口打开
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       {data.data && Array.isArray(data.data) && data.data.length > 0 && (
         <div className="space-y-4">
