@@ -1,4 +1,5 @@
 import { parseKuaishou, formatResponse } from "@/lib/kuaishouCore";
+import { getCachedResponse, setCacheResponse, rateLimit, isValidUrl } from "@/lib/api-utils";
 export const runtime = "edge";
 
 class KuaishouParser {
@@ -1350,12 +1351,51 @@ async function runKuaishou(url) {
 }
 
 export async function GET(request) {
+  // 获取客户端IP
+  const clientIP = request.headers.get('x-forwarded-for') ||
+                  request.headers.get('x-real-ip') ||
+                  request.headers.get('cf-connecting-ip') ||
+                  'unknown';
+
+  // 检查速率限制
+  if (!rateLimit(clientIP)) {
+    return Response.json(
+      formatResponse(429, "请求过于频繁，请稍后再试"),
+      {
+        status: 429,
+        headers: { "Access-Control-Allow-Origin": "*" }
+      }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
 
   if (!url) {
-    return Response.json(formatResponse(201, "链接不能为空！"), {
-      status: 400,
+    return Response.json(
+      formatResponse(201, "链接不能为空！"),
+      {
+        status: 400,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      }
+    );
+  }
+
+  // 验证URL格式
+  if (!isValidUrl(url)) {
+    return Response.json(
+      formatResponse(400, "无效的URL格式"),
+      {
+        status: 400,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      }
+    );
+  }
+
+  // 检查缓存
+  const cached = getCachedResponse(url);
+  if (cached) {
+    return Response.json(cached, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
   }
@@ -1369,6 +1409,10 @@ export async function GET(request) {
 
     if (jsonData) {
       console.log("=== 解析成功 ===");
+
+      // 设置缓存
+      setCacheResponse(url, jsonData);
+
       return Response.json(jsonData, {
         headers: { "Access-Control-Allow-Origin": "*" },
       });
@@ -1385,9 +1429,12 @@ export async function GET(request) {
   } catch (error) {
     console.log("=== API处理错误 ===");
     console.log("错误详情:", error);
-    return Response.json(formatResponse(500, "服务器错误", error.message), {
-      status: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
+    return Response.json(
+      formatResponse(500, "服务器错误", error.message),
+      {
+        status: 500,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      }
+    );
   }
 }

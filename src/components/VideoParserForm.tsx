@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ApiResponse } from "@/types/api";
+import { extractUrlFromText as extractUrl, detectPlatform } from "@/utils/share";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
@@ -8,23 +9,25 @@ interface VideoParserFormProps {
   loading: boolean;
 }
 
-// 提取URL的函数
-function extractUrl(text: string): string | null {
-  const urlPatterns = [
-    /(https?:\/\/[^\s]+)/, // 基本URL
-    /(https?:\/\/[^\s]+)\s*复制此链接/, // 抖音格式
-    /(https?:\/\/[^\s]+)\s*打开[^\s]+搜索/, // 通用格式
-  ];
-
-  for (const pattern of urlPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      return match[1].trim();
+// 防抖函数
+const debounceAsync = (func: (...args: any[]) => any, delay: number) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  return (...args: any[]) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
     }
-  }
-
-  return null;
-}
+    return new Promise((resolve) => {
+      timeoutId = setTimeout(() => {
+        const result = func(...args);
+        if (result instanceof Promise) {
+          result.then(resolve);
+        } else {
+          resolve(result);
+        }
+      }, delay);
+    });
+  };
+};
 
 export default function VideoParserForm({
   onResult,
@@ -37,10 +40,27 @@ export default function VideoParserForm({
     "douyin" | "bilibili" | "kuaishou" | "weibo" | "xhs"
   >("douyin");
 
-  // 自动解析函数（稳定引用）
-  const autoParseVideo = useCallback(
-    async (url: string, platform: string) => {
-      if (loading) return; // 如果正在加载中，不重复解析
+  // 使用防抖的自动解析函数
+  const debouncedParse = useCallback(
+    debounceAsync(async (url: string, platform: string) => {
+      if (!url || loading) return;
+
+      // 检查是否已缓存解析结果
+      const cacheKey = `${platform}:${url}`;
+      const cachedResult = sessionStorage.getItem(cacheKey);
+
+      if (cachedResult) {
+        try {
+          const parsed = JSON.parse(cachedResult);
+          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) { // 5分钟内有效
+            onResult(parsed.data, "");
+            return;
+          }
+        } catch (error) {
+          // 忽略缓存错误，继续正常流程
+          console.warn('缓存解析失败:', error);
+        }
+      }
 
       setLoading(true);
       onResult(null, "");
@@ -58,6 +78,12 @@ export default function VideoParserForm({
             | "weibo"
             | "xhs";
           onResult(data, "");
+
+          // 缓存结果
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            data,
+            timestamp: Date.now()
+          }));
         } else {
           onResult(null, data.msg || "解析失败");
         }
@@ -66,58 +92,27 @@ export default function VideoParserForm({
       } finally {
         setLoading(false);
       }
-    },
+    }, 500), // 500ms 防抖延迟
     [loading, onResult, setLoading]
-  );
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 处理输入内容的函数
   const processInputText = useCallback(
     (text: string) => {
-      // 自动检测平台
-      if (text.includes("douyin.com")) {
-        setPlatform("douyin");
-      } else if (text.includes("kuaishou.com")) {
-        setPlatform("kuaishou");
-      } else if (text.includes("weibo.com")) {
-        setPlatform("weibo");
-      } else if (
-        text.includes("xiaohongshu.com") ||
-        text.includes("xhslink.com")
-      ) {
-        setPlatform("xhs");
-      } else if (text.includes("bilibili.com")) {
-        setPlatform("bilibili");
-      }
-
       // 提取URL
       const extractedUrl = extractUrl(text);
       if (extractedUrl) {
         setUrl(extractedUrl);
 
-        // 自动检测平台并开始解析
-        let detectedPlatform = "douyin"; // 默认平台
-        if (text.includes("douyin.com")) {
-          detectedPlatform = "douyin";
-        } else if (text.includes("kuaishou.com")) {
-          detectedPlatform = "kuaishou";
-        } else if (text.includes("weibo.com")) {
-          detectedPlatform = "weibo";
-        } else if (
-          text.includes("xiaohongshu.com") ||
-          text.includes("xhslink.com")
-        ) {
-          detectedPlatform = "xhs";
-        } else if (text.includes("bilibili.com")) {
-          detectedPlatform = "bilibili";
-        }
+        // 使用统一的平台检测函数
+        const detectedPlatform = detectPlatform(text);
+        setPlatform(detectedPlatform as "douyin" | "bilibili" | "kuaishou" | "weibo" | "xhs");
 
-        // 使用 setTimeout 确保状态更新完成后再执行自动解析
-        setTimeout(() => {
-          autoParseVideo(extractedUrl, detectedPlatform);
-        }, 100);
+        // 使用防抖函数进行解析
+        debouncedParse(extractedUrl, detectedPlatform);
       }
     },
-    [autoParseVideo]
+    [debouncedParse]
   );
 
   // 检查是否包含有效的视频平台URL

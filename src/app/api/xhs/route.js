@@ -1,3 +1,5 @@
+import { createApiHandler } from "@/lib/api-middleware";
+
 export const runtime = "edge";
 
 function output(code, msg, data = []) {
@@ -201,26 +203,4 @@ async function xhs(url) {
   }
 }
 
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get("url");
-
-  if (!url) {
-    return Response.json(output(201, "url 为空"), {
-      status: 400,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
-  }
-
-  try {
-    const result = await xhs(url);
-    return Response.json(result, {
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
-  } catch (error) {
-    return Response.json(output(500, "服务器错误", error.message), {
-      status: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
-  }
-}
+export const GET = createApiHandler(xhs);

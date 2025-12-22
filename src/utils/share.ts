@@ -62,3 +62,25 @@ export function detectPlatform(text: string): Platform {
     return "douyin";
   return "douyin"; // 默认平台
 }
+
+// 提取URL的函数（导出以供组件使用）
+export function extractUrlFromText(text: string): string | null {
+  // 1) 标准 http(s) URL：允许域名中的点和路径的常见字符，仅以空白或中文标点作为边界
+  const httpUrl = text.match(
+    /(https?:\/\/[^\s\u3000\u00A0，。！？、；：【】（）《》"'"'"'"]+)/
+  );
+  if (httpUrl && httpUrl[1]) {
+    // 去掉末尾英文标点（逗号、句号等）或中文标点
+    return httpUrl[1].replace(/[，。！？、；：.,!?;]+$/, "");
+  }
+
+  // 支持无协议的短链（如 v.douyin.com/xxxx）
+  const bareUrlMatch = text.match(
+    /(?:^|\s)((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/[^\s\u3000\u00A0，。！？、；：【】（）《》"'"'"'"]+)/
+  );
+  if (bareUrlMatch && bareUrlMatch[1]) {
+    return bareUrlMatch[1].replace(/[，。！？、；：.,!?;]+$/, "");
+  }
+
+  return null;
+}

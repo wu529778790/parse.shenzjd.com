@@ -1,3 +1,5 @@
+import { createApiHandler } from "@/lib/api-middleware";
+
 export const runtime = "edge";
 
 async function weibo(url) {
@@ -56,31 +58,4 @@ async function weiboRequest(id) {
   }
 }
 
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get("url");
-  if (!url) {
-    return Response.json(
-      { code: 201, msg: "链接不能为空！" },
-      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
-  }
-  try {
-    const info = await weibo(url);
-    if (info && info.code === 200) {
-      return Response.json(info, {
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
-    } else {
-      return Response.json(
-        { code: 404, msg: "解析失败！" },
-        { status: 404, headers: { "Access-Control-Allow-Origin": "*" } }
-      );
-    }
-  } catch (error) {
-    return Response.json(
-      { code: 500, msg: "服务器错误", error: error },
-      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
-  }
-}
+export const GET = createApiHandler(weibo);
