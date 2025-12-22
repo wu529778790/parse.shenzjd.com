@@ -10,15 +10,15 @@ interface VideoParserFormProps {
 }
 
 // 防抖函数
-const debounceAsync = (func: (...args: any[]) => any, delay: number) => {
+const debounceAsync = (func: (url: string, platform: string) => Promise<void>, delay: number) => {
   let timeoutId: NodeJS.Timeout | null = null;
-  return (...args: any[]) => {
+  return (url: string, platform: string): Promise<void> => {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
     return new Promise((resolve) => {
       timeoutId = setTimeout(() => {
-        const result = func(...args);
+        const result = func(url, platform);
         if (result instanceof Promise) {
           result.then(resolve);
         } else {
@@ -51,7 +51,7 @@ export default function VideoParserForm({
 
       if (cachedResult) {
         try {
-          const parsed = JSON.parse(cachedResult);
+          const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
           if (Date.now() - parsed.timestamp < 5 * 60 * 1000) { // 5分钟内有效
             onResult(parsed.data, "");
             return;
@@ -94,7 +94,7 @@ export default function VideoParserForm({
       }
     }, 500), // 500ms 防抖延迟
     [loading, onResult, setLoading]
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // 处理输入内容的函数
   const processInputText = useCallback(
