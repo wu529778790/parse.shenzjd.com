@@ -147,7 +147,7 @@ export default function Home() {
           {/* Results Section */}
           {result && (result.code === 1 || result.code === 200) && (
             <div className="reveal max-w-3xl mx-auto mt-8">
-              <div className="glass-card iridescent-border overflow-hidden">
+              <div className="glass-card iridescent-border">
                 {/* Result Header */}
                 <div className="px-6 py-4 border-b border-border-subtle bg-glass-2">
                   <div className="flex items-center justify-between">

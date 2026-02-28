@@ -147,6 +147,13 @@
     mask-composite: exclude;
     opacity: 0;
     transition: opacity 0.4s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .iridescent-border > * {
+    position: relative;
+    z-index: 1;
   }
 
   .iridescent-border:hover::before {
