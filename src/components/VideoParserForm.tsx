@@ -9,7 +9,41 @@ interface VideoParserFormProps {
   loading: boolean;
 }
 
-// 防抖函数
+// Platform configuration with colors and icons
+const PLATFORMS = {
+  douyin: {
+    name: "抖音",
+    emoji: "🎵",
+    color: "#fe2c55",
+    gradient: "from-[#fe2c55] to-[#ff6b8a]",
+  },
+  bilibili: {
+    name: "哔哩哔哩",
+    emoji: "🅱️",
+    color: "#00aeec",
+    gradient: "from-[#00aeec] to-[#4dc9ff]",
+  },
+  kuaishou: {
+    name: "快手",
+    emoji: "⚡",
+    color: "#ff6600",
+    gradient: "from-[#ff6600] to-[#ff9933]",
+  },
+  weibo: {
+    name: "微博",
+    emoji: "📱",
+    color: "#e6162d",
+    gradient: "from-[#e6162d] to-[#ff4d6a]",
+  },
+  xhs: {
+    name: "小红书",
+    emoji: "📝",
+    color: "#ff2442",
+    gradient: "from-[#ff2442] to-[#ff5c7c]",
+  },
+} as const;
+
+// Debounce function
 const debounceAsync = (func: (url: string, platform: string) => Promise<void>, delay: number) => {
   let timeoutId: NodeJS.Timeout | null = null;
   return (url: string, platform: string): Promise<void> => {
@@ -36,29 +70,32 @@ export default function VideoParserForm({
 }: VideoParserFormProps) {
   const [input, setInput] = useState("");
   const [url, setUrl] = useState("");
-  const [platform, setPlatform] = useState<
-    "douyin" | "bilibili" | "kuaishou" | "weibo" | "xhs"
-  >("douyin");
+  const [platform, setPlatform] = useState<keyof typeof PLATFORMS>("douyin");
+  const [isFocused, setIsFocused] = useState(false);
+  const [detectedPlatform, setDetectedPlatform] = useState<keyof typeof PLATFORMS | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // 使用防抖的自动解析函数
-  const debouncedParse = useCallback(
+  // Debounced parse function using useRef to avoid dependency issues
+  const debouncedParseRef = useRef<
+    (url: string, platform: string) => Promise<void>
+  >(
     debounceAsync(async (url: string, platform: string) => {
       if (!url || loading) return;
 
-      // 检查是否已缓存解析结果
+      // Check cache
       const cacheKey = `${platform}:${url}`;
       const cachedResult = sessionStorage.getItem(cacheKey);
 
       if (cachedResult) {
         try {
           const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
-          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) { // 5分钟内有效
+          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
             onResult(parsed.data, "");
             return;
           }
         } catch (error) {
-          // 忽略缓存错误，继续正常流程
-          console.warn('缓存解析失败:', error);
+          console.warn('Cache parse failed:', error);
         }
       }
 
@@ -79,7 +116,6 @@ export default function VideoParserForm({
             | "xhs";
           onResult(data, "");
 
-          // 缓存结果
           sessionStorage.setItem(cacheKey, JSON.stringify({
             data,
             timestamp: Date.now()
@@ -92,30 +128,80 @@ export default function VideoParserForm({
       } finally {
         setLoading(false);
       }
-    }, 500), // 500ms 防抖延迟
-    [loading, onResult, setLoading]
+    }, 500)
   );
 
-  // 处理输入内容的函数
+  // Update ref when dependencies change
+  useEffect(() => {
+    debouncedParseRef.current = debounceAsync(async (url: string, platform: string) => {
+      if (!url || loading) return;
+
+      const cacheKey = `${platform}:${url}`;
+      const cachedResult = sessionStorage.getItem(cacheKey);
+
+      if (cachedResult) {
+        try {
+          const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
+          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+            onResult(parsed.data, "");
+            return;
+          }
+        } catch (error) {
+          console.warn('Cache parse failed:', error);
+        }
+      }
+
+      setLoading(true);
+      onResult(null, "");
+
+      try {
+        const response = await fetch(
+          `/api/${platform}?url=${encodeURIComponent(url)}`
+        );
+        const data: ApiResponse = await response.json();
+        if (data.code === 1 || data.code === 200) {
+          data.platform = platform as
+            | "douyin"
+            | "bilibili"
+            | "kuaishou"
+            | "weibo"
+            | "xhs";
+          onResult(data, "");
+
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            data,
+            timestamp: Date.now()
+          }));
+        } else {
+          onResult(null, data.msg || "解析失败");
+        }
+      } catch {
+        onResult(null, "请求失败，请稍后重试");
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+  }, [loading, onResult, setLoading]);
+
+  // Process input and detect platform
   const processInputText = useCallback(
     (text: string) => {
-      // 提取URL
       const extractedUrl = extractUrl(text);
       if (extractedUrl) {
         setUrl(extractedUrl);
-
-        // 使用统一的平台检测函数
-        const detectedPlatform = detectPlatform(text);
-        setPlatform(detectedPlatform as "douyin" | "bilibili" | "kuaishou" | "weibo" | "xhs");
-
-        // 使用防抖函数进行解析
-        debouncedParse(extractedUrl, detectedPlatform);
+        const detected = detectPlatform(text);
+        const platformKey = detected as keyof typeof PLATFORMS;
+        setDetectedPlatform(platformKey);
+        setPlatform(platformKey);
+        debouncedParseRef.current(extractedUrl, detected);
+      } else {
+        setDetectedPlatform(null);
       }
     },
-    [debouncedParse]
+    []
   );
 
-  // 检查是否包含有效的视频平台URL
+  // Check for valid video URL
   const hasValidVideoUrl = useCallback((text: string): boolean => {
     const supportedPlatforms = [
       "douyin.com",
@@ -125,11 +211,10 @@ export default function VideoParserForm({
       "xhslink.com",
       "bilibili.com",
     ];
-
     return supportedPlatforms.some((platform) => text.includes(platform));
   }, []);
 
-  // 页面加载时自动读取剪贴板（仅执行一次，避免重复触发解析）
+  // Auto-read clipboard on mount
   const hasAutoReadRef = useRef(false);
   useEffect(() => {
     if (hasAutoReadRef.current) return;
@@ -144,7 +229,7 @@ export default function VideoParserForm({
           processInputText(text);
         }
       } catch (error) {
-        console.log("自动读取剪贴板失败:", error);
+        console.log("Auto-read clipboard failed:", error);
       }
     };
 
@@ -158,23 +243,23 @@ export default function VideoParserForm({
     processInputText(text);
   };
 
-  // 粘贴按钮功能
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
       setInput(text);
       processInputText(text);
     } catch (error) {
-      console.error("粘贴失败:", error);
+      console.error("Paste failed:", error);
       onResult(null, "粘贴失败，请手动粘贴或检查浏览器权限");
     }
   };
 
-  // 清空输入
   const handleClear = () => {
     setInput("");
     setUrl("");
+    setDetectedPlatform(null);
     onResult(null, "");
+    textareaRef.current?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -205,174 +290,191 @@ export default function VideoParserForm({
     }
   };
 
-  return (
-    <div className="max-w-3xl mx-auto mb-12">
-      {/* 标题区域 */}
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          视频解析工具
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          支持抖音、快手、B站、
-          {/* 微博、 */}
-          小红书等平台视频解析
-        </p>
-      </div>
+  // Update CSS variable for platform accent
+  useEffect(() => {
+    if (detectedPlatform && PLATFORMS[detectedPlatform]) {
+      document.documentElement.style.setProperty('--accent', PLATFORMS[detectedPlatform].color);
+    }
+  }, [detectedPlatform]);
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 输入区域 */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              视频链接或分享文本
-            </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handlePaste}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors">
+  return (
+    <div className="max-w-2xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Input Card */}
+        <div className={`glass-card iridescent-border p-1 transition-all duration-500 ${isFocused ? 'shadow-2xl shadow-indigo-500/10' : ''}`}>
+          <div className="bg-glass-1 rounded-xl p-4 sm:p-5">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <label className="flex items-center gap-2 text-sm font-medium text-primary">
                 <svg
-                  className="w-4 h-4 mr-1"
+                  className="w-4 h-4 text-accent"
                   fill="none"
                   stroke="currentColor"
-                  viewBox="0 0 24 24">
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}>
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
                   />
                 </svg>
-                粘贴
-              </button>
-              {input && (
+                视频链接或分享文本
+              </label>
+
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleClear}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 transition-colors">
+                  onClick={handlePaste}
+                  className="paste-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-accent bg-accent/10 hover:bg-accent/20 transition-all duration-200">
                   <svg
-                    className="w-4 h-4 mr-1"
+                    className="w-3.5 h-3.5"
                     fill="none"
                     stroke="currentColor"
-                    viewBox="0 0 24 24">
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}>
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
+                      d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                     />
                   </svg>
-                  清空
+                  粘贴
                 </button>
-              )}
-            </div>
-          </div>
 
-          <textarea
-            value={input}
-            onChange={handleInputChange}
-            placeholder="请粘贴包含视频链接的文本，或点击粘贴按钮自动读取剪贴板内容..."
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[120px] resize-none"
-          />
-
-          {/* {url && (
-            <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center">
-                <svg
-                  className="w-4 h-4 text-green-500 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span className="text-sm text-green-700 dark:text-green-400 font-medium">
-                  已检测到链接:{url}
-                </span>
-              </div>
-            </div>
-          )} */}
-        </div>
-
-        {/* 平台选择和解析按钮 */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              {/* <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                选择平台
-              </label> */}
-              <select
-                value={platform}
-                onChange={(e) =>
-                  setPlatform(
-                    e.target.value as
-                      | "bilibili"
-                      | "douyin"
-                      | "kuaishou"
-                      | "weibo"
-                      | "xhs"
-                  )
-                }
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                <option value="douyin">🎵 抖音</option>
-                <option value="bilibili">🅱️ 哔哩哔哩</option>
-                <option value="kuaishou">⚡ 快手</option>
-                <option value="weibo">📱 微博</option>
-                <option value="xhs">📝 小红书</option>
-              </select>
-            </div>
-
-            <div className="flex-1">
-              {/* <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                开始解析
-              </label> */}
-              <button
-                type="submit"
-                disabled={loading || !url}
-                className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none">
-                {loading ? (
-                  <div className="flex items-center justify-center">
+                {input && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-muted hover:text-primary bg-glass-2 hover:bg-glass-3 transition-all duration-200">
                     <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    解析中...
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
+                      className="w-3.5 h-3.5"
                       fill="none"
                       stroke="currentColor"
-                      viewBox="0 0 24 24">
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}>
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                        d="M6 18L18 6M6 6l12 12"
                       />
                     </svg>
-                    开始解析
-                  </div>
+                    清空
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
+
+            {/* Textarea */}
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInputChange}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder="粘贴包含视频链接的文本，或点击粘贴按钮..."
+                className="input-glow w-full px-4 py-3 rounded-xl border border-border-subtle bg-glass-2 text-primary placeholder-muted/50 focus:border-accent/50 focus:bg-glass-3 transition-all duration-300 min-h-[120px] resize-none"
+              />
+
+              {/* Detected Platform Indicator */}
+              {detectedPlatform && PLATFORMS[detectedPlatform] && (
+                <div className="absolute bottom-3 left-3 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-glass-3 border border-border-subtle">
+                  <span className="text-lg">{PLATFORMS[detectedPlatform].emoji}</span>
+                  <span className="text-xs font-medium text-primary">
+                    {PLATFORMS[detectedPlatform].name}
+                  </span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Platform & Submit Row */}
+        <div className="glass-card iridescent-border p-1">
+          <div className="bg-glass-1 rounded-xl p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Platform Selector */}
+              <div className="flex-1">
+                <select
+                  value={platform}
+                  onChange={(e) =>
+                    setPlatform(e.target.value as keyof typeof PLATFORMS)
+                  }
+                  className="input-glow w-full px-4 py-3.5 rounded-xl border border-border-subtle bg-glass-2 text-primary focus:border-accent/50 focus:bg-glass-3 transition-all duration-300 appearance-none cursor-pointer">
+                  {Object.entries(PLATFORMS).map(([key, config]) => (
+                    <option key={key} value={key}>
+                      {config.emoji} {config.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Custom Arrow */}
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden">
+                  <svg
+                    className="w-5 h-5 text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex-1 sm:flex-[1.2]">
+                <button
+                  ref={buttonRef}
+                  type="submit"
+                  disabled={loading || !url}
+                  className="magnetic-btn group relative w-full px-6 py-3.5 rounded-xl font-semibold text-white overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5 disabled:translate-y-0">
+                  {/* Dynamic Gradient Background */}
+                  <div className={`absolute inset-0 bg-gradient-to-r ${detectedPlatform && PLATFORMS[detectedPlatform] ? PLATFORMS[detectedPlatform].gradient : 'from-indigo-500 to-purple-600'} transition-all duration-500`} />
+
+                  {/* Shimmer Effect */}
+                  <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                  {/* Button Content */}
+                  <div className="relative flex items-center justify-center gap-2">
+                    {loading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>解析中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-5 h-5 transition-transform group-hover:scale-110"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2}>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                        <span>开始解析</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Ripple Effect Container */}
+                  <span className="absolute inset-0 rounded-xl" />
+                </button>
+              </div>
+            </div>
+
+            {/* Helper Text */}
+            <p className="mt-3 text-xs text-muted text-center">
+              支持自动检测平台 · 粘贴后自动解析
+            </p>
           </div>
         </div>
       </form>
