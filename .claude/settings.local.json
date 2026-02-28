@@ -3,7 +3,13 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(npx skills:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebSearch",
+      "Bash(ping:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist:*)",
+      "Bash(netstat:*)",
+      "Bash(cmd.exe:*)"
     ]
   }
 }
