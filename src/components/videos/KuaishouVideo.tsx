@@ -115,8 +115,8 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
             kuaishouData.photoUrl || ""
           )}&filename=${encodeURIComponent(
             kuaishouData.caption || "kuaishou"
-          )}`}
-          target="_blank"
+          )}&disposition=attachment`}
+          download
           rel="noopener noreferrer"
           className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ff6600] to-[#ff9933] hover:from-[#e65c00] hover:to-[#ff8800] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:-translate-y-0.5">
           <svg

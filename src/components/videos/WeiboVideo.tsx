@@ -135,8 +135,8 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
           <a
             href={`/api/proxy?url=${encodeURIComponent(
               weiboData.url
-            )}&filename=${encodeURIComponent(weiboData.title || "weibo")}`}
-            target="_blank"
+            )}&filename=${encodeURIComponent(weiboData.title || "weibo")}&disposition=attachment`}
+            download
             rel="noopener noreferrer"
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#e6162d] to-[#ff4d6a] hover:from-[#c91227] hover:to-[#e6162d] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#e6162d]/25 hover:-translate-y-0.5">
             <svg

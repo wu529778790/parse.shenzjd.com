@@ -196,8 +196,8 @@ export default function XhsVideo({ data }: XhsVideoProps) {
           <a
             href={`/api/proxy?url=${encodeURIComponent(
               xhsData.url
-            )}&filename=${encodeURIComponent(xhsData.title || "xhs")}`}
-            target="_blank"
+            )}&filename=${encodeURIComponent(xhsData.title || "xhs")}&disposition=attachment`}
+            download
             rel="noopener noreferrer"
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ff2442] to-[#ff5c7c] hover:from-[#e61f3a] hover:to-[#ff4d6a] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#ff2442]/25 hover:-translate-y-0.5">
             <svg

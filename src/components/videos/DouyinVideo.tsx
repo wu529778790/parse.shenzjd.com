@@ -123,8 +123,8 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
         <a
           href={`/api/proxy?url=${encodeURIComponent(
             douyinData.url
-          )}&filename=${encodeURIComponent(douyinData.title || "douyin")}`}
-          target="_blank"
+          )}&filename=${encodeURIComponent(douyinData.title || "douyin")}&disposition=attachment`}
+          download
           rel="noopener noreferrer"
           className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5">
           <svg

@@ -153,8 +153,8 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
                     item.video_url
                   )}&filename=${encodeURIComponent(
                     (data.title || "bilibili") + `-${index + 1}`
-                  )}`}
-                  target="_blank"
+                  )}&disposition=attachment`}
+                  download
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00aeec] to-[#4dc9ff] hover:from-[#0099d4] hover:to-[#3db8e8] text-white rounded-lg text-sm font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25 hover:-translate-y-0.5">
                   <svg
