@@ -40,6 +40,26 @@ export default function Home() {
         <div className="orb orb-3" />
       </div>
 
+      {/* GitHub Floating Button */}
+      <a
+        href="https://github.com/wu529778790/parse.shenzjd.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed top-4 right-4 z-50 group"
+        aria-label="GitHub Repository">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-glass-2 backdrop-blur-xl border border-border-subtle hover:border-accent/50 hover:bg-glass-3 transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/20">
+          <svg
+            className="w-5 h-5 text-muted group-hover:text-accent transition-colors duration-300"
+            fill="currentColor"
+            viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.112.82-.262.82-.582 0-.288-.01-1.05-.016-2.06-3.338.726-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.744.083-.729.083-.729 1.205.085 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.492.997.108-.775.42-1.305.763-1.606-2.665-.304-5.466-1.333-5.466-5.93 0-1.31.47-2.382 1.236-3.222-.124-.303-.536-1.524.117-3.176 0 0 1.008-.323 3.3 1.23a11.5 11.5 0 0 1 3.003-.404c1.02.005 2.047.138 3.003.404 2.29-1.553 3.297-1.23 3.297-1.23.655 1.652.243 2.873.12 3.176.77.84 1.235 1.912 1.235 3.222 0 4.61-2.805 5.624-5.477 5.92.431.372.815 1.103.815 2.222 0 1.604-.015 2.896-.015 3.29 0 .322.216.699.825.58C20.565 21.796 24 17.297 24 12c0-6.63-5.37-12-12-12Z" />
+          </svg>
+          <span className="text-sm font-medium text-muted group-hover:text-primary transition-colors duration-300">
+            GitHub
+          </span>
+        </div>
+      </a>
+
       {/* Main Content */}
       <div className="relative min-h-screen" style={{ zIndex: 1 }}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
