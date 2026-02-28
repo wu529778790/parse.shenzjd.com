@@ -37,7 +37,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
   const isImageType = xhsData.type === "image";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Header */}
       <div className="glass-card p-5">
         <div className="flex items-center gap-4">

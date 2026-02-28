@@ -33,7 +33,7 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
   const handlePause = () => setIsPlaying(false);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info */}
       {kuaishouData.authorName && (
         <div className="glass-card p-4">

@@ -37,9 +37,9 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Video Container */}
-      <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
+      <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl" style={{ touchAction: 'manipulation' }}>
         <div className="aspect-[9/16] sm:aspect-video w-full">
           <video
             ref={videoRef}
@@ -52,7 +52,8 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
             onError={handleVideoError}
             onLoadedData={handleVideoLoad}
             onPlay={handlePlay}
-            onPause={handlePause}>
+            onPause={handlePause}
+            x-webkit-airplay="allow">
             <source src={proxyUrl} type="video/mp4" />
             <p className="text-center text-gray-500 p-4">
               您的浏览器不支持视频播放

@@ -375,17 +375,6 @@ export default function VideoParserForm({
                 placeholder="粘贴包含视频链接的文本，或点击粘贴按钮..."
                 className="input-glow w-full px-4 py-3 rounded-xl border border-border-subtle bg-glass-2 text-primary placeholder-muted/50 focus:border-accent/50 focus:bg-glass-3 transition-all duration-300 min-h-[120px] resize-none"
               />
-
-              {/* Detected Platform Indicator */}
-              {detectedPlatform && PLATFORMS[detectedPlatform] && (
-                <div className="absolute bottom-3 left-3 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-glass-3 border border-border-subtle">
-                  <span className="text-lg">{PLATFORMS[detectedPlatform].emoji}</span>
-                  <span className="text-xs font-medium text-primary">
-                    {PLATFORMS[detectedPlatform].name}
-                  </span>
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                </div>
-              )}
             </div>
           </div>
         </div>

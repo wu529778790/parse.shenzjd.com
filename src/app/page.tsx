@@ -41,7 +41,7 @@ export default function Home() {
       </div>
 
       {/* Main Content */}
-      <div className="relative min-h-screen">
+      <div className="relative min-h-screen" style={{ zIndex: 1 }}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
           {/* Hero Section */}
           <header className="text-center mb-16 reveal">
@@ -177,7 +177,7 @@ export default function Home() {
                 </div>
 
                 {/* Result Content */}
-                <div className="p-6">
+                <div className="p-6" style={{ touchAction: 'manipulation' }}>
                   {result.platform === "bilibili" && (
                     <BilibiliVideo data={result} />
                   )}

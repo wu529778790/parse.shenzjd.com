@@ -25,7 +25,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
   const hasVideo = videoItems.length > 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info Card */}
       {(data.user?.user_img || data.title) && (
         <div className="glass-card p-5">

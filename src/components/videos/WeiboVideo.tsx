@@ -34,7 +34,7 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
   const handlePause = () => setIsPlaying(false);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Header */}
       <div className="glass-card p-5">
         <div className="flex items-center gap-4">
