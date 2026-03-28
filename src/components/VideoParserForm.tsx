@@ -71,8 +71,8 @@ export default function VideoParserForm({
           onResult(parsed.data, "");
           return;
         }
-      } catch (error) {
-        console.warn('Cache parse failed:', error);
+      } catch {
+        // 缓存解析失败，忽略错误继续执行
       }
     }
 

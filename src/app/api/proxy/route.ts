@@ -119,14 +119,42 @@ export async function GET(req: NextRequest) {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
 
   function guessRefererByHost(hostname: string): string | undefined {
-    if (hostname.includes("douyin")) return "https://www.douyin.com/";
-    if (hostname.includes("bilibili")) return "https://www.bilibili.com/";
-    if (hostname.includes("kuaishou")) return "https://www.kuaishou.com/";
-    if (hostname.includes("weibo")) return "https://weibo.com/";
-    if (hostname.includes("xiaohongshu") || hostname.includes("xhs"))
-      return "https://www.xiaohongshu.com/";
-    if (hostname.includes("douyinpic") || hostname.includes("snssdk"))
+    const lower = hostname.toLowerCase();
+    
+    // 抖音相关域名
+    if (lower.includes("douyin") || lower.includes("douyinpic") || 
+        lower.includes("snssdk") || lower.includes("douyinvod") || 
+        lower.includes("aweme") || lower.includes("iesdouyin")) {
       return "https://www.douyin.com/";
+    }
+    
+    // 哔哩哔哩相关域名
+    if (lower.includes("bilibili") || lower.includes("hdslb") || lower.includes("bilivideo")) {
+      return "https://www.bilibili.com/";
+    }
+    
+    // 快手相关域名
+    if (lower.includes("kuaishou") || lower.includes("kwaicdn") || 
+        lower.includes("kwimgs") || lower.includes("ksyungslb") ||
+        lower.includes("gifshow") || lower.includes("kscdns")) {
+      return "https://www.kuaishou.com/";
+    }
+    
+    // 微博相关域名
+    if (lower.includes("weibo") || lower.includes("sina")) {
+      return "https://weibo.com/";
+    }
+    
+    // 小红书相关域名
+    if (lower.includes("xiaohongshu") || lower.includes("xhs") || lower.includes("xhscdn")) {
+      return "https://www.xiaohongshu.com/";
+    }
+    
+    // 皮皮虾相关域名
+    if (lower.includes("pipigx") || lower.includes("pipix") || lower.includes("ippzone")) {
+      return "https://h5.pipix.com/";
+    }
+    
     return `${parsed.protocol}//${parsed.host}/`;
   }
 
