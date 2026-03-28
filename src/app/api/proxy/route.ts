@@ -1,6 +1,7 @@
 export const runtime = "edge";
 
 import { NextRequest } from "next/server";
+import { logger } from "@/lib/api-utils";
 
 export async function OPTIONS() {
   return new Response(null, {
@@ -11,6 +12,53 @@ export async function OPTIONS() {
       "Access-Control-Allow-Headers": "*",
     },
   });
+}
+
+// SSRF防护：检查是否为内网地址
+function isPrivateHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  
+  // 检查localhost
+  if (lower === "localhost" || lower === "127.0.0.1" || lower === "0.0.0.0" || lower === "::1") {
+    return true;
+  }
+  
+  // 检查私有IP段
+  const privatePatterns = [
+    /^10\./,
+    /^172\.(1[6-9]|2[0-9]|3[01])\./,
+    /^192\.168\./,
+    /^169\.254\./,  // 链路本地
+    /^fc00:/,       // IPv6 私有
+    /^fe80:/,       // IPv6 链路本地
+  ];
+  
+  return privatePatterns.some(pattern => pattern.test(lower));
+}
+
+// 允许的域名白名单（可选，提高安全性）
+const ALLOWED_DOMAINS = [
+  "douyinpic.com",
+  "snssdk.com",
+  "douyinvod.com",
+  "aweme.com",
+  "hdslb.com",
+  "bilibili.com",
+  "kwaicdn.com",
+  "kwimgs.com",
+  "kuaishou.com",
+  "xiaohongshu.com",
+  "xhslink.com",
+  "pipigx.com",
+  "pipix.com",
+  "weibo.com",
+  "douyin.com",
+];
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function isAllowedDomain(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return ALLOWED_DOMAINS.some(domain => lower.endsWith(domain) || lower.includes(domain));
 }
 
 export async function GET(req: NextRequest) {
@@ -46,6 +94,24 @@ export async function GET(req: NextRequest) {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
   }
+
+  // SSRF防护：阻止访问内网地址
+  if (isPrivateHostname(parsed.hostname)) {
+    logger.warn(`SSRF blocked: ${parsed.hostname}`);
+    return new Response("Access denied: private network", {
+      status: 403,
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
+  }
+
+  // 域名白名单检查（可选启用）
+  // if (!isAllowedDomain(parsed.hostname)) {
+  //   logger.warn(`Domain not allowed: ${parsed.hostname}`);
+  //   return new Response("Domain not allowed", {
+  //     status: 403,
+  //     headers: { "Access-Control-Allow-Origin": "*" },
+  //   });
+  // }
 
   const DEFAULT_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";

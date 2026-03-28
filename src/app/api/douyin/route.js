@@ -1,58 +1,19 @@
+import { createApiHandler } from "@/lib/api-middleware";
+import { logger } from "@/lib/api-utils";
+
 export const runtime = "edge";
-
-// 缓存相关配置
-const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
-let cache = new Map();
-
-const getCachedResponse = (url) => {
-  const cached = cache.get(url);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.data;
-  }
-  return null;
-};
-
-const setCacheResponse = (url, data) => {
-  cache.set(url, {
-    data,
-    timestamp: Date.now()
-  });
-};
-
-// 速率限制相关配置
-const rateLimit = (() => {
-  const requests = new Map();
-  const WINDOW_SIZE = 60000; // 1分钟
-  const MAX_REQUESTS = 10; // 每分钟最多10次请求
-
-  return (ip) => {
-    const now = Date.now();
-    const userRequests = requests.get(ip) || [];
-
-    // 清理过期请求
-    const recentRequests = userRequests.filter(time => now - time < WINDOW_SIZE);
-
-    if (recentRequests.length >= MAX_REQUESTS) {
-      return false; // 超出限制
-    }
-
-    recentRequests.push(now);
-    requests.set(ip, recentRequests);
-    return true; // 允许请求
-  };
-})();
 
 async function douyin(url) {
   try {
-    // 检查缓存
-    const cached = getCachedResponse(url);
-    if (cached) {
-      return cached;
-    }
-
+    // 从环境变量获取配置
+    const DOUYIN_USER_AGENT = process.env.DOUYIN_USER_AGENT || 
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
+    
+    const DOUYIN_COOKIE = process.env.DOUYIN_COOKIE || 
+      "msToken=abcdefghijklmnopqrstuvwxyz123456; odin_tt=abcdefghijklmnopqrstuvwxyz123456";
+    
     const headers = {
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+      "User-Agent": DOUYIN_USER_AGENT,
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
       "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -83,8 +44,7 @@ async function douyin(url) {
       "sec-ch-ua-wow64": "?0",
       "X-Forwarded-For": "36.112.123.123",
       "X-Real-IP": "36.112.123.123",
-      Cookie:
-        "msToken=abcdefghijklmnopqrstuvwxyz123456; odin_tt=abcdefghijklmnopqrstuvwxyz123456",
+      Cookie: DOUYIN_COOKIE,
     };
     let id = await extractId(url);
     if (!id) {
@@ -122,14 +82,14 @@ async function douyin(url) {
     const pattern = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s;
     const matches = html.match(pattern);
     if (!matches || !matches[1]) {
-      console.log("No _ROUTER_DATA found in HTML");
+      logger.warn("No _ROUTER_DATA found in HTML");
       return {
         code: 201,
         msg: "解析失败：未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除",
       };
     }
     const videoInfo = JSON.parse(matches[1].trim());
-    console.log("videoInfo:", JSON.stringify(videoInfo, null, 2));
+    logger.log("videoInfo:", JSON.stringify(videoInfo, null, 2));
     if (!videoInfo.loaderData) {
       return {
         code: 201,
@@ -185,16 +145,13 @@ async function douyin(url) {
         },
       };
 
-      // 设置缓存
-      setCacheResponse(url, result);
-
       return result;
     } catch (error) {
-      console.error("Error parsing video data:", error);
+      logger.error("Error parsing video data:", error);
       return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
     }
   } catch (error) {
-    console.error("Error in douyin function:", error);
+    logger.error("Error in douyin function:", error);
     return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
   }
 }
@@ -218,7 +175,7 @@ async function extractId(url) {
     if (canonicalMatch) return canonicalMatch[1];
     return null;
   } catch (error) {
-    console.error("Error extracting ID:", error);
+    logger.error("Error extracting ID:", error);
     return null;
   }
 }
@@ -229,56 +186,4 @@ function getRedirectUrl(html) {
   return match ? match[1] : null;
 }
 
-export async function GET(request) {
-  // 获取客户端IP
-  const clientIP = request.headers.get('x-forwarded-for') ||
-                  request.headers.get('x-real-ip') ||
-                  request.headers.get('cf-connecting-ip') ||
-                  'unknown';
-
-  // 检查速率限制
-  if (!rateLimit(clientIP)) {
-    return Response.json(
-      { code: 429, msg: "请求过于频繁，请稍后再试" },
-      { status: 429, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
-  }
-
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get("url");
-  if (!url) {
-    return Response.json(
-      { code: 201, msg: "url为空" },
-      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
-  }
-
-  // 验证URL格式
-  try {
-    new URL(url);
-  } catch (error) {
-    console.warn('Invalid URL provided:', error);
-    return Response.json(
-      { code: 400, msg: "无效的URL格式" },
-      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
-  }
-
-  try {
-    const response = await douyin(url);
-    if (!response) {
-      return Response.json(
-        { code: 404, msg: "获取失败" },
-        { status: 404, headers: { "Access-Control-Allow-Origin": "*" } }
-      );
-    }
-    return Response.json(response, {
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
-  } catch (error) {
-    return Response.json(
-      { code: 500, msg: "服务器错误", error: error.message || "未知错误" },
-      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
-    );
-  }
-}
+export const GET = createApiHandler(douyin);

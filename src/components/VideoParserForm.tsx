@@ -43,26 +43,6 @@ const PLATFORMS = {
   },
 } as const;
 
-// Debounce function
-const debounceAsync = (func: (url: string, platform: string) => Promise<void>, delay: number) => {
-  let timeoutId: NodeJS.Timeout | null = null;
-  return (url: string, platform: string): Promise<void> => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    return new Promise((resolve) => {
-      timeoutId = setTimeout(() => {
-        const result = func(url, platform);
-        if (result instanceof Promise) {
-          result.then(resolve);
-        } else {
-          resolve(result);
-        }
-      }, delay);
-    });
-  };
-};
-
 export default function VideoParserForm({
   onResult,
   setLoading,
@@ -76,112 +56,72 @@ export default function VideoParserForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Debounced parse function using useRef to avoid dependency issues
-  const debouncedParseRef = useRef<
-    (url: string, platform: string) => Promise<void>
-  >(
-    debounceAsync(async (url: string, platform: string) => {
-      if (!url || loading) return;
+  // Parse function with cache and retry support
+  const parseVideo = useCallback(async (url: string, platform: string, retryCount = 0) => {
+    if (!url || loading) return;
 
-      // Check cache
-      const cacheKey = `${platform}:${url}`;
-      const cachedResult = sessionStorage.getItem(cacheKey);
+    const cacheKey = `${platform}:${url}`;
+    const cachedResult = sessionStorage.getItem(cacheKey);
 
-      if (cachedResult) {
-        try {
-          const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
-          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
-            onResult(parsed.data, "");
-            return;
-          }
-        } catch (error) {
-          console.warn('Cache parse failed:', error);
-        }
-      }
-
-      setLoading(true);
-      onResult(null, "");
-
+    // Check cache
+    if (cachedResult) {
       try {
-        const response = await fetch(
-          `/api/${platform}?url=${encodeURIComponent(url)}`
-        );
-        const data: ApiResponse = await response.json();
-        if (data.code === 1 || data.code === 200) {
-          data.platform = platform as
-            | "douyin"
-            | "bilibili"
-            | "kuaishou"
-            | "weibo"
-            | "xhs";
-          onResult(data, "");
-
-          sessionStorage.setItem(cacheKey, JSON.stringify({
-            data,
-            timestamp: Date.now()
-          }));
-        } else {
-          onResult(null, data.msg || "解析失败");
+        const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
+        if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+          onResult(parsed.data, "");
+          return;
         }
-      } catch {
-        onResult(null, "请求失败，请稍后重试");
-      } finally {
-        setLoading(false);
+      } catch (error) {
+        console.warn('Cache parse failed:', error);
       }
-    }, 500)
-  );
+    }
 
-  // Update ref when dependencies change
-  useEffect(() => {
-    debouncedParseRef.current = debounceAsync(async (url: string, platform: string) => {
-      if (!url || loading) return;
+    setLoading(true);
+    onResult(null, "");
 
-      const cacheKey = `${platform}:${url}`;
-      const cachedResult = sessionStorage.getItem(cacheKey);
+    try {
+      const response = await fetch(
+        `/api/${platform}?url=${encodeURIComponent(url)}`
+      );
+      const data: ApiResponse = await response.json();
+      
+      if (data.code === 1 || data.code === 200) {
+        data.platform = platform as
+          | "douyin"
+          | "bilibili"
+          | "kuaishou"
+          | "weibo"
+          | "xhs";
+        onResult(data, "");
 
-      if (cachedResult) {
-        try {
-          const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
-          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
-            onResult(parsed.data, "");
-            return;
-          }
-        } catch (error) {
-          console.warn('Cache parse failed:', error);
-        }
+        // Cache successful result
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      } else {
+        onResult(null, data.msg || "解析失败");
       }
-
-      setLoading(true);
-      onResult(null, "");
-
-      try {
-        const response = await fetch(
-          `/api/${platform}?url=${encodeURIComponent(url)}`
-        );
-        const data: ApiResponse = await response.json();
-        if (data.code === 1 || data.code === 200) {
-          data.platform = platform as
-            | "douyin"
-            | "bilibili"
-            | "kuaishou"
-            | "weibo"
-            | "xhs";
-          onResult(data, "");
-
-          sessionStorage.setItem(cacheKey, JSON.stringify({
-            data,
-            timestamp: Date.now()
-          }));
-        } else {
-          onResult(null, data.msg || "解析失败");
-        }
-      } catch {
-        onResult(null, "请求失败，请稍后重试");
-      } finally {
-        setLoading(false);
+    } catch {
+      // Retry once on failure
+      if (retryCount < 1) {
+        setTimeout(() => parseVideo(url, platform, retryCount + 1), 1000);
+        return;
       }
-    }, 500);
+      onResult(null, "请求失败，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
   }, [loading, onResult, setLoading]);
+
+  // Debounced parse function
+  const debouncedParse = useCallback(
+    (url: string, platform: string) => {
+      const timeoutId = setTimeout(() => parseVideo(url, platform), 500);
+      return () => clearTimeout(timeoutId);
+    },
+    [parseVideo]
+  );
 
   // Process input and detect platform
   const processInputText = useCallback(
@@ -193,12 +133,12 @@ export default function VideoParserForm({
         const platformKey = detected as keyof typeof PLATFORMS;
         setDetectedPlatform(platformKey);
         setPlatform(platformKey);
-        debouncedParseRef.current(extractedUrl, detected);
+        debouncedParse(extractedUrl, detected);
       } else {
         setDetectedPlatform(null);
       }
     },
-    []
+    [debouncedParse]
   );
 
   // Check for valid video URL
@@ -222,14 +162,21 @@ export default function VideoParserForm({
 
     const autoReadClipboard = async () => {
       try {
-        if (!navigator.clipboard || !navigator.clipboard.readText) return;
+        // 检查clipboard API是否可用
+        if (typeof navigator === 'undefined' || 
+            !navigator.clipboard || 
+            typeof navigator.clipboard.readText !== 'function') {
+          return;
+        }
+        
         const text = await navigator.clipboard.readText();
         if (text && text.trim() && hasValidVideoUrl(text)) {
           setInput(text);
           processInputText(text);
         }
-      } catch (error) {
-        console.log("Auto-read clipboard failed:", error);
+      } catch {
+        // 静默失败，不显示错误（权限问题或非安全上下文）
+        // 用户仍可手动粘贴
       }
     };
 
@@ -245,12 +192,19 @@ export default function VideoParserForm({
 
   const handlePaste = async () => {
     try {
+      // 检查clipboard API是否可用
+      if (typeof navigator === 'undefined' || 
+          !navigator.clipboard || 
+          typeof navigator.clipboard.readText !== 'function') {
+        onResult(null, "您的浏览器不支持自动粘贴，请手动粘贴（Ctrl+V）");
+        return;
+      }
+      
       const text = await navigator.clipboard.readText();
       setInput(text);
       processInputText(text);
-    } catch (error) {
-      console.error("Paste failed:", error);
-      onResult(null, "粘贴失败，请手动粘贴或检查浏览器权限");
+    } catch {
+      onResult(null, "粘贴失败：请检查浏览器权限或使用手动粘贴（Ctrl+V）");
     }
   };
 
