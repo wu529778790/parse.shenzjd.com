@@ -1,7 +1,8 @@
 import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
 
-export const runtime = "edge";
+// Docker 自托管下 Node runtime 对外网 fetch 通常比 Edge 沙箱更稳定（抖音等站）
+export const runtime = "nodejs";
 
 async function douyin(url) {
   try {
@@ -158,7 +159,6 @@ async function douyin(url) {
 
 async function extractId(url) {
   try {
-    // Edge Runtime 下用 fetch
     const response = await fetch(url, { redirect: "follow" });
     const finalUrl = response.url || url;
     // 优先从 URL 里找 video/1234567890

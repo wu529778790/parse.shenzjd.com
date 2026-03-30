@@ -16,6 +16,11 @@ RUN pnpm install --frozen-lockfile
 # 复制所有文件
 COPY . .
 
+# 稳定构建 ID，避免多副本 / 滚动更新时前后端 build 不一致（Server Action 报错）
+# 使用：docker build --build-arg BUILD_ID=$(git rev-parse HEAD) .
+ARG BUILD_ID=local
+ENV NEXT_BUILD_ID=${BUILD_ID}
+
 # 构建应用
 RUN pnpm build
 
