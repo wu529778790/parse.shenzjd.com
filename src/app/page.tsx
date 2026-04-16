@@ -10,8 +10,32 @@ import {
   QsMusicVideo,
   PipigxVideo,
   PpxiaVideo,
+  GenericParsedVideo,
 } from "@/components/videos";
 import { ApiResponse } from "@/types/api";
+
+function renderPlatformResult(result: ApiResponse) {
+  switch (result.platform) {
+    case "bilibili":
+      return <BilibiliVideo data={result} />;
+    case "douyin":
+      return <DouyinVideo data={result} />;
+    case "kuaishou":
+      return <KuaishouVideo data={result} />;
+    case "weibo":
+      return <WeiboVideo data={result} />;
+    case "xhs":
+      return <XhsVideo data={result} />;
+    case "qsmusic":
+      return <QsMusicVideo data={result} />;
+    case "pipigx":
+      return <PipigxVideo data={result} />;
+    case "ppxia":
+      return <PpxiaVideo data={result} />;
+    default:
+      return <GenericParsedVideo data={result} />;
+  }
+}
 
 export default function Home() {
   const [result, setResult] = useState<ApiResponse | null>(null);
@@ -90,7 +114,7 @@ export default function Home() {
             <p className="text-lg sm:text-xl text-secondary max-w-xl mx-auto leading-relaxed">
               精通各平台短视频解析
               <span className="block mt-2 text-sm text-muted">
-                抖音 · 哔哩哔哩 · 快手 · 小红书
+                对齐 parse-video：抖音 / B站 / 快手 / 小红书 / 虎牙 / 西瓜 / X…
               </span>
             </p>
 
@@ -98,9 +122,11 @@ export default function Home() {
             <div className="flex flex-wrap justify-center gap-2 mt-6">
               {[
                 { name: "抖音", color: "bg-[#fe2c55]/10 text-[#fe2c55]" },
-                { name: "哔哩哔哩", color: "bg-[#00aeec]/10 text-[#00aeec]" },
+                { name: "B站", color: "bg-[#00aeec]/10 text-[#00aeec]" },
                 { name: "快手", color: "bg-[#ff6600]/10 text-[#ff6600]" },
                 { name: "小红书", color: "bg-[#ff2442]/10 text-[#ff2442]" },
+                { name: "虎牙", color: "bg-[#ff9f1a]/10 text-[#ff9f1a]" },
+                { name: "西瓜", color: "bg-[#ff6348]/10 text-[#ff6348]" },
               ].map((platform, i) => (
                 <span
                   key={platform.name}
@@ -198,20 +224,7 @@ export default function Home() {
 
                 {/* Result Content */}
                 <div className="p-6" style={{ touchAction: 'manipulation' }}>
-                  {result.platform === "bilibili" && (
-                    <BilibiliVideo data={result} />
-                  )}
-                  {result.platform === "douyin" && <DouyinVideo data={result} />}
-                  {result.platform === "kuaishou" && (
-                    <KuaishouVideo data={result} />
-                  )}
-                  {result.platform === "weibo" && <WeiboVideo data={result} />}
-                  {result.platform === "xhs" && <XhsVideo data={result} />}
-                  {result.platform === "qsmusic" && (
-                    <QsMusicVideo data={result} />
-                  )}
-                  {result.platform === "pipigx" && <PipigxVideo data={result} />}
-                  {result.platform === "ppxia" && <PpxiaVideo data={result} />}
+                  {renderPlatformResult(result)}
                 </div>
               </div>
             </div>
