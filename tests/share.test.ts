@@ -89,6 +89,13 @@ const cases: ShareParseCase[] = [
     expectUrl: "http://xhslink.com/A1B2C3",
   },
   {
+    name: "xhs-App分享文案-含-o-短链",
+    input:
+      "黄裙入夏，温柔刚好 窗边一隅，碎花黄裙轻垂，像把阳... http://xhslink.com/o/1fRz2qqwhkI \n复制后打开【小红书】查看笔记！",
+    expectPlatform: "xhs",
+    expectUrl: "http://xhslink.com/o/1fRz2qqwhkI",
+  },
+  {
     name: "xhs-标准笔记页",
     input:
       "https://www.xiaohongshu.com/explore/66f8f8f8f8f8f8f8f8f8f8f8?xhsshare=WeixinSession",
