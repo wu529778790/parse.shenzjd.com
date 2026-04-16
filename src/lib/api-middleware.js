@@ -1,11 +1,11 @@
 // 通用 API 中间件函数
-import { 
-  getCachedResponse, 
-  setCacheResponse, 
-  rateLimit, 
-  isValidUrl, 
-  sanitizeUrl, 
-  getClientIP, 
+import {
+  getCachedResponse,
+  setCacheResponse,
+  rateLimit,
+  isValidUrl,
+  sanitizeUrl,
+  getClientIP,
   logger,
   errorResponse,
   serverErrorResponse,
@@ -13,7 +13,17 @@ import {
 } from "@/lib/api-utils";
 
 // 通用 API 处理函数
-export const createApiHandler = (parseFunction) => {
+export const createApiHandler = (parseFunction, options = {}) => {
+  const {
+    shouldCache = true,
+    responseHeaders = {},
+  } = options;
+
+  const jsonHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    ...responseHeaders,
+  };
+
   return async (request) => {
     const startTime = Date.now();
     
@@ -25,9 +35,9 @@ export const createApiHandler = (parseFunction) => {
     if (!rateLimit(clientIP)) {
       return Response.json(
         errorResponse("请求过于频繁，请稍后再试", 429),
-        { 
-          status: 429, 
-          headers: { "Access-Control-Allow-Origin": "*" } 
+        {
+          status: 429,
+          headers: jsonHeaders
         }
       );
     }
@@ -38,9 +48,9 @@ export const createApiHandler = (parseFunction) => {
     if (!url) {
       return Response.json(
         errorResponse("url为空", 400),
-        { 
-          status: 400, 
-          headers: { "Access-Control-Allow-Origin": "*" } 
+        {
+          status: 400,
+          headers: jsonHeaders
         }
       );
     }
@@ -49,9 +59,9 @@ export const createApiHandler = (parseFunction) => {
     if (!isValidUrl(url)) {
       return Response.json(
         errorResponse("无效的URL格式", 400),
-        { 
-          status: 400, 
-          headers: { "Access-Control-Allow-Origin": "*" } 
+        {
+          status: 400,
+          headers: jsonHeaders
         }
       );
     }
@@ -62,21 +72,22 @@ export const createApiHandler = (parseFunction) => {
       logger.warn(`SSRF attempt blocked from IP: ${clientIP}, URL: ${url.substring(0, 100)}`);
       return Response.json(
         errorResponse("URL包含不允许访问的地址", 400),
-        { 
-          status: 400, 
-          headers: { "Access-Control-Allow-Origin": "*" } 
+        {
+          status: 400,
+          headers: jsonHeaders
         }
       );
     }
     
-    // 检查缓存
-    const cached = getCachedResponse(sanitizedUrl);
-    if (cached) {
-      const duration = Date.now() - startTime;
-      logger.log(`Cache hit, response time: ${duration}ms`);
-      return Response.json(cached, {
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
+    if (shouldCache) {
+      const cached = getCachedResponse(sanitizedUrl);
+      if (cached) {
+        const duration = Date.now() - startTime;
+        logger.log(`Cache hit, response time: ${duration}ms`);
+        return Response.json(cached, {
+          headers: jsonHeaders,
+        });
+      }
     }
 
     try {
@@ -88,30 +99,31 @@ export const createApiHandler = (parseFunction) => {
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
         return Response.json(
           parseErrorResponse("解析失败"),
-          { 
-            status: 400, 
-            headers: { "Access-Control-Allow-Origin": "*" } 
+          {
+            status: 400,
+            headers: jsonHeaders
           }
         );
       }
       
-      // 设置缓存
-      setCacheResponse(sanitizedUrl, result);
+      if (shouldCache) {
+        setCacheResponse(sanitizedUrl, result);
+      }
       
       const duration = Date.now() - startTime;
       logger.log(`Parse successful, response time: ${duration}ms`);
       
       return Response.json(result, {
-        headers: { "Access-Control-Allow-Origin": "*" },
+        headers: jsonHeaders,
       });
     } catch (error) {
       const duration = Date.now() - startTime;
       logger.error(`API error after ${duration}ms:`, error.message);
       return Response.json(
         serverErrorResponse(error),
-        { 
-          status: 500, 
-          headers: { "Access-Control-Allow-Origin": "*" } 
+        {
+          status: 500,
+          headers: jsonHeaders
         }
       );
     }

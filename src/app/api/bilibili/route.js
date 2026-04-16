@@ -123,4 +123,9 @@ async function getBilibiliVideoInfo(url) {
   }
 }
 
-export const GET = createApiHandler(getBilibiliVideoInfo);
+export const GET = createApiHandler(getBilibiliVideoInfo, {
+  shouldCache: false,
+  responseHeaders: {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  },
+});

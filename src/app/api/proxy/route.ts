@@ -14,6 +14,31 @@ export async function OPTIONS() {
   });
 }
 
+const DEFAULT_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
+
+function getBilibiliProxyUserAgent(): string {
+  return process.env.BILIBILI_USER_AGENT || DEFAULT_UA;
+}
+
+function getBilibiliProxyCookie(): string {
+  return process.env.BILIBILI_COOKIE || "";
+}
+
+function isBilibiliHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return (
+    lower.includes("bilibili") ||
+    lower.includes("hdslb") ||
+    lower.includes("bilivideo") ||
+    lower.includes("akamaized") ||
+    lower.includes("akamaihd") ||
+    lower.includes("bvcvod")
+  );
+}
+
 // SSRF防护：检查是否为内网地址
 function isPrivateHostname(hostname: string): boolean {
   const lower = hostname.toLowerCase();
@@ -113,11 +138,6 @@ export async function GET(req: NextRequest) {
   //   });
   // }
 
-  const DEFAULT_UA =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-  const MOBILE_UA =
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
-
   function guessRefererByHost(hostname: string): string | undefined {
     const lower = hostname.toLowerCase();
     
@@ -129,14 +149,7 @@ export async function GET(req: NextRequest) {
     }
     
     // 哔哩哔哩相关域名（含 UPOS / Akamai 等 CDN）
-    if (
-      lower.includes("bilibili") ||
-      lower.includes("hdslb") ||
-      lower.includes("bilivideo") ||
-      lower.includes("akamaized") ||
-      lower.includes("akamaihd") ||
-      lower.includes("bvcvod")
-    ) {
+    if (isBilibiliHostname(lower)) {
       return "https://www.bilibili.com/";
     }
     
@@ -225,13 +238,27 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const isBilibiliTarget = isBilibiliHostname(parsed.hostname);
+  const bilibiliCookie = getBilibiliProxyCookie();
   const upstreamHeaders: Record<string, string> = {
-    "User-Agent": customUA || req.headers.get("user-agent") || DEFAULT_UA,
+    "User-Agent":
+      customUA ||
+      (isBilibiliTarget
+        ? getBilibiliProxyUserAgent()
+        : req.headers.get("user-agent") || DEFAULT_UA),
   };
   const fwdRange = req.headers.get("range");
   if (fwdRange) upstreamHeaders["Range"] = fwdRange;
   const refererToUse = customReferer || guessRefererByHost(parsed.hostname);
   if (refererToUse) upstreamHeaders["Referer"] = refererToUse;
+  if (isBilibiliTarget) {
+    upstreamHeaders["Origin"] = "https://www.bilibili.com";
+    upstreamHeaders["Accept"] = "*/*";
+    upstreamHeaders["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8";
+    if (bilibiliCookie) {
+      upstreamHeaders["Cookie"] = bilibiliCookie;
+    }
+  }
 
   let upstreamResp: Response;
 
@@ -282,11 +309,14 @@ export async function GET(req: NextRequest) {
   const respHeaders: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Content-Type": finalContentType,
+    "Cache-Control": "no-store, no-cache, must-revalidate",
   };
   const contentLength = upstreamResp.headers.get("content-length");
   if (contentLength) respHeaders["Content-Length"] = contentLength;
   const acceptRanges = upstreamResp.headers.get("accept-ranges");
   if (acceptRanges) respHeaders["Accept-Ranges"] = acceptRanges;
+  const contentRange = upstreamResp.headers.get("content-range");
+  if (contentRange) respHeaders["Content-Range"] = contentRange;
   if (disposition === "attachment") {
     respHeaders[
       "Content-Disposition"
