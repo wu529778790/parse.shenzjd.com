@@ -23,21 +23,11 @@ export class BaseParser {
     this.timeout = options.timeout || 15000;
   }
 
-  /**
-   * 解析分享链接
-   * @param {string} url - 分享链接
-   * @returns {Promise<object|null>}
-   */
-  async parseShareUrl(url) {
+  async parseShareUrl() {
     throw new Error("parseShareUrl must be implemented");
   }
 
-  /**
-   * 解析视频 ID
-   * @param {string} videoId - 视频 ID
-   * @returns {Promise<object|null>}
-   */
-  async parseVideoId(videoId) {
+  async parseVideoId() {
     throw new Error("parseVideoId must be implemented");
   }
 

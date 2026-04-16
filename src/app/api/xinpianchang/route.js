@@ -1,7 +1,26 @@
-import { parseHTML } from "linkedom";
 import { createApiHandler } from "@/lib/api-middleware";
 
 export const runtime = "nodejs";
+
+/**
+ * 用正则从 HTML 中提取内容（替代 linkedom）
+ */
+function extractFromHtml(html) {
+  const result = {};
+
+  // 提取 __NEXT_DATA__
+  const nextDataMatch = html.match(/id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (nextDataMatch?.[1]) {
+    try {
+      const jsonStr = nextDataMatch[1].trim();
+      result.nextData = JSON.parse(jsonStr);
+    } catch {
+      // JSON 解析失败
+    }
+  }
+
+  return result;
+}
 
 async function xinpianchangParse(shareUrl) {
   const res = await fetch(shareUrl, {
@@ -13,23 +32,20 @@ async function xinpianchangParse(shareUrl) {
     },
   });
   const html = await res.text();
-  const { document } = parseHTML(html);
-  const el = document.querySelector("#__NEXT_DATA__");
-  const videoJson = el?.textContent?.trim();
-  if (!videoJson) {
+
+  const extracted = extractFromHtml(html);
+
+  if (!extracted.nextData) {
     return { code: 400, msg: "新片场页面无 __NEXT_DATA__" };
   }
-  let root;
-  try {
-    root = JSON.parse(videoJson);
-  } catch {
-    return { code: 400, msg: "新片场 JSON 解析失败" };
-  }
-  const data = root?.props?.pageProps?.detail;
+
+  const data = extracted.nextData?.props?.pageProps?.detail;
   const videoUrl = data?.video?.content?.progressive?.[0]?.url;
+
   if (!videoUrl) {
     return { code: 404, msg: "未找到新片场视频地址" };
   }
+
   return {
     code: 200,
     msg: "解析成功",

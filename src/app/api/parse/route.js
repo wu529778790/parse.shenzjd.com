@@ -31,7 +31,7 @@ async function getParser(platform) {
     return platformParsers[platform];
   }
 
-  // 动态导入对应平台的路由解析器
+  // 动态导入对应平台的路由解析器（与实际目录名匹配）
   const platformRoutes = {
     douyin: () => import("@/app/api/douyin/route.js"),
     bilibili: () => import("@/app/api/bilibili/route.js"),
@@ -44,7 +44,8 @@ async function getParser(platform) {
     huoshan: () => import("@/app/api/huoshan/route.js"),
     acfun: () => import("@/app/api/acfun/route.js"),
     lishipin: () => import("@/app/api/lishipin/route.js"),
-    pipixia: () => import("@/app/api/pipixia/route.js"),
+    // 皮皮虾目录是 ppxia
+    pipixia: () => import("@/app/api/ppxia/route.js"),
     pipigx: () => import("@/app/api/pipigx/route.js"),
     sixroom: () => import("@/app/api/sixroom/route.js"),
     lvzhou: () => import("@/app/api/lvzhou/route.js"),
@@ -60,9 +61,9 @@ async function getParser(platform) {
   const loader = platformRoutes[platform];
   if (loader) {
     try {
-      const module = await loader();
+      const mod = await loader();
       // 假设路由模块导出解析函数
-      return module.default || module.GET;
+      return mod.default || mod.GET;
     } catch {
       return null;
     }
