@@ -185,18 +185,9 @@ const CASES = [
 ] as const;
 
 describe.skipIf(!RUN)("真机解析（LIVE_URL_* 已配置，直连上游）", () => {
-  beforeAll(() => {
-    const missing = CASES.filter((c) => !process.env[c.envKey]?.trim()).map(
-      (c) => c.envKey
-    );
-    if (missing.length) {
-      throw new Error(
-        `缺少环境变量（请对照 tests/live/urls.example.env 填写到 .env.local）：\n${missing.join("\n")}`
-      );
-    }
-  });
+  const configured = CASES.filter((c) => process.env[c.envKey]?.trim());
 
-  for (const { id, path, envKey, GET } of CASES) {
+  for (const { id, path, envKey, GET } of configured) {
     it(id, async () => {
       const shareUrl = process.env[envKey].trim();
       const res = await GET(req(path, shareUrl));

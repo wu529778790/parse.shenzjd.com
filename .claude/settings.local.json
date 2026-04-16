@@ -9,7 +9,9 @@
       "Bash(taskkill:*)",
       "Bash(tasklist:*)",
       "Bash(netstat:*)",
-      "Bash(cmd.exe:*)"
+      "Bash(cmd.exe:*)",
+      "Bash(ls -la /Users/mac/github/parse.shenzjd.com/.env*)",
+      "Bash(RUN_LIVE_PARSE=1 pnpm test:live *)"
     ]
   }
 }
