@@ -1,12 +1,12 @@
 import { createApiHandler } from "@/lib/api-middleware";
-import { PARSE_VIDEO_DEFAULT_UA } from "@/lib/parse-video-ua";
+import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
 
 export const runtime = "nodejs";
 
 async function parseVideoId(videoId) {
   const reqUrl = `https://haokan.baidu.com/v?_format=json&vid=${videoId}`;
   const res = await fetch(reqUrl, {
-    headers: { "User-Agent": PARSE_VIDEO_DEFAULT_UA },
+    headers: { "User-Agent": DEFAULT_MOBILE_UA },
   });
   const json = await res.json();
   if (json.errno !== 0) {

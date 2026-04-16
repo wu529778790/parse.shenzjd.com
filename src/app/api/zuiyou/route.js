@@ -1,5 +1,5 @@
 import { createApiHandler } from "@/lib/api-middleware";
-import { PARSE_VIDEO_DEFAULT_UA } from "@/lib/parse-video-ua";
+import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,7 @@ async function zuiyouParse(shareUrl) {
     {
       method: "POST",
       headers: {
-        "User-Agent": PARSE_VIDEO_DEFAULT_UA,
+        "User-Agent": DEFAULT_MOBILE_UA,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ h_av: "5.2.13.011", pid: intPid }),

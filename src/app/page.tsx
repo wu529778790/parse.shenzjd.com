@@ -114,7 +114,7 @@ export default function Home() {
             <p className="text-lg sm:text-xl text-secondary max-w-xl mx-auto leading-relaxed">
               精通各平台短视频解析
               <span className="block mt-2 text-sm text-muted">
-                对齐 parse-video：抖音 / B站 / 快手 / 小红书 / 虎牙 / 西瓜 / X…
+                抖音 / B站 / 快手 / 小红书 / 虎牙 / 西瓜 / X…
               </span>
             </p>
 

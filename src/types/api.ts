@@ -13,7 +13,7 @@ export interface User {
   user_img: string;
 }
 
-/** parse-video 风格扁平 data（多平台新路由） */
+/** 多平台解析接口共用的扁平 data 结构 */
 export interface GenericParsedData {
   title?: string;
   author?: string;

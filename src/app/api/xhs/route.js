@@ -2,7 +2,7 @@ import { createApiHandler } from "@/lib/api-middleware";
 
 export const runtime = "edge";
 
-/** 与 parse-video redbook 一致：桌面 Chrome UA + 短链走 https */
+/** 小红书 H5：桌面 Chrome UA，短链统一走 https */
 const XHS_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0";
 
@@ -29,7 +29,7 @@ function normalizeXhsUrl(url) {
 }
 
 /**
- * 短链与笔记页：一次 GET 自动跟随重定向（与 parse-video 一致），直接拿最终 HTML
+ * 短链与笔记页：一次 GET 自动跟随重定向，直接取最终 HTML
  */
 async function fetchXhsNoteHtml(url) {
   const target = normalizeXhsUrl(url);
@@ -62,7 +62,7 @@ function safeGet(obj, path) {
 }
 
 /**
- * 新版笔记页：note.currentNoteId + note.noteDetailMap[id].note（parse-video / gjson 路径）
+ * 新版笔记页：note.currentNoteId + note.noteDetailMap[id].note
  * 旧版：noteData.data.noteData 等
  */
 function resolveNotePayload(decoded) {
@@ -84,7 +84,7 @@ function resolveNotePayload(decoded) {
 }
 
 function extractInitialStateJson(html) {
-  // 与 parse-video 一致：取到下一个 </script>，避免 `{...}?` 非贪婪截断嵌套 JSON
+  // 取到下一个 </script>，避免对大段 JSON 做错误的非贪婪 `}` 截断
   const re = /window\.__INITIAL_STATE__\s*=\s*(.*?)<\/script>/is;
   const m = html.match(re);
   if (m?.[1]) {

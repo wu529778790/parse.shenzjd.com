@@ -1,6 +1,4 @@
-/**
- * 前端下拉与样式（与 parse-video 支持域对齐，并保留本站已有平台）
- */
+/** 前端下拉与样式（多平台） */
 export const VIDEO_PLATFORMS = {
   douyin: {
     name: "抖音",

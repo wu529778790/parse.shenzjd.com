@@ -1,5 +1,5 @@
 import { createApiHandler } from "@/lib/api-middleware";
-import { PARSE_VIDEO_DEFAULT_UA } from "@/lib/parse-video-ua";
+import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
 import { getRedirectLocation } from "@/lib/redirect-location";
 
 export const runtime = "nodejs";
@@ -121,7 +121,7 @@ async function twitterParse(shareUrl) {
   let url = shareUrl;
   if (url.includes("t.co/")) {
     const loc = await getRedirectLocation(url, {
-      "User-Agent": PARSE_VIDEO_DEFAULT_UA,
+      "User-Agent": DEFAULT_MOBILE_UA,
     });
     if (!loc) {
       return { code: 400, msg: "t.co 短链解析失败" };

@@ -66,7 +66,7 @@ export function hasValidVideoUrl(text: string): boolean {
 }
 
 /**
- * 根据文本粗略检测平台（与 parse-video 域名映射一致，顺序：先匹配更具体的域）
+ * 根据文本粗略检测平台（先匹配更具体的域名）
  */
 export function detectPlatform(text: string): VideoPlatformKey {
   const firstUrl = extractUrl(text) || "";

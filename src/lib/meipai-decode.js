@@ -1,5 +1,5 @@
 /**
- * 美拍分享页 data-video 解码（自 parse-video parser/meipai.go）
+ * 美拍分享页 data-video 解码
  */
 
 function reverseString(s) {

@@ -1,10 +1,10 @@
 import { createApiHandler } from "@/lib/api-middleware";
-import { PARSE_VIDEO_DEFAULT_UA } from "@/lib/parse-video-ua";
+import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
 import { getRedirectLocation } from "@/lib/redirect-location";
 
 export const runtime = "nodejs";
 
-const headers = { "User-Agent": PARSE_VIDEO_DEFAULT_UA };
+const headers = { "User-Agent": DEFAULT_MOBILE_UA };
 
 async function parseVideoId(itemId) {
   const reqUrl = `https://share.huoshan.com/api/item/info?item_id=${itemId}`;

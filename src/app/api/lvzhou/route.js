@@ -1,12 +1,12 @@
 import { parseHTML } from "linkedom";
 import { createApiHandler } from "@/lib/api-middleware";
-import { PARSE_VIDEO_DEFAULT_UA } from "@/lib/parse-video-ua";
+import { DEFAULT_MOBILE_UA } from "@/lib/default-mobile-ua";
 
 export const runtime = "nodejs";
 
 async function lvzhouParse(shareUrl) {
   const res = await fetch(shareUrl, {
-    headers: { "User-Agent": PARSE_VIDEO_DEFAULT_UA },
+    headers: { "User-Agent": DEFAULT_MOBILE_UA },
   });
   const html = await res.text();
   const { document } = parseHTML(html);
