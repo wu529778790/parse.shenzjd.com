@@ -76,7 +76,6 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}>
               <source

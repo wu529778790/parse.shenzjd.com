@@ -128,8 +128,15 @@ export async function GET(req: NextRequest) {
       return "https://www.douyin.com/";
     }
     
-    // 哔哩哔哩相关域名
-    if (lower.includes("bilibili") || lower.includes("hdslb") || lower.includes("bilivideo")) {
+    // 哔哩哔哩相关域名（含 UPOS / Akamai 等 CDN）
+    if (
+      lower.includes("bilibili") ||
+      lower.includes("hdslb") ||
+      lower.includes("bilivideo") ||
+      lower.includes("akamaized") ||
+      lower.includes("akamaihd") ||
+      lower.includes("bvcvod")
+    ) {
       return "https://www.bilibili.com/";
     }
     
