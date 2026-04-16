@@ -45,6 +45,39 @@ docker pull docker.io/wu529778790/parse.shenzjd.com:latest
 docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:latest
 ```
 
+## 测试
+
+### 单元测试（默认，无需外网）
+
+```bash
+pnpm test
+```
+
+包含 URL 提取 / 平台识别、`api-utils` 等本地逻辑，**不访问**各视频平台。
+
+### 真机解析测试（直连上游，必配分享链接）
+
+与 [parse-video](https://github.com/wujunwei928/parse-video) 一样，解析依赖各站实时页面与接口，**必须用真实分享链接**才能验证整条链路。
+
+1. 复制模板并按平台填入你从 App 分享得到的链接（短链或详情页均可，失效后需更换）：
+
+   - 模板文件：[`tests/live/urls.example.env`](tests/live/urls.example.env)
+   - 将其中变量写入项目根目录的 `.env.local`（已加入 `.gitignore` 时不要提交真实链接）。
+
+2. 执行：
+
+   ```bash
+   pnpm test:live
+   ```
+
+   该命令会设置 `RUN_LIVE_PARSE=1`，并对 **24 个解析路由** 各跑一条用例；**缺少任一 `LIVE_URL_*` 时会在 `beforeAll` 中报错并列出变量名**。
+
+3. 可选：`LIVE_PARSE_TIMEOUT_MS`（默认 `120000`）用于单条用例超时（毫秒）。
+
+4. 抖音 / 微博 / 哔哩哔哩等若解析失败，请检查 `.env.local` 中是否按需配置了 `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`（与 `API.md` 一致）。
+
+说明：真机测试受地区、风控、Cookie 与链接失效影响，失败时请更换有效分享链或网络环境后重试。
+
 ## 许可证
 
 MIT License
