@@ -12,11 +12,60 @@ import {
   parseErrorResponse
 } from "@/lib/api-utils";
 
+// Basic Auth 配置（可选）
+const AUTH_USERNAME = process.env.API_AUTH_USERNAME;
+const AUTH_PASSWORD = process.env.API_AUTH_PASSWORD;
+
+/**
+ * 验证 Basic Auth
+ */
+function verifyBasicAuth(request) {
+  // 如果没有配置用户名密码，则跳过验证
+  if (!AUTH_USERNAME || !AUTH_PASSWORD) {
+    return true;
+  }
+
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Basic ")) {
+    return false;
+  }
+
+  try {
+    const base64Credentials = authHeader.slice(6);
+    const credentials = atob(base64Credentials);
+    const [username, password] = credentials.split(":");
+    return username === AUTH_USERNAME && password === AUTH_PASSWORD;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 返回 401 未授权响应
+ */
+function unauthorizedResponse() {
+  return new Response(
+    JSON.stringify({
+      code: 401,
+      msg: "未授权访问，请提供有效的认证信息",
+    }),
+    {
+      status: 401,
+      headers: {
+        "Content-Type": "application/json",
+        "WWW-Authenticate": 'Basic realm="Video Parser API"',
+        "Access-Control-Allow-Origin": "*",
+      },
+    }
+  );
+}
+
 // 通用 API 处理函数
 export const createApiHandler = (parseFunction, options = {}) => {
   const {
     shouldCache = true,
     responseHeaders = {},
+    requireAuth = false, // 是否需要认证
   } = options;
 
   const jsonHeaders = {
@@ -26,7 +75,15 @@ export const createApiHandler = (parseFunction, options = {}) => {
 
   return async (request) => {
     const startTime = Date.now();
-    
+
+    // Basic Auth 验证
+    if (requireAuth || AUTH_USERNAME) {
+      if (!verifyBasicAuth(request)) {
+        logger.warn(`Unauthorized access attempt from IP: ${getClientIP(request)}`);
+        return unauthorizedResponse();
+      }
+    }
+
     // 获取客户端IP
     const clientIP = getClientIP(request);
     logger.log(`API request from IP: ${clientIP}`);
