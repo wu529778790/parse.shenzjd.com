@@ -1,47 +1,21 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ApiResponse } from "@/types/api";
-import { extractUrlFromText as extractUrl, detectPlatform } from "@/utils/share";
+import {
+  VIDEO_PLATFORMS,
+  type VideoPlatformKey,
+} from "@/config/video-platforms";
+import {
+  extractUrlFromText as extractUrl,
+  detectPlatform,
+  hasValidVideoUrl,
+} from "@/utils/share";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
   setLoading: (loading: boolean) => void;
   loading: boolean;
 }
-
-// Platform configuration with colors and icons
-const PLATFORMS = {
-  douyin: {
-    name: "抖音",
-    emoji: "🎵",
-    color: "#fe2c55",
-    gradient: "from-[#fe2c55] to-[#ff6b8a]",
-  },
-  bilibili: {
-    name: "哔哩哔哩",
-    emoji: "🅱️",
-    color: "#00aeec",
-    gradient: "from-[#00aeec] to-[#4dc9ff]",
-  },
-  kuaishou: {
-    name: "快手",
-    emoji: "⚡",
-    color: "#ff6600",
-    gradient: "from-[#ff6600] to-[#ff9933]",
-  },
-  weibo: {
-    name: "微博",
-    emoji: "📱",
-    color: "#e6162d",
-    gradient: "from-[#e6162d] to-[#ff4d6a]",
-  },
-  xhs: {
-    name: "小红书",
-    emoji: "📝",
-    color: "#ff2442",
-    gradient: "from-[#ff2442] to-[#ff5c7c]",
-  },
-} as const;
 
 export default function VideoParserForm({
   onResult,
@@ -50,9 +24,10 @@ export default function VideoParserForm({
 }: VideoParserFormProps) {
   const [input, setInput] = useState("");
   const [url, setUrl] = useState("");
-  const [platform, setPlatform] = useState<keyof typeof PLATFORMS>("douyin");
+  const [platform, setPlatform] = useState<VideoPlatformKey>("douyin");
   const [isFocused, setIsFocused] = useState(false);
-  const [detectedPlatform, setDetectedPlatform] = useState<keyof typeof PLATFORMS | null>(null);
+  const [detectedPlatform, setDetectedPlatform] =
+    useState<VideoPlatformKey | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -86,12 +61,7 @@ export default function VideoParserForm({
       const data: ApiResponse = await response.json();
       
       if (data.code === 1 || data.code === 200) {
-        data.platform = platform as
-          | "douyin"
-          | "bilibili"
-          | "kuaishou"
-          | "weibo"
-          | "xhs";
+        data.platform = platform as VideoPlatformKey;
         onResult(data, "");
 
         // Cache successful result
@@ -130,9 +100,8 @@ export default function VideoParserForm({
       if (extractedUrl) {
         setUrl(extractedUrl);
         const detected = detectPlatform(text);
-        const platformKey = detected as keyof typeof PLATFORMS;
-        setDetectedPlatform(platformKey);
-        setPlatform(platformKey);
+        setDetectedPlatform(detected);
+        setPlatform(detected);
         debouncedParse(extractedUrl, detected);
       } else {
         setDetectedPlatform(null);
@@ -140,19 +109,6 @@ export default function VideoParserForm({
     },
     [debouncedParse]
   );
-
-  // Check for valid video URL
-  const hasValidVideoUrl = useCallback((text: string): boolean => {
-    const supportedPlatforms = [
-      "douyin.com",
-      "kuaishou.com",
-      "weibo.com",
-      "xiaohongshu.com",
-      "xhslink.com",
-      "bilibili.com",
-    ];
-    return supportedPlatforms.some((platform) => text.includes(platform));
-  }, []);
 
   // Auto-read clipboard on mount
   const hasAutoReadRef = useRef(false);
@@ -182,7 +138,7 @@ export default function VideoParserForm({
 
     const timer = setTimeout(autoReadClipboard, 500);
     return () => clearTimeout(timer);
-  }, [processInputText, hasValidVideoUrl]);
+  }, [processInputText]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
@@ -232,7 +188,7 @@ export default function VideoParserForm({
       );
       const data: ApiResponse = await response.json();
       if (data.code === 1 || data.code === 200) {
-        data.platform = platform;
+        data.platform = platform as VideoPlatformKey;
         onResult(data, "");
       } else {
         onResult(null, data.msg || "解析失败");
@@ -246,8 +202,11 @@ export default function VideoParserForm({
 
   // Update CSS variable for platform accent
   useEffect(() => {
-    if (detectedPlatform && PLATFORMS[detectedPlatform]) {
-      document.documentElement.style.setProperty('--accent', PLATFORMS[detectedPlatform].color);
+    if (detectedPlatform && VIDEO_PLATFORMS[detectedPlatform]) {
+      document.documentElement.style.setProperty(
+        "--accent",
+        VIDEO_PLATFORMS[detectedPlatform].color
+      );
     }
   }, [detectedPlatform]);
 
@@ -342,10 +301,10 @@ export default function VideoParserForm({
                 <select
                   value={platform}
                   onChange={(e) =>
-                    setPlatform(e.target.value as keyof typeof PLATFORMS)
+                    setPlatform(e.target.value as VideoPlatformKey)
                   }
                   className="input-glow w-full px-4 py-3.5 rounded-xl border border-border-subtle bg-glass-2 text-primary focus:border-accent/50 focus:bg-glass-3 transition-all duration-300 appearance-none cursor-pointer">
-                  {Object.entries(PLATFORMS).map(([key, config]) => (
+                  {Object.entries(VIDEO_PLATFORMS).map(([key, config]) => (
                     <option key={key} value={key}>
                       {config.emoji} {config.name}
                     </option>
@@ -377,7 +336,7 @@ export default function VideoParserForm({
                   disabled={loading || !url}
                   className="magnetic-btn group relative w-full px-6 py-3.5 rounded-xl font-semibold text-white overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5 disabled:translate-y-0">
                   {/* Dynamic Gradient Background */}
-                  <div className={`absolute inset-0 bg-gradient-to-r ${detectedPlatform && PLATFORMS[detectedPlatform] ? PLATFORMS[detectedPlatform].gradient : 'from-indigo-500 to-purple-600'} transition-all duration-500`} />
+                  <div className={`absolute inset-0 bg-gradient-to-r ${detectedPlatform && VIDEO_PLATFORMS[detectedPlatform] ? VIDEO_PLATFORMS[detectedPlatform].gradient : 'from-indigo-500 to-purple-600'} transition-all duration-500`} />
 
                   {/* Shimmer Effect */}
                   <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

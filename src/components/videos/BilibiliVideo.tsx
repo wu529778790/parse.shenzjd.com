@@ -9,6 +9,16 @@ interface BilibiliVideoProps {
 
 export default function BilibiliVideo({ data }: BilibiliVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
+  const videoItems = data.data && Array.isArray(data.data) ? data.data : [];
+  const hasVideo = videoItems.length > 0;
+  const primaryVideoProxyUrl = hasVideo
+    ? `/api/proxy?url=${encodeURIComponent(
+        videoItems[0].video_url
+      )}&disposition=inline`
+    : "";
+  const posterProxyUrl = data.imgurl
+    ? `/api/proxy?url=${encodeURIComponent(data.imgurl)}&disposition=inline`
+    : undefined;
 
   const handleVideoError = (
     e: React.SyntheticEvent<HTMLVideoElement, Event>
@@ -20,9 +30,6 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
   const handleVideoLoad = () => {
     setVideoError(null);
   };
-
-  const videoItems = data.data && Array.isArray(data.data) ? data.data : [];
-  const hasVideo = videoItems.length > 0;
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
@@ -72,19 +79,13 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
           <div className="aspect-video w-full">
             <video
               controls
-              poster={data.imgurl}
+              poster={posterProxyUrl}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}>
-              <source
-                src={`/api/proxy?url=${encodeURIComponent(
-                  videoItems[0].video_url
-                )}&disposition=inline`}
-                type="video/mp4"
-              />
+              <source src={primaryVideoProxyUrl} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
@@ -96,7 +97,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               <div className="text-center text-white p-6">
                 <p className="mb-4 text-sm">{videoError}</p>
                 <a
-                  href={videoItems[0].video_url}
+                  href={primaryVideoProxyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00aeec] hover:bg-[#0099d4] text-white rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25">

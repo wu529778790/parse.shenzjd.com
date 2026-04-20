@@ -1,3 +1,5 @@
+import type { VideoPlatformKey } from "@/config/video-platforms";
+
 export interface VideoItem {
   title: string;
   duration: number;
@@ -9,6 +11,17 @@ export interface VideoItem {
 export interface User {
   name: string;
   user_img: string;
+}
+
+/** 多平台解析接口共用的扁平 data 结构 */
+export interface GenericParsedData {
+  title?: string;
+  author?: string;
+  avatar?: string;
+  uid?: string;
+  cover?: string;
+  url?: string;
+  images?: string[];
 }
 
 export interface ApiResponse {
@@ -25,17 +38,10 @@ export interface ApiResponse {
     | XhsData
     | QsMusicData
     | PipigxData
-    | PpxiaData;
+    | PpxiaData
+    | GenericParsedData;
   user?: User;
-  platform?:
-    | "bilibili"
-    | "douyin"
-    | "kuaishou"
-    | "weibo"
-    | "xhs"
-    | "qsmusic"
-    | "pipigx"
-    | "ppxia";
+  platform?: VideoPlatformKey;
 }
 
 export interface DouyinData {

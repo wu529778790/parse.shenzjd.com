@@ -85,7 +85,9 @@ async function getBilibiliVideoInfo(url) {
         headers
       );
       
-      if (playUrl && playUrl.data) {
+      if (playUrl && playUrl.data?.durl?.[0]?.url) {
+        // 直接使用接口返回的直链（CDN 可能是 bilivideo / akamaized 等，硬拼 mirror 会导致地址错误、播放失败）
+        const video_url = playUrl.data.durl[0].url;
         return {
           title: page.part,
           duration: page.duration,
@@ -93,9 +95,7 @@ async function getBilibiliVideoInfo(url) {
             .toISOString()
             .substr(11, 8),
           accept: playUrl.data.accept_description,
-          video_url: `https://upos-sz-mirrorhw.bilivideo.com/${
-            playUrl.data.durl[0].url.split(".bilivideo.com/")[1]
-          }`,
+          video_url,
         };
       }
       return null;
@@ -123,4 +123,9 @@ async function getBilibiliVideoInfo(url) {
   }
 }
 
-export const GET = createApiHandler(getBilibiliVideoInfo);
+export const GET = createApiHandler(getBilibiliVideoInfo, {
+  shouldCache: false,
+  responseHeaders: {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  },
+});

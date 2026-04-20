@@ -1,14 +1,11 @@
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { extractUrl, detectPlatform, hasValidVideoUrl } from "@/utils/share";
-
-type Platform =
-  | "douyin"
-  | "kuaishou"
-  | "weibo"
-  | "xhs"
-  | "bilibili"
-  | "qsmusic";
+import {
+  extractUrl,
+  detectPlatform,
+  hasValidVideoUrl,
+  type Platform,
+} from "@/utils/share";
 
 interface ShareParseCase {
   name: string;
@@ -133,6 +130,24 @@ const cases: ShareParseCase[] = [
     expectPlatform: "qsmusic",
     expectUrl:
       "https://music.douyin.com/qishui/share/track?track_id=7031234567890123456",
+  },
+  {
+    name: "huya-视频页",
+    input: "https://v.huya.com/play/123456789.html",
+    expectPlatform: "huya",
+    expectUrl: "https://v.huya.com/play/123456789.html",
+  },
+  {
+    name: "twitter-状态页",
+    input: "https://x.com/foo/status/1234567890123456789",
+    expectPlatform: "twitter",
+    expectUrl: "https://x.com/foo/status/1234567890123456789",
+  },
+  {
+    name: "weibo.cn-绿洲域",
+    input: "https://weibo.cn/feed/xxx",
+    expectPlatform: "lvzhou",
+    expectUrl: "https://weibo.cn/feed/xxx",
   },
   // 复杂/边界
   {

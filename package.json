@@ -13,13 +13,13 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "test:live": "RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts",
     "test:watch": "vitest",
     "wrk:dev": "npx -y wrangler@4.29.1 dev --local",
     "wrk:deploy": "npx -y wrangler@4.29.1 deploy"
   },
   "dependencies": {
     "axios": "^1.9.0",
-    "linkedom": "^0.18.11",
     "next": "15.3.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -30,6 +30,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
     "postcss": "^8",

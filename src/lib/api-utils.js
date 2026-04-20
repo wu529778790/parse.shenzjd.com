@@ -83,6 +83,10 @@ export const rateLimit = (() => {
   }, WINDOW_SIZE);
 
   return (ip) => {
+    // Vitest 单测会短时间触发大量解析请求，避免误触生产限流逻辑
+    if (process.env.VITEST === "true") {
+      return true;
+    }
     const now = Date.now();
     const userRequests = requests.get(ip) || [];
     
