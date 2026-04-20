@@ -12,6 +12,17 @@ import {
   parseErrorResponse
 } from "@/lib/api-utils";
 
+/**
+ * 安全的状态码 - 确保在 200-599 范围内
+ */
+export function safeStatus(code) {
+  const num = Number(code);
+  if (Number.isNaN(num)) return 500;
+  if (num < 200) return 500;
+  if (num > 599) return 500;
+  return Math.round(num);
+}
+
 // Basic Auth 配置（可选）
 const AUTH_USERNAME = process.env.API_AUTH_USERNAME;
 const AUTH_PASSWORD = process.env.API_AUTH_PASSWORD;
@@ -93,7 +104,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
       return Response.json(
         errorResponse("请求过于频繁，请稍后再试", 429),
         {
-          status: 429,
+          status: safeStatus(429),
           headers: jsonHeaders
         }
       );
@@ -106,7 +117,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
       return Response.json(
         errorResponse("url为空", 400),
         {
-          status: 400,
+          status: safeStatus(400),
           headers: jsonHeaders
         }
       );
@@ -117,7 +128,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
       return Response.json(
         errorResponse("无效的URL格式", 400),
         {
-          status: 400,
+          status: safeStatus(400),
           headers: jsonHeaders
         }
       );
@@ -130,7 +141,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
       return Response.json(
         errorResponse("URL包含不允许访问的地址", 400),
         {
-          status: 400,
+          status: safeStatus(400),
           headers: jsonHeaders
         }
       );
@@ -157,7 +168,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
         return Response.json(
           parseErrorResponse("解析失败"),
           {
-            status: 400,
+            status: safeStatus(400),
             headers: jsonHeaders
           }
         );
@@ -170,6 +181,12 @@ export const createApiHandler = (parseFunction, options = {}) => {
       const duration = Date.now() - startTime;
       logger.log(`Parse successful, response time: ${duration}ms`);
       
+      // 安全处理响应中的状态码
+      if (typeof result?.code === "number") {
+        // 如果 result.code 被用于 HTTP status，需要确保在有效范围内
+        // 这里只返回 JSON body，不使用 result.code 作为 HTTP status
+      }
+      
       return Response.json(result, {
         headers: jsonHeaders,
       });
@@ -179,7 +196,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
       return Response.json(
         serverErrorResponse(error),
         {
-          status: 500,
+          status: safeStatus(500),
           headers: jsonHeaders
         }
       );

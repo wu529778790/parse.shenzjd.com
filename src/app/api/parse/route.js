@@ -7,7 +7,7 @@
  * 参考: https://github.com/wujunwei928/parse-video
  */
 
-import { createApiHandler } from "@/lib/api-middleware";
+import { createApiHandler, safeStatus } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
 import {
   identifyPlatform,
@@ -184,7 +184,7 @@ export async function GET(request) {
           })),
       },
       {
-        status: 400,
+        status: safeStatus(400),
         headers: { "Access-Control-Allow-Origin": "*" },
       }
     );
