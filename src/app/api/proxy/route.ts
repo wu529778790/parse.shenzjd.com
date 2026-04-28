@@ -1,7 +1,11 @@
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import { logger } from "@/lib/api-utils";
+
+const UPSTREAM_TIMEOUT_MS = Number(
+  process.env.PROXY_UPSTREAM_TIMEOUT_MS || 30000
+);
 
 export async function OPTIONS() {
   return new Response(null, {
@@ -11,6 +15,69 @@ export async function OPTIONS() {
       "Access-Control-Allow-Methods": "GET,OPTIONS",
       "Access-Control-Allow-Headers": "*",
     },
+  });
+}
+
+function proxyErrorResponse(message: string, status = 502) {
+  return new Response(message, {
+    status,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "TimeoutError" ||
+      error.name === "AbortError" ||
+      error.message.includes("timed out"))
+  );
+}
+
+function wrapUpstreamBody(
+  body: ReadableStream<Uint8Array> | null
+): ReadableStream<Uint8Array> | null {
+  if (!body) return null;
+
+  const reader = body.getReader();
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (error) {
+        // Upstream media CDNs occasionally terminate long-lived connections.
+        // Close the downstream stream cleanly so Next.js does not surface an
+        // uncaught "failed to pipe response" error for an expected network edge case.
+        logger.warn("Upstream proxy stream terminated early:", error);
+        controller.close();
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } catch {
+        // Ignore cancellation races from the upstream body.
+      }
+    },
+  });
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit
+): Promise<Response> {
+  return fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
 }
 
@@ -208,7 +275,7 @@ export async function GET(req: NextRequest) {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers,
         redirect: "follow",
       });
@@ -221,7 +288,7 @@ export async function GET(req: NextRequest) {
       if (response.status === 302) {
         const location = response.headers.get("location");
         if (location) {
-          return await fetch(location, {
+          return await fetchWithTimeout(location, {
             headers,
             redirect: "follow",
           });
@@ -231,7 +298,7 @@ export async function GET(req: NextRequest) {
       return response;
     } catch {
       // 出错时返回基本请求
-      return await fetch(url, {
+      return await fetchWithTimeout(url, {
         headers,
         redirect: "follow",
       });
@@ -263,17 +330,25 @@ export async function GET(req: NextRequest) {
   let upstreamResp: Response;
 
   // 检查是否为抖音视频，使用专门的处理逻辑
-  if (
-    parsed.hostname.includes("snssdk") ||
-    parsed.hostname.includes("douyinvod") ||
-    parsed.hostname.includes("aweme")
-  ) {
-    upstreamResp = await fetchDouyinVideo(targetUrl);
-  } else {
-    upstreamResp = await fetch(targetUrl, {
-      headers: upstreamHeaders,
-      redirect: "follow",
-    });
+  try {
+    if (
+      parsed.hostname.includes("snssdk") ||
+      parsed.hostname.includes("douyinvod") ||
+      parsed.hostname.includes("aweme")
+    ) {
+      upstreamResp = await fetchDouyinVideo(targetUrl);
+    } else {
+      upstreamResp = await fetchWithTimeout(targetUrl, {
+        headers: upstreamHeaders,
+        redirect: "follow",
+      });
+    }
+  } catch (error) {
+    logger.error("Proxy upstream fetch failed:", error);
+    return proxyErrorResponse(
+      isTimeoutError(error) ? "Upstream request timed out" : "Upstream fetch failed",
+      isTimeoutError(error) ? 504 : 502
+    );
   }
 
   const contentType =
@@ -323,7 +398,7 @@ export async function GET(req: NextRequest) {
     ] = `attachment; filename*=UTF-8''${encodeURIComponent(finalFilename)}`;
   }
 
-  return new Response(upstreamResp.body, {
+  return new Response(wrapUpstreamBody(upstreamResp.body), {
     status: upstreamResp.status,
     headers: respHeaders,
   });
