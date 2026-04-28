@@ -24,6 +24,33 @@ const platformParsers = {
   // 可以继续添加其他平台
 };
 
+function createInternalRouteRequest(url) {
+  return new Request(`http://internal.local/api/parser?url=${encodeURIComponent(url)}`, {
+    headers: {
+      "x-forwarded-for": "127.0.0.1",
+      "user-agent": "parse.shenzjd.com/internal-parser",
+    },
+  });
+}
+
+async function invokeRouteHandler(handler, url) {
+  const response = await handler(createInternalRouteRequest(url));
+  if (!(response instanceof Response)) {
+    return response ?? null;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return await response.json();
+  }
+
+  const text = await response.text();
+  return {
+    code: response.ok ? 200 : response.status,
+    msg: text || (response.ok ? "解析成功" : "解析失败"),
+  };
+}
+
 // 获取平台对应的解析函数
 async function getParser(platform) {
   // 如果有直接注册的解析器
@@ -62,8 +89,17 @@ async function getParser(platform) {
   if (loader) {
     try {
       const mod = await loader();
-      // 假设路由模块导出解析函数
-      return mod.default || mod.GET;
+      if (typeof mod.default === "function" && mod.default !== mod.GET) {
+        return mod.default;
+      }
+      if (typeof mod.GET === "function") {
+        const routeParser = async (url) => invokeRouteHandler(mod.GET, url);
+        if (typeof mod.parseVideoId === "function") {
+          routeParser.parseVideoId = mod.parseVideoId;
+        }
+        return routeParser;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -98,7 +134,7 @@ async function unifiedParser(input, options = {}) {
 
       // 调用对应的解析函数
       const result = await parser(input);
-      if (result?.data?.platform === undefined) {
+      if (result && result.platform === undefined) {
         result.platform = platform;
       }
       return result;
@@ -195,8 +231,12 @@ export async function GET(request) {
   }
 
   if (source && id) {
-    return createApiHandler((u) => unifiedParser(u, { source, id }))(request);
+    const result = await unifiedParser("", { source, id });
+    return Response.json(result, {
+      status: safeStatus(result?.code || 200),
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

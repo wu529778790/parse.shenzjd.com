@@ -73,4 +73,17 @@ describe("proxy route", () => {
     expect(res.status).toBe(403);
     expect(await res.text()).toContain("private network");
   });
+
+  it("returns a controlled 502 when the upstream fetch fails", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+
+    const req = new NextRequest(
+      "http://127.0.0.1/api/proxy?url=https%3A%2F%2Fexample.com%2Fvideo.mp4"
+    );
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(502);
+    expect(await res.text()).toContain("Upstream fetch failed");
+  });
 });
