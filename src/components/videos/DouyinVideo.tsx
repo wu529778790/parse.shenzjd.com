@@ -120,46 +120,33 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
       {isImageType && douyinData.images && douyinData.images.length > 0 && (
         <div className="glass-card p-3">
           {douyinData.images.length === 1 ? (
-            <div className="relative aspect-square rounded-xl overflow-hidden">
+            <div className="relative rounded-xl overflow-hidden">
               {imageLoading && (
                 <div className="absolute inset-0 bg-glass-2 animate-pulse" />
               )}
               <Image
                 src={douyinData.images[0]}
                 alt={douyinData.title || "图片"}
-                fill
-                sizes="(max-width: 800px) 100vw, 800px"
-                className="object-cover transition-transform duration-500 hover:scale-105"
+                width={864}
+                height={1920}
+                className="w-full h-auto rounded-xl"
                 priority
                 unoptimized
                 onLoad={() => setImageLoading(false)}
               />
             </div>
           ) : (
-            <div
-              className={`grid gap-2 ${
-                douyinData.images.length === 2
-                  ? "grid-cols-2"
-                  : douyinData.images.length === 3
-                  ? "grid-cols-3"
-                  : douyinData.images.length === 4
-                  ? "grid-cols-2"
-                  : "grid-cols-3"
-              }`}>
+            <div className="flex flex-col gap-2">
               {douyinData.images.map((imageUrl, index) => (
                 <div
                   key={index}
-                  className={`relative aspect-square rounded-xl overflow-hidden group ${
-                    douyinData.images!.length === 4 && index >= 2
-                      ? "col-span-1"
-                      : ""
-                  }`}>
+                  className="relative rounded-xl overflow-hidden group">
                   <Image
                     src={imageUrl}
                     alt={`${douyinData.title || "图片"} ${index + 1}`}
-                    fill
-                    sizes="(max-width: 800px) 50vw, 400px"
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    width={864}
+                    height={1920}
+                    className="w-full h-auto rounded-xl transition-transform duration-500 group-hover:scale-[1.02]"
                     unoptimized
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
