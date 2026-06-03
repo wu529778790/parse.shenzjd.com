@@ -49,6 +49,20 @@ const cases: ShareParseCase[] = [
     expectPlatform: "douyin",
     expectUrl: "https://v.douyin.com/abc123/",
   },
+  {
+    name: "douyin-动图实况图分享",
+    input:
+      "5.61 复制打开抖音，看看【夏末荼靡📸的图文作品】茂密，是晓茂密😍😍# 表情包 # 月薪喵 # 猫咪... https://v.douyin.com/HdkBkaqT9b8/ aAT:/ Z@M.wF :6pm 08/24",
+    expectPlatform: "douyin",
+    expectUrl: "https://v.douyin.com/HdkBkaqT9b8/",
+  },
+  {
+    name: "douyin-日常分享视频",
+    input:
+      "8.94 。好牛逼  https://v.douyin.com/lEhWwo2TepE/ 复制此链接，打开抖音搜索，直接观看视频！ 03/01 t@e.Ox :3pm OKj:/",
+    expectPlatform: "douyin",
+    expectUrl: "https://v.douyin.com/lEhWwo2TepE/",
+  },
   // 快手
   {
     name: "kuaishou-短链",

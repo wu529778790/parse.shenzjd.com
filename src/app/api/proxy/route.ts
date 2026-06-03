@@ -33,7 +33,9 @@ function isTimeoutError(error: unknown): boolean {
     error instanceof Error &&
     (error.name === "TimeoutError" ||
       error.name === "AbortError" ||
-      error.message.includes("timed out"))
+      error.message.includes("timed out") ||
+      // Node.js network-level socket timeout (ETIMEDOUT)
+      (error as NodeJS.ErrnoException).code === "ETIMEDOUT")
   );
 }
 
@@ -43,13 +45,17 @@ function wrapUpstreamBody(
   if (!body) return null;
 
   const reader = body.getReader();
+  let closed = false;
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const { done, value } = await reader.read();
         if (done) {
-          controller.close();
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
           return;
         }
         controller.enqueue(value);
@@ -57,11 +63,15 @@ function wrapUpstreamBody(
         // Upstream media CDNs occasionally terminate long-lived connections.
         // Close the downstream stream cleanly so Next.js does not surface an
         // uncaught "failed to pipe response" error for an expected network edge case.
-        logger.warn("Upstream proxy stream terminated early:", error);
-        controller.close();
+        if (!closed) {
+          closed = true;
+          logger.warn("Upstream proxy stream terminated early:", error);
+          controller.close();
+        }
       }
     },
     async cancel(reason) {
+      closed = true;
       try {
         await reader.cancel(reason);
       } catch {
@@ -296,12 +306,10 @@ export async function GET(req: NextRequest) {
       }
 
       return response;
-    } catch {
-      // 出错时返回基本请求
-      return await fetchWithTimeout(url, {
-        headers,
-        redirect: "follow",
-      });
+    } catch (innerError) {
+      // If the retry also fails, let the caller handle the error
+      logger.warn("Douyin video fetch retry failed:", innerError);
+      throw innerError;
     }
   }
 
@@ -356,16 +364,19 @@ export async function GET(req: NextRequest) {
     upstreamResp.headers.get("content-type") ||
     "application/octet-stream";
 
-  // 为抖音视频强制设置正确的Content-Type
+  // 为抖音资源设置正确的Content-Type
   let finalContentType = contentType;
   if (
     parsed.hostname.includes("snssdk") ||
     parsed.hostname.includes("douyinvod") ||
     parsed.hostname.includes("aweme")
   ) {
+    const isImage = contentType.includes("image");
     if (
-      contentType === "application/octet-stream" ||
-      !contentType.includes("video")
+      !isImage && (
+        contentType === "application/octet-stream" ||
+        !contentType.includes("video")
+      )
     ) {
       finalContentType = "video/mp4";
     }

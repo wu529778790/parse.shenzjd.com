@@ -31,11 +31,13 @@ describe("parse route", () => {
                 },
                 create_time: 1710000000,
                 desc: "测试视频",
+                aweme_type: 0,
                 video: {
                   cover: { url_list: ["https://example.com/cover.jpg"] },
                   play_addr: {
                     url_list: ["https://example.com/playwm/video.mp4"],
                   },
+                  duration: 10000,
                 },
                 music: {
                   author: "配乐作者",

@@ -53,7 +53,9 @@ export interface DouyinData {
   time: number;
   title: string;
   uid: string;
-  url: string;
+  url?: string;
+  type?: "video" | "image";
+  images?: string[];
 }
 
 // 快手数据类型
