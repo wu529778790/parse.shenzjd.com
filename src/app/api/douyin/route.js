@@ -83,7 +83,7 @@ async function douyin(url) {
       logger.warn(`Douyin share page filtered video ${id}: ${filterReason}`);
       return {
         code: 201,
-        msg: `解析失败：抖音服务端过滤了该内容（${filterReason}），可能是IP地域限制或内容类型不支持`,
+        msg: `解析失败：抖音服务端过滤了该内容（${filterReason}），部分视频（如实况图、刚发布的内容）暂不支持解析`,
       };
     }
 
