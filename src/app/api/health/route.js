@@ -1,6 +1,6 @@
 import { logger } from "@/lib/api-utils";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 // 健康检查端点
 export async function GET(request) {

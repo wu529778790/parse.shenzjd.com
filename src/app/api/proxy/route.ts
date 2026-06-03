@@ -33,7 +33,9 @@ function isTimeoutError(error: unknown): boolean {
     error instanceof Error &&
     (error.name === "TimeoutError" ||
       error.name === "AbortError" ||
-      error.message.includes("timed out"))
+      error.message.includes("timed out") ||
+      // Node.js network-level socket timeout (ETIMEDOUT)
+      (error as NodeJS.ErrnoException).code === "ETIMEDOUT")
   );
 }
 
@@ -296,12 +298,10 @@ export async function GET(req: NextRequest) {
       }
 
       return response;
-    } catch {
-      // 出错时返回基本请求
-      return await fetchWithTimeout(url, {
-        headers,
-        redirect: "follow",
-      });
+    } catch (innerError) {
+      // If the retry also fails, let the caller handle the error
+      logger.warn("Douyin video fetch retry failed:", innerError);
+      throw innerError;
     }
   }
 
@@ -356,16 +356,19 @@ export async function GET(req: NextRequest) {
     upstreamResp.headers.get("content-type") ||
     "application/octet-stream";
 
-  // 为抖音视频强制设置正确的Content-Type
+  // 为抖音资源设置正确的Content-Type
   let finalContentType = contentType;
   if (
     parsed.hostname.includes("snssdk") ||
     parsed.hostname.includes("douyinvod") ||
     parsed.hostname.includes("aweme")
   ) {
+    const isImage = contentType.includes("image");
     if (
-      contentType === "application/octet-stream" ||
-      !contentType.includes("video")
+      !isImage && (
+        contentType === "application/octet-stream" ||
+        !contentType.includes("video")
+      )
     ) {
       finalContentType = "video/mp4";
     }
