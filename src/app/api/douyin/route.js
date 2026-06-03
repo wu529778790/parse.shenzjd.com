@@ -126,9 +126,16 @@ function parseVideoData(videoInfo) {
     }
 
     // 判断是视频还是图文内容
-    const isVideo = !!videoData.video?.play_addr?.url_list?.[0];
+    // aweme_type: 0=普通视频, 1=图文, 2=图文(实况图/动图), 4=故事
+    // 同时检查 video.duration > 0 排除只有音乐占位的情况
+    const awemeType = videoData.aweme_type;
+    const hasRealVideo =
+      !!videoData.video?.play_addr?.url_list?.[0] &&
+      (videoData.video.duration || 0) > 0;
+    const isImageType = awemeType === 1 || awemeType === 2;
+    const isVideo = !isImageType && hasRealVideo;
     const images =
-      !isVideo && Array.isArray(videoData.images)
+      Array.isArray(videoData.images)
         ? videoData.images.map((img) => img.url_list?.[0]).filter(Boolean)
         : [];
 
