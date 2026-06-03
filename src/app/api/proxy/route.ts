@@ -45,13 +45,17 @@ function wrapUpstreamBody(
   if (!body) return null;
 
   const reader = body.getReader();
+  let closed = false;
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const { done, value } = await reader.read();
         if (done) {
-          controller.close();
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
           return;
         }
         controller.enqueue(value);
@@ -59,11 +63,15 @@ function wrapUpstreamBody(
         // Upstream media CDNs occasionally terminate long-lived connections.
         // Close the downstream stream cleanly so Next.js does not surface an
         // uncaught "failed to pipe response" error for an expected network edge case.
-        logger.warn("Upstream proxy stream terminated early:", error);
-        controller.close();
+        if (!closed) {
+          closed = true;
+          logger.warn("Upstream proxy stream terminated early:", error);
+          controller.close();
+        }
       }
     },
     async cancel(reason) {
+      closed = true;
       try {
         await reader.cancel(reason);
       } catch {
