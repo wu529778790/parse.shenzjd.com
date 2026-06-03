@@ -170,6 +170,16 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
         </div>
       )}
 
+      {/* Image type hint */}
+      {isImageType && (
+        <div className="glass-card p-3 flex items-center gap-2 text-xs text-muted">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>当前显示为静态图，动图/实况图的动画效果暂不支持</span>
+        </div>
+      )}
+
       {/* Video Info */}
       {douyinData.title && (
         <div className="glass-card p-4">
