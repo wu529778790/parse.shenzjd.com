@@ -129,6 +129,6 @@ jobs:
               --name "$CONTAINER" \
               --restart unless-stopped \
               $ENV_FLAGS \
-              -p 6669:3000 \
+              -p 5269:3000 \
               "$IMAGE"
             sudo docker image prune -f
