@@ -28,10 +28,20 @@ export const PLATFORMS = {
   ACFUN: "acfun",
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
-};
+} as const;
+
+type PlatformKey = (typeof PLATFORMS)[keyof typeof PLATFORMS];
+
+export interface PlatformInfoEntry {
+  name: string;
+  nameEn: string;
+  domains: string[];
+  shortDomains: string[];
+  supportsIdParse: boolean;
+}
 
 // 平台信息映射
-export const PLATFORM_INFO = {
+export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
   [PLATFORMS.DOUYIN]: {
     name: "抖音",
     nameEn: "Douyin",
@@ -196,7 +206,7 @@ export const PLATFORM_INFO = {
 };
 
 // 从 URL 识别平台
-export function identifyPlatform(url) {
+export function identifyPlatform(url: string): string | null {
   const hostname = new URL(url).hostname.toLowerCase();
 
   for (const [platform, info] of Object.entries(PLATFORM_INFO)) {
@@ -214,24 +224,24 @@ export function identifyPlatform(url) {
 }
 
 // 获取平台信息
-export function getPlatformInfo(platform) {
-  return PLATFORM_INFO[platform] || null;
+export function getPlatformInfo(platform: string): PlatformInfoEntry | null {
+  return PLATFORM_INFO[platform as PlatformKey] || null;
 }
 
 // 获取平台名称
-export function getPlatformName(platform) {
-  return PLATFORM_INFO[platform]?.name || platform;
+export function getPlatformName(platform: string): string {
+  return PLATFORM_INFO[platform as PlatformKey]?.name || platform;
 }
 
 // 获取所有支持 ID 解析的平台
-export function getPlatformsSupportingIdParse() {
+export function getPlatformsSupportingIdParse(): string[] {
   return Object.entries(PLATFORM_INFO)
     .filter(([, info]) => info.supportsIdParse)
     .map(([platform]) => platform);
 }
 
 // 平台域名列表（用于 URL 验证）
-export const ALL_DOMAINS = [
+export const ALL_DOMAINS: string[] = [
   // 主域名
   "douyin.com",
   "iesdouyin.com",

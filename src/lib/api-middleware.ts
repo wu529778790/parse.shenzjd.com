@@ -6,6 +6,7 @@ import {
   isValidUrl,
   sanitizeUrl,
   getClientIP,
+  getCorsHeaders,
   logger,
   errorResponse,
   serverErrorResponse,
@@ -15,7 +16,7 @@ import {
 /**
  * 安全的状态码 - 确保在 200-599 范围内
  */
-export function safeStatus(code) {
+export function safeStatus(code: number): number {
   const num = Number(code);
   if (Number.isNaN(num)) return 500;
   if (num < 200) return 500;
@@ -30,7 +31,7 @@ const AUTH_PASSWORD = process.env.API_AUTH_PASSWORD;
 /**
  * 验证 Basic Auth
  */
-function verifyBasicAuth(request) {
+function verifyBasicAuth(request: Request): boolean {
   // 如果没有配置用户名密码，则跳过验证
   if (!AUTH_USERNAME || !AUTH_PASSWORD) {
     return true;
@@ -54,7 +55,7 @@ function verifyBasicAuth(request) {
 /**
  * 返回 401 未授权响应
  */
-function unauthorizedResponse() {
+function unauthorizedResponse(): Response {
   return new Response(
     JSON.stringify({
       code: 401,
@@ -65,27 +66,38 @@ function unauthorizedResponse() {
       headers: {
         "Content-Type": "application/json",
         "WWW-Authenticate": 'Basic realm="Video Parser API"',
-        "Access-Control-Allow-Origin": "*",
       },
     }
   );
 }
 
+export interface ApiHandlerOptions {
+  shouldCache?: boolean;
+  responseHeaders?: Record<string, string>;
+  requireAuth?: boolean;
+}
+
+type ParseFunction = (url: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
+
 // 通用 API 处理函数
-export const createApiHandler = (parseFunction, options = {}) => {
+export const createApiHandler = (
+  parseFunction: ParseFunction,
+  options: ApiHandlerOptions = {}
+): ((request: Request) => Promise<Response>) => {
   const {
     shouldCache = true,
     responseHeaders = {},
     requireAuth = false, // 是否需要认证
   } = options;
 
-  const jsonHeaders = {
-    "Access-Control-Allow-Origin": "*",
+  const extraHeaders = {
     ...responseHeaders,
   };
 
-  return async (request) => {
+  return async (request: Request): Promise<Response> => {
     const startTime = Date.now();
+    const corsHeaders = getCorsHeaders(request.headers.get('origin') || '') as Record<string, string>;
+    const headers = { ...corsHeaders, ...extraHeaders };
 
     // Basic Auth 验证
     if (requireAuth || AUTH_USERNAME) {
@@ -98,18 +110,18 @@ export const createApiHandler = (parseFunction, options = {}) => {
     // 获取客户端IP
     const clientIP = getClientIP(request);
     logger.log(`API request from IP: ${clientIP}`);
-    
+
     // 检查速率限制
     if (!rateLimit(clientIP)) {
       return Response.json(
         errorResponse("请求过于频繁，请稍后再试", 429),
         {
           status: safeStatus(429),
-          headers: jsonHeaders
+          headers
         }
       );
     }
-    
+
     const { searchParams } = new URL(request.url);
     const url = searchParams.get("url");
 
@@ -118,22 +130,22 @@ export const createApiHandler = (parseFunction, options = {}) => {
         errorResponse("url为空", 400),
         {
           status: safeStatus(400),
-          headers: jsonHeaders
+          headers
         }
       );
     }
-    
+
     // 验证URL格式
     if (!isValidUrl(url)) {
       return Response.json(
         errorResponse("无效的URL格式", 400),
         {
           status: safeStatus(400),
-          headers: jsonHeaders
+          headers
         }
       );
     }
-    
+
     // 安全检查：防止SSRF攻击
     const sanitizedUrl = sanitizeUrl(url);
     if (!sanitizedUrl) {
@@ -142,18 +154,18 @@ export const createApiHandler = (parseFunction, options = {}) => {
         errorResponse("URL包含不允许访问的地址", 400),
         {
           status: safeStatus(400),
-          headers: jsonHeaders
+          headers
         }
       );
     }
-    
+
     if (shouldCache) {
       const cached = getCachedResponse(sanitizedUrl);
       if (cached) {
         const duration = Date.now() - startTime;
         logger.log(`Cache hit, response time: ${duration}ms`);
         return Response.json(cached, {
-          headers: jsonHeaders,
+          headers,
         });
       }
     }
@@ -161,7 +173,7 @@ export const createApiHandler = (parseFunction, options = {}) => {
     try {
       logger.log(`Parsing URL: ${sanitizedUrl.substring(0, 80)}...`);
       const result = await parseFunction(sanitizedUrl);
-      
+
       if (!result) {
         const duration = Date.now() - startTime;
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
@@ -169,35 +181,30 @@ export const createApiHandler = (parseFunction, options = {}) => {
           parseErrorResponse("解析失败"),
           {
             status: safeStatus(400),
-            headers: jsonHeaders
+            headers
           }
         );
       }
-      
+
       if (shouldCache) {
         setCacheResponse(sanitizedUrl, result);
       }
-      
+
       const duration = Date.now() - startTime;
       logger.log(`Parse successful, response time: ${duration}ms`);
-      
-      // 安全处理响应中的状态码
-      if (typeof result?.code === "number") {
-        // 如果 result.code 被用于 HTTP status，需要确保在有效范围内
-        // 这里只返回 JSON body，不使用 result.code 作为 HTTP status
-      }
-      
+
       return Response.json(result, {
-        headers: jsonHeaders,
+        headers,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      logger.error(`API error after ${duration}ms:`, error.message);
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      logger.error(`API error after ${duration}ms:`, errMsg);
       return Response.json(
         serverErrorResponse(error),
         {
           status: safeStatus(500),
-          headers: jsonHeaders
+          headers
         }
       );
     }

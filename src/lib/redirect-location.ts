@@ -1,7 +1,7 @@
 /**
  * 模拟 resty NoRedirectPolicy：取 3xx 的 Location（火山 / 西瓜等短链）
  */
-export async function getRedirectLocation(url, headers = {}) {
+export async function getRedirectLocation(url: string, headers: Record<string, string> = {}): Promise<string | null> {
   const res = await fetch(url, {
     method: "GET",
     redirect: "manual",

@@ -1,11 +1,48 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { logger } from "@/lib/api-utils";
+import { logger, rateLimit, getClientIP } from "@/lib/api-utils";
 
 const UPSTREAM_TIMEOUT_MS = Number(
   process.env.PROXY_UPSTREAM_TIMEOUT_MS || 30000
 );
+
+// Basic Auth 配置（与 api-middleware 共享）
+const AUTH_USERNAME = process.env.API_AUTH_USERNAME;
+const AUTH_PASSWORD = process.env.API_AUTH_PASSWORD;
+
+function verifyBasicAuth(request: NextRequest): boolean {
+  if (!AUTH_USERNAME || !AUTH_PASSWORD) return true;
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Basic ")) return false;
+  try {
+    const credentials = atob(authHeader.slice(6));
+    const [username, password] = credentials.split(":");
+    return username === AUTH_USERNAME && password === AUTH_PASSWORD;
+  } catch {
+    return false;
+  }
+}
+
+function unauthorizedResponse(): Response {
+  return new Response(JSON.stringify({ code: 401, msg: "未授权访问" }), {
+    status: 401,
+    headers: {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": 'Basic realm="Proxy API"',
+    },
+  });
+}
+
+function rateLimitResponse(): Response {
+  return new Response(
+    JSON.stringify({ code: 429, msg: "请求过于频繁，请稍后再试" }),
+    {
+      status: 429,
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+}
 
 export async function OPTIONS() {
   return new Response(null, {
@@ -18,7 +55,7 @@ export async function OPTIONS() {
   });
 }
 
-function proxyErrorResponse(message: string, status = 502) {
+function proxyErrorResponse(message: string, status = 502): Response {
   return new Response(message, {
     status,
     headers: {
@@ -34,7 +71,6 @@ function isTimeoutError(error: unknown): boolean {
     (error.name === "TimeoutError" ||
       error.name === "AbortError" ||
       error.message.includes("timed out") ||
-      // Node.js network-level socket timeout (ETIMEDOUT)
       (error as NodeJS.ErrnoException).code === "ETIMEDOUT")
   );
 }
@@ -60,9 +96,6 @@ function wrapUpstreamBody(
         }
         controller.enqueue(value);
       } catch (error) {
-        // Upstream media CDNs occasionally terminate long-lived connections.
-        // Close the downstream stream cleanly so Next.js does not surface an
-        // uncaught "failed to pipe response" error for an expected network edge case.
         if (!closed) {
           closed = true;
           logger.warn("Upstream proxy stream terminated early:", error);
@@ -116,54 +149,104 @@ function isBilibiliHostname(hostname: string): boolean {
   );
 }
 
-// SSRF防护：检查是否为内网地址
+// SSRF防护：检查是否为内网地址（与 api-utils.js 中 sanitizeUrl 逻辑对齐）
 function isPrivateHostname(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  
-  // 检查localhost
-  if (lower === "localhost" || lower === "127.0.0.1" || lower === "0.0.0.0" || lower === "::1") {
-    return true;
-  }
-  
-  // 检查私有IP段
-  const privatePatterns = [
-    /^10\./,
-    /^172\.(1[6-9]|2[0-9]|3[01])\./,
-    /^192\.168\./,
-    /^169\.254\./,  // 链路本地
-    /^fc00:/,       // IPv6 私有
-    /^fe80:/,       // IPv6 链路本地
+  // new URL() 对 IPv6 保留方括号，统一去掉
+  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+  const blockedExact = [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "::1",
+    "::",
+    "0:0:0:0:0:0:0:1",
+    "0:0:0:0:0:0:0:0",
   ];
-  
-  return privatePatterns.some(pattern => pattern.test(lower));
+  if (blockedExact.includes(lower)) return true;
+
+  const blockedPrefixes = [
+    "10.",
+    "172.16.", "172.17.", "172.18.", "172.19.",
+    "172.20.", "172.21.", "172.22.", "172.23.",
+    "172.24.", "172.25.", "172.26.", "172.27.",
+    "172.28.", "172.29.", "172.30.", "172.31.",
+    "192.168.",
+    "169.254.",
+  ];
+
+  // IPv4-mapped IPv6 私有地址（URL标准化后的 hex 格式）
+  const blockedIPv4MappedPrefixes = [
+    "::ffff:7f00:",
+    "::ffff:a:",
+    "::ffff:ac10:",
+    "::ffff:c0a8:",
+    "::ffff:a9fe:",
+  ];
+
+  // IPv6 私有地址段
+  const blockedIPv6Prefixes = [
+    "fc00:", "fd00:",
+    "fe80:",
+  ];
+
+  if (blockedPrefixes.some((p) => lower.startsWith(p))) return true;
+  if (blockedIPv4MappedPrefixes.some((p) => lower.startsWith(p))) return true;
+  if (blockedIPv6Prefixes.some((p) => lower.startsWith(p))) return true;
+
+  return false;
 }
 
-// 允许的域名白名单（可选，提高安全性）
+// 允许的域名白名单 — 使用后缀匹配
 const ALLOWED_DOMAINS = [
   "douyinpic.com",
   "snssdk.com",
   "douyinvod.com",
   "aweme.com",
+  "iesdouyin.com",
   "hdslb.com",
   "bilibili.com",
+  "bilivideo.com",
+  "akamaized.net",
+  "akamaihd.net",
+  "bvcvod.com",
   "kwaicdn.com",
   "kwimgs.com",
   "kuaishou.com",
+  "kscdns.com",
+  "ksyungslb.com",
+  "gifshow.com",
   "xiaohongshu.com",
   "xhslink.com",
+  "xhscdn.com",
   "pipigx.com",
   "pipix.com",
+  "ippzone.com",
   "weibo.com",
+  "sinaimg.cn",
+  "sina.com.cn",
   "douyin.com",
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isAllowedDomain(hostname: string): boolean {
   const lower = hostname.toLowerCase();
-  return ALLOWED_DOMAINS.some(domain => lower.endsWith(domain) || lower.includes(domain));
+  return ALLOWED_DOMAINS.some(
+    (domain) => lower === domain || lower.endsWith("." + domain)
+  );
 }
 
 export async function GET(req: NextRequest) {
+  // Basic Auth 验证
+  if (!verifyBasicAuth(req)) {
+    return unauthorizedResponse();
+  }
+
+  // 速率限制
+  const clientIP = getClientIP(req);
+  if (!rateLimit(clientIP)) {
+    return rateLimitResponse();
+  }
+
   const search = req.nextUrl.searchParams;
   const targetUrl = search.get("url");
   const customFilename = search.get("filename") || undefined;
@@ -206,52 +289,64 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // 域名白名单检查（可选启用）
-  // if (!isAllowedDomain(parsed.hostname)) {
-  //   logger.warn(`Domain not allowed: ${parsed.hostname}`);
-  //   return new Response("Domain not allowed", {
-  //     status: 403,
-  //     headers: { "Access-Control-Allow-Origin": "*" },
-  //   });
-  // }
+  // 域名白名单检查
+  if (!isAllowedDomain(parsed.hostname)) {
+    logger.warn(`Domain not allowed: ${parsed.hostname}`);
+    return new Response("Domain not allowed", {
+      status: 403,
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
+  }
 
   function guessRefererByHost(hostname: string): string | undefined {
     const lower = hostname.toLowerCase();
-    
-    // 抖音相关域名
-    if (lower.includes("douyin") || lower.includes("douyinpic") || 
-        lower.includes("snssdk") || lower.includes("douyinvod") || 
-        lower.includes("aweme") || lower.includes("iesdouyin")) {
+
+    if (
+      lower.includes("douyin") ||
+      lower.includes("douyinpic") ||
+      lower.includes("snssdk") ||
+      lower.includes("douyinvod") ||
+      lower.includes("aweme") ||
+      lower.includes("iesdouyin")
+    ) {
       return "https://www.douyin.com/";
     }
-    
-    // 哔哩哔哩相关域名（含 UPOS / Akamai 等 CDN）
+
     if (isBilibiliHostname(lower)) {
       return "https://www.bilibili.com/";
     }
-    
-    // 快手相关域名
-    if (lower.includes("kuaishou") || lower.includes("kwaicdn") || 
-        lower.includes("kwimgs") || lower.includes("ksyungslb") ||
-        lower.includes("gifshow") || lower.includes("kscdns")) {
+
+    if (
+      lower.includes("kuaishou") ||
+      lower.includes("kwaicdn") ||
+      lower.includes("kwimgs") ||
+      lower.includes("ksyungslb") ||
+      lower.includes("gifshow") ||
+      lower.includes("kscdns")
+    ) {
       return "https://www.kuaishou.com/";
     }
-    
-    // 微博相关域名
+
     if (lower.includes("weibo") || lower.includes("sina")) {
       return "https://weibo.com/";
     }
-    
-    // 小红书相关域名
-    if (lower.includes("xiaohongshu") || lower.includes("xhs") || lower.includes("xhscdn")) {
+
+    if (
+      lower.includes("xiaohongshu") ||
+      lower.includes("xhs") ||
+      lower.includes("xhscdn")
+    ) {
       return "https://www.xiaohongshu.com/";
     }
-    
-    // 皮皮虾相关域名
-    if (lower.includes("pipigx") || lower.includes("pipix") || lower.includes("ippzone")) {
+
+    if (
+      lower.includes("pipigx") ||
+      lower.includes("pipix") ||
+      lower.includes("ippzone")
+    ) {
       return "https://h5.pipix.com/";
     }
-    
+
     return `${parsed.protocol}//${parsed.host}/`;
   }
 
@@ -278,39 +373,16 @@ export async function GET(req: NextRequest) {
   }
 
   // 抖音视频特殊处理函数
-  async function fetchDouyinVideo(url: string) {
+  async function fetchDouyinVideo(url: string): Promise<Response> {
     const headers = {
       "User-Agent": MOBILE_UA,
       Referer: "https://www.douyin.com/",
     };
 
-    try {
-      const response = await fetchWithTimeout(url, {
-        headers,
-        redirect: "follow",
-      });
-
-      if (response.status === 200 || response.status === 206) {
-        return response;
-      }
-
-      // 如果是302重定向，跟踪重定向
-      if (response.status === 302) {
-        const location = response.headers.get("location");
-        if (location) {
-          return await fetchWithTimeout(location, {
-            headers,
-            redirect: "follow",
-          });
-        }
-      }
-
-      return response;
-    } catch (innerError) {
-      // If the retry also fails, let the caller handle the error
-      logger.warn("Douyin video fetch retry failed:", innerError);
-      throw innerError;
-    }
+    return await fetchWithTimeout(url, {
+      headers,
+      redirect: "manual",
+    });
   }
 
   const isBilibiliTarget = isBilibiliHostname(parsed.hostname);
@@ -335,20 +407,73 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  let upstreamResp: Response;
+  // 手动处理重定向，验证每次跳转目标
+  let upstreamResp: Response | null = null;
+  let currentUrl = targetUrl;
+  const MAX_REDIRECTS = 5;
 
-  // 检查是否为抖音视频，使用专门的处理逻辑
   try {
-    if (
+    const isDouyinTarget =
       parsed.hostname.includes("snssdk") ||
       parsed.hostname.includes("douyinvod") ||
-      parsed.hostname.includes("aweme")
-    ) {
-      upstreamResp = await fetchDouyinVideo(targetUrl);
-    } else {
-      upstreamResp = await fetchWithTimeout(targetUrl, {
-        headers: upstreamHeaders,
-        redirect: "follow",
+      parsed.hostname.includes("aweme");
+
+    for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount++) {
+      const resp = isDouyinTarget && redirectCount === 0
+        ? await fetchDouyinVideo(currentUrl)
+        : await fetchWithTimeout(currentUrl, {
+            headers: upstreamHeaders,
+            redirect: "manual",
+          });
+
+      // 非重定向响应，直接返回
+      if (resp.status < 300 || resp.status >= 400) {
+        upstreamResp = resp;
+        break;
+      }
+
+      // 处理 3xx 重定向 — 验证目标地址
+      const location = resp.headers.get("location");
+      if (!location) {
+        upstreamResp = resp;
+        break;
+      }
+
+      // 解析重定向目标
+      let redirectUrl: URL;
+      try {
+        redirectUrl = new URL(location, currentUrl);
+      } catch {
+        upstreamResp = resp;
+        break;
+      }
+
+      // 验证重定向目标的 scheme
+      if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
+        logger.warn(`Redirect to non-http scheme blocked: ${redirectUrl.protocol}`);
+        return new Response("Redirect to non-http scheme blocked", {
+          status: 403,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      // 验证重定向目标不是内网地址
+      if (isPrivateHostname(redirectUrl.hostname)) {
+        logger.warn(`SSRF redirect blocked: ${redirectUrl.hostname}`);
+        return new Response("Access denied: redirect to private network", {
+          status: 403,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      // 跟进重定向
+      currentUrl = redirectUrl.toString();
+    }
+
+    if (!upstreamResp) {
+      return new Response("Too many redirects", {
+        status: 502,
+        headers: { "Access-Control-Allow-Origin": "*" },
       });
     }
   } catch (error) {
@@ -373,10 +498,9 @@ export async function GET(req: NextRequest) {
   ) {
     const isImage = contentType.includes("image");
     if (
-      !isImage && (
-        contentType === "application/octet-stream" ||
-        !contentType.includes("video")
-      )
+      !isImage &&
+      (contentType === "application/octet-stream" ||
+        !contentType.includes("video"))
     ) {
       finalContentType = "video/mp4";
     }

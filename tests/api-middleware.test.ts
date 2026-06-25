@@ -46,4 +46,59 @@ describe("api-middleware", () => {
     expect(json.msg).toBe("cached");
     expect(parseSpy).not.toHaveBeenCalled();
   });
+
+  it("blocks requests when rate limit exceeded", async () => {
+    vi.spyOn(apiUtils, "rateLimit").mockReturnValue(false);
+    const parseSpy = vi.fn();
+    const handler = createApiHandler(parseSpy);
+
+    const req = new Request("http://127.0.0.1/api/test?url=https://example.com/video");
+    const res = await handler(req);
+
+    expect(res.status).toBe(429);
+    const json = await res.json();
+    expect(json.code).toBe(429);
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
+  it("blocks SSRF attempts (sanitizeUrl returns null)", async () => {
+    vi.spyOn(apiUtils, "sanitizeUrl").mockReturnValue(null);
+    const parseSpy = vi.fn();
+    const handler = createApiHandler(parseSpy);
+
+    const req = new Request("http://127.0.0.1/api/test?url=http://192.168.1.1/secret");
+    const res = await handler(req);
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.code).toBe(400);
+    expect(json.msg).toContain("不允许访问");
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns CORS header for allowed origin (*.shenzjd.com)", async () => {
+    vi.spyOn(apiUtils, "getCachedResponse").mockReturnValue(null);
+    const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const req = new Request("http://127.0.0.1/api/test?url=https://example.com", {
+      headers: { Origin: "https://parse.shenzjd.com" },
+    });
+    const res = await handler(req);
+
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://parse.shenzjd.com");
+  });
+
+  it("does not return CORS header for unauthorized origin", async () => {
+    vi.spyOn(apiUtils, "getCachedResponse").mockReturnValue(null);
+    const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const req = new Request("http://127.0.0.1/api/test?url=https://example.com", {
+      headers: { Origin: "https://evil-site.com" },
+    });
+    const res = await handler(req);
+
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
 });

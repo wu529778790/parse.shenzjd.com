@@ -50,7 +50,7 @@ describe("proxy route", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://upos-sz-mirrorcosov.bilivideo.com/upgcxcode/xx/archive/video.m4s",
       expect.objectContaining({
-        redirect: "follow",
+        redirect: "manual",
         headers: expect.objectContaining({
           "User-Agent": "UnitTestBiliUA/1.0",
           Referer: "https://www.bilibili.com/",
@@ -58,6 +58,7 @@ describe("proxy route", () => {
           Cookie: "SESSDATA=test-cookie",
           Range: "bytes=0-1",
           Accept: "*/*",
+          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         }),
       })
     );
@@ -74,16 +75,57 @@ describe("proxy route", () => {
     expect(await res.text()).toContain("private network");
   });
 
-  it("returns a controlled 502 when the upstream fetch fails", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-
+  it("blocks domains not in whitelist", async () => {
     const req = new NextRequest(
       "http://127.0.0.1/api/proxy?url=https%3A%2F%2Fexample.com%2Fvideo.mp4"
     );
 
     const res = await GET(req);
 
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain("Domain not allowed");
+  });
+
+  it("returns a controlled 502 when the upstream fetch fails", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+
+    // 使用白名单中的域名
+    const req = new NextRequest(
+      "http://127.0.0.1/api/proxy?url=https%3A%2F%2Fupos-sz-mirrorcosov.bilivideo.com%2Ffail%2Fvideo.m4s"
+    );
+
+    const res = await GET(req);
+
     expect(res.status).toBe(502);
     expect(await res.text()).toContain("Upstream fetch failed");
+  });
+
+  it("blocks redirect to private network (SSRF via redirect)", async () => {
+    // 第一次请求返回 302 重定向到内网地址
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: "http://169.254.169.254/latest/meta-data/" },
+      })
+    );
+
+    const req = new NextRequest(
+      "http://127.0.0.1/api/proxy?url=https%3A%2F%2Fupos-sz-mirrorcosov.bilivideo.com%2Fredirect%2Fvideo.m4s"
+    );
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain("redirect to private network");
+  });
+
+  it("blocks 169.254.169.254 (cloud metadata endpoint)", async () => {
+    const req = new NextRequest(
+      "http://127.0.0.1/api/proxy?url=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2F"
+    );
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(403);
   });
 });

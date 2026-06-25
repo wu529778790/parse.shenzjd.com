@@ -42,6 +42,33 @@ describe("api-utils", () => {
       expect(sanitizeUrl("http://192.168.1.1")).toBeNull();
     });
 
+    it("should block 169.254.0.0/16 (link-local / cloud metadata)", () => {
+      expect(sanitizeUrl("http://169.254.169.254/latest/meta-data/")).toBeNull();
+      expect(sanitizeUrl("http://169.254.1.1/")).toBeNull();
+    });
+
+    it("should block 0.0.0.0", () => {
+      expect(sanitizeUrl("http://0.0.0.0/")).toBeNull();
+    });
+
+    it("should block IPv6 private addresses", () => {
+      expect(sanitizeUrl("http://[::1]/")).toBeNull();
+      expect(sanitizeUrl("http://[fc00::1]/")).toBeNull();
+      expect(sanitizeUrl("http://[fd00::1]/")).toBeNull();
+      expect(sanitizeUrl("http://[fe80::1]/")).toBeNull();
+    });
+
+    it("should block IPv4-mapped IPv6 addresses", () => {
+      expect(sanitizeUrl("http://[::ffff:127.0.0.1]/")).toBeNull();
+      expect(sanitizeUrl("http://[::ffff:192.168.1.1]/")).toBeNull();
+    });
+
+    it("should block non-http/https schemes", () => {
+      expect(sanitizeUrl("ftp://example.com/file")).toBeNull();
+      expect(sanitizeUrl("gopher://example.com")).toBeNull();
+      expect(sanitizeUrl("file:///etc/passwd")).toBeNull();
+    });
+
     it("should return null for invalid URLs", () => {
       expect(sanitizeUrl("not-a-url")).toBeNull();
       expect(sanitizeUrl("")).toBeNull();

@@ -8,7 +8,7 @@
  */
 
 import { createApiHandler, safeStatus } from "@/lib/api-middleware";
-import { logger } from "@/lib/api-utils";
+import { logger, rateLimit, getClientIP, getCorsHeaders } from "@/lib/api-utils";
 import {
   identifyPlatform,
   getPlatformName,
@@ -27,7 +27,6 @@ const platformParsers = {
 function createInternalRouteRequest(url) {
   return new Request(`http://internal.local/api/parser?url=${encodeURIComponent(url)}`, {
     headers: {
-      "x-forwarded-for": "127.0.0.1",
       "user-agent": "parse.shenzjd.com/internal-parser",
     },
   });
@@ -193,6 +192,7 @@ async function unifiedParser(input, options = {}) {
 
 // GET 请求处理
 export async function GET(request) {
+  const corsHeaders = getCorsHeaders(request.headers.get('origin') || '');
   const { searchParams } = new URL(request.url);
 
   // 方式1: ?url=xxx
@@ -221,7 +221,7 @@ export async function GET(request) {
       },
       {
         status: safeStatus(400),
-        headers: { "Access-Control-Allow-Origin": "*" },
+        headers: corsHeaders,
       }
     );
   }
@@ -231,10 +231,19 @@ export async function GET(request) {
   }
 
   if (source && id) {
+    // source+id 路径也受速率限制保护
+    const clientIP = getClientIP(request);
+    if (!rateLimit(clientIP)) {
+      return Response.json(
+        { code: 429, msg: "请求过于频繁，请稍后再试" },
+        { status: safeStatus(429), headers: corsHeaders }
+      );
+    }
+
     const result = await unifiedParser("", { source, id });
     return Response.json(result, {
       status: safeStatus(result?.code || 200),
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: corsHeaders,
     });
   }
 }

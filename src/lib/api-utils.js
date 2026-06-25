@@ -11,9 +11,8 @@ export const logger = {
     }
   },
   warn: (...args) => {
-    if (isDevelopment) {
-      console.warn(...args);
-    }
+    // warn 在生产环境也输出，便于线上问题排查
+    console.warn(...args);
   },
   error: (...args) => {
     // 生产环境也记录错误
@@ -28,28 +27,11 @@ export const logger = {
 
 // 缓存相关配置
 const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+const CACHE_MAX_SIZE = 500;          // 最大缓存条目数
 let cache = new Map();
 
-export const getCachedResponse = (url) => {
-  const cached = cache.get(url);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    logger.log('Cache hit for:', url.substring(0, 50) + '...');
-    return cached.data;
-  }
-  logger.log('Cache miss for:', url.substring(0, 50) + '...');
-  return null;
-};
-
-export const setCacheResponse = (url, data) => {
-  cache.set(url, {
-    data,
-    timestamp: Date.now()
-  });
-  logger.log('Cache set for:', url.substring(0, 50) + '...');
-};
-
-// 清理过期缓存
-export const cleanupCache = () => {
+// 惰性清理过期缓存
+function evictExpiredCache() {
   const now = Date.now();
   let cleaned = 0;
   for (const [key, value] of cache.entries()) {
@@ -59,8 +41,34 @@ export const cleanupCache = () => {
     }
   }
   if (cleaned > 0) {
-    logger.log(`Cleaned up ${cleaned} expired cache entries`);
+    logger.log(`Cleaned up ${cleaned} expired cache entries, remaining: ${cache.size}`);
   }
+}
+
+export const getCachedResponse = (url) => {
+  const cached = cache.get(url);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    logger.log('Cache hit for:', url.substring(0, 50) + '...');
+    return cached.data;
+  }
+  // 过期条目立即删除
+  if (cached) {
+    cache.delete(url);
+  }
+  logger.log('Cache miss for:', url.substring(0, 50) + '...');
+  return null;
+};
+
+export const setCacheResponse = (url, data) => {
+  // 超过阈值时触发惰性清理
+  if (cache.size >= CACHE_MAX_SIZE) {
+    evictExpiredCache();
+  }
+  cache.set(url, {
+    data,
+    timestamp: Date.now()
+  });
+  logger.log('Cache set for:', url.substring(0, 50) + '...');
 };
 
 // 速率限制相关配置
@@ -69,19 +77,6 @@ export const rateLimit = (() => {
   const WINDOW_SIZE = 60000; // 1分钟
   const MAX_REQUESTS = 10; // 每分钟最多10次请求
 
-  // 定期清理过期记录
-  setInterval(() => {
-    const now = Date.now();
-    for (const [ip, times] of requests.entries()) {
-      const recentRequests = times.filter(time => now - time < WINDOW_SIZE);
-      if (recentRequests.length === 0) {
-        requests.delete(ip);
-      } else {
-        requests.set(ip, recentRequests);
-      }
-    }
-  }, WINDOW_SIZE);
-
   return (ip) => {
     // Vitest 单测会短时间触发大量解析请求，避免误触生产限流逻辑
     if (process.env.VITEST === "true") {
@@ -89,15 +84,15 @@ export const rateLimit = (() => {
     }
     const now = Date.now();
     const userRequests = requests.get(ip) || [];
-    
+
     // 清理过期请求
     const recentRequests = userRequests.filter(time => now - time < WINDOW_SIZE);
-    
+
     if (recentRequests.length >= MAX_REQUESTS) {
       logger.warn(`Rate limit exceeded for IP: ${ip}`);
       return false; // 超出限制
     }
-    
+
     recentRequests.push(now);
     requests.set(ip, recentRequests);
     logger.log(`Request allowed for IP: ${ip}, count: ${recentRequests.length}/${MAX_REQUESTS}`);
@@ -120,39 +115,75 @@ export const isValidUrl = (string) => {
 export const sanitizeUrl = (url) => {
   try {
     const parsedUrl = new URL(url);
-    
+
+    // 仅允许 http/https scheme
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error(`Blocked scheme: ${parsedUrl.protocol}`);
+    }
+
     // 防止访问内网地址
-    const hostname = parsedUrl.hostname.toLowerCase();
-    const blockedHostnames = [
+    // new URL() 对 IPv6 保留方括号，统一去掉
+    const hostname = parsedUrl.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+    // 精确匹配的主机名
+    const blockedExact = [
       'localhost',
       '127.0.0.1',
       '0.0.0.0',
-      '10.',
-      '172.16.',
-      '172.17.',
-      '172.18.',
-      '172.19.',
-      '172.20.',
-      '172.21.',
-      '172.22.',
-      '172.23.',
-      '172.24.',
-      '172.25.',
-      '172.26.',
-      '172.27.',
-      '172.28.',
-      '172.29.',
-      '172.30.',
-      '172.31.',
-      '192.168.'
+      '::1',
+      '::',
+      '0:0:0:0:0:0:0:1',
+      '0:0:0:0:0:0:0:0',
     ];
-    
-    for (const blocked of blockedHostnames) {
-      if (hostname === blocked || hostname.startsWith(blocked)) {
+
+    if (blockedExact.includes(hostname)) {
+      throw new Error(`Blocked hostname: ${hostname}`);
+    }
+
+    // 前缀匹配 — IPv4 私有段 + 链路本地
+    const blockedPrefixes = [
+      '10.',
+      '172.16.', '172.17.', '172.18.', '172.19.',
+      '172.20.', '172.21.', '172.22.', '172.23.',
+      '172.24.', '172.25.', '172.26.', '172.27.',
+      '172.28.', '172.29.', '172.30.', '172.31.',
+      '192.168.',
+      '169.254.',          // 链路本地 / 云元数据端点
+    ];
+
+    // IPv4-mapped IPv6 私有地址（URL标准化后 ::ffff:x.x.x.x 变为 ::ffff:hex）
+    const blockedIPv4MappedPrefixes = [
+      '::ffff:7f00:',     // ::ffff:127.0.0.1 → ::ffff:7f00:1
+      '::ffff:a:',        // ::ffff:10.x.x.x → ::ffff:a:*
+      '::ffff:ac10:',     // ::ffff:172.16.x.x → ::ffff:ac10:*
+      '::ffff:c0a8:',     // ::ffff:192.168.x.x → ::ffff:c0a8:*
+      '::ffff:a9fe:',     // ::ffff:169.254.x.x → ::ffff:a9fe:*
+    ];
+
+    // IPv6 私有地址段前缀匹配
+    const blockedIPv6Prefixes = [
+      'fc00:', 'fd00:',     // 唯一本地地址 (ULA)
+      'fe80:',             // 链路本地
+    ];
+
+    for (const prefix of blockedPrefixes) {
+      if (hostname.startsWith(prefix)) {
         throw new Error(`Blocked hostname: ${hostname}`);
       }
     }
-    
+
+    for (const prefix of blockedIPv4MappedPrefixes) {
+      if (hostname.startsWith(prefix)) {
+        throw new Error(`Blocked IPv4-mapped hostname: ${hostname}`);
+      }
+    }
+
+    for (const prefix of blockedIPv6Prefixes) {
+      if (hostname.startsWith(prefix)) {
+        throw new Error(`Blocked IPv6 hostname: ${hostname}`);
+      }
+    }
+
     return parsedUrl.toString();
   } catch (error) {
     logger.warn('URL sanitization failed:', error.message);
@@ -166,6 +197,22 @@ export const getClientIP = (request) => {
          request.headers.get('x-real-ip') ||
          request.headers.get('cf-connecting-ip') ||
          'unknown';
+};
+
+// CORS 头生成 — 仅允许 *.shenzjd.com
+const ALLOWED_ORIGIN_SUFFIX = '.shenzjd.com';
+
+export const getCorsHeaders = (origin) => {
+  if (!origin || typeof origin !== 'string') return {};
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    if (hostname === 'shenzjd.com' || hostname.endsWith(ALLOWED_ORIGIN_SUFFIX)) {
+      return { 'Access-Control-Allow-Origin': origin };
+    }
+  } catch {
+    // 无效的 origin，不返回 CORS 头
+  }
+  return {};
 };
 
 // 标准API响应格式

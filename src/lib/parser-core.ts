@@ -3,12 +3,36 @@
  * 参考: https://github.com/wujunwei928/parse-video
  */
 
+export interface BaseParserOptions {
+  platform?: string;
+  userAgent?: string;
+  timeout?: number;
+}
+
+export interface ParseResult {
+  code: number;
+  msg: string;
+  data?: Record<string, unknown>;
+  platform?: string;
+  [key: string]: unknown;
+}
+
+interface UrlPattern {
+  platform: string;
+  domain: string;
+  parser: BaseParser;
+}
+
 /**
  * 基础解析器类
  * 所有平台解析器应继承此类
  */
 export class BaseParser {
-  constructor(options = {}) {
+  platform: string;
+  defaultHeaders: Record<string, string>;
+  timeout: number;
+
+  constructor(options: BaseParserOptions = {}) {
     this.platform = options.platform || "";
     this.defaultHeaders = {
       "User-Agent":
@@ -23,19 +47,19 @@ export class BaseParser {
     this.timeout = options.timeout || 15000;
   }
 
-  async parseShareUrl() {
+  async parseShareUrl(_url: string): Promise<ParseResult | null> {
     throw new Error("parseShareUrl must be implemented");
   }
 
-  async parseVideoId() {
+  async parseVideoId(_videoId: string): Promise<ParseResult | null> {
     throw new Error("parseVideoId must be implemented");
   }
 
   /**
    * 发送 HTTP 请求
    */
-  async fetch(url, options = {}) {
-    const defaultOptions = {
+  async fetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const defaultOptions: RequestInit = {
       headers: this.defaultHeaders,
       signal: AbortSignal.timeout(this.timeout),
       redirect: "follow",
@@ -48,7 +72,7 @@ export class BaseParser {
   /**
    * 从 HTML 中提取 JSON 数据
    */
-  extractJsonFromScript(html, pattern) {
+  extractJsonFromScript(html: string, pattern: string): unknown | null {
     const regex = new RegExp(pattern, "s");
     const match = html.match(regex);
     if (match && match[1]) {
@@ -65,7 +89,7 @@ export class BaseParser {
   /**
    * 清理 JSON 字符串
    */
-  cleanJsonString(jsonStr) {
+  cleanJsonString(jsonStr: string): string {
     return jsonStr
       .replace(/function\s*\([^)]*\)\s*{[^{}]*(?:{[^{}]*}[^{}]*)*}/g, "null")
       .replace(/:\s*undefined/g, ":null")
@@ -79,7 +103,7 @@ export class BaseParser {
   /**
    * 清理 URL
    */
-  cleanUrl(url) {
+  cleanUrl(url: string): string {
     return url
       .replace(/\\u002F/g, "/")
       .replace(/\\\//g, "/")
@@ -89,7 +113,7 @@ export class BaseParser {
   /**
    * 格式化响应
    */
-  formatResponse(code = 200, msg = "解析成功", data = {}) {
+  formatResponse(code: number = 200, msg: string = "解析成功", data: Record<string, unknown> = {}): ParseResult {
     return {
       code,
       msg,
@@ -104,6 +128,9 @@ export class BaseParser {
  * 管理所有平台解析器
  */
 class ParserRegistry {
+  parsers: Map<string, BaseParser>;
+  urlPatterns: UrlPattern[];
+
   constructor() {
     this.parsers = new Map();
     this.urlPatterns = [];
@@ -112,7 +139,7 @@ class ParserRegistry {
   /**
    * 注册解析器
    */
-  register(platform, parser, domains = []) {
+  register(platform: string, parser: BaseParser, domains: string[] = []): void {
     this.parsers.set(platform, parser);
     domains.forEach((domain) => {
       this.urlPatterns.push({
@@ -126,7 +153,7 @@ class ParserRegistry {
   /**
    * 根据 URL 获取解析器
    */
-  getParserByUrl(url) {
+  getParserByUrl(url: string): BaseParser | null {
     try {
       const hostname = new URL(url).hostname.toLowerCase();
 
@@ -147,14 +174,14 @@ class ParserRegistry {
   /**
    * 根据平台名称获取解析器
    */
-  getParserByPlatform(platform) {
+  getParserByPlatform(platform: string): BaseParser | null {
     return this.parsers.get(platform) || null;
   }
 
   /**
    * 获取所有已注册的解析器
    */
-  getAllParsers() {
+  getAllParsers(): Record<string, BaseParser> {
     return Object.fromEntries(this.parsers);
   }
 }
@@ -164,14 +191,13 @@ export const parserRegistry = new ParserRegistry();
 
 /**
  * 统一解析函数
- * @param {string} urlOrPlatform - URL 或平台名称
- * @param {string} videoId - 视频 ID（可选）
- * @returns {Promise<object>}
+ * @param urlOrPlatform - URL 或平台名称
+ * @param videoId - 视频 ID（可选）
  */
-export async function parseVideo(urlOrPlatform, videoId = null) {
+export async function parseVideo(urlOrPlatform: string, videoId: string | null = null): Promise<ParseResult> {
   // 如果是 URL 格式
   if (urlOrPlatform.includes("://") || urlOrPlatform.includes(".")) {
-    const { identifyPlatform } = await import("./platforms.js");
+    const { identifyPlatform } = await import("./platforms");
     const platform = identifyPlatform(urlOrPlatform);
 
     if (!platform) {
@@ -189,7 +215,8 @@ export async function parseVideo(urlOrPlatform, videoId = null) {
       };
     }
 
-    return await parser.parseShareUrl(urlOrPlatform);
+    const result = await parser.parseShareUrl(urlOrPlatform);
+    return result ?? { code: 500, msg: "解析失败" };
   }
 
   // 如果是平台 + ID 格式
@@ -202,7 +229,8 @@ export async function parseVideo(urlOrPlatform, videoId = null) {
       };
     }
 
-    return await parser.parseVideoId(videoId);
+    const result = await parser.parseVideoId(videoId);
+    return result ?? { code: 500, msg: "解析失败" };
   }
 
   return {
