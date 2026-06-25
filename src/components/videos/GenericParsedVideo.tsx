@@ -8,8 +8,8 @@ interface GenericParsedVideoProps {
 }
 
 // 判断 URL 是否需要通过代理（避免 Mixed Content 和 CORS）
-function proxyUrl(url: string, referer?: string): string {
-  if (!url) return url;
+function proxyUrl(url: string | undefined, referer?: string): string {
+  if (!url) return url || "";
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     if (
