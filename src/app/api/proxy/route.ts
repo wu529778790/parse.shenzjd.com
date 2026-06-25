@@ -378,17 +378,46 @@ export async function GET(req: NextRequest) {
     return undefined;
   }
 
-  // 视频 CDN 特殊处理 — 自动跟随重定向（抖音/小红书 CDN 会 302/QUIC 跳转）
+  // 视频 CDN 特殊处理 — 手动跟踪重定向，强制 HTTPS
+  // 抖音/小红书 CDN 返回的 http:// 链接可能触发浏览器 QUIC 协议错误，
+  // 这里手动处理重定向并将目标 URL 升级为 HTTPS
   async function fetchVideoWithFollow(url: string, referer: string): Promise<Response> {
     const headers: Record<string, string> = {
       "User-Agent": MOBILE_UA,
     };
     if (referer) headers["Referer"] = referer;
 
-    return await fetchWithTimeout(url, {
-      headers,
-      redirect: "follow",
-    });
+    let currentUrl = url;
+    for (let i = 0; i < 5; i++) {
+      const resp = await fetchWithTimeout(currentUrl, {
+        headers,
+        redirect: "manual",
+      });
+
+      if (resp.status < 300 || resp.status >= 400) {
+        return resp;
+      }
+
+      const location = resp.headers.get("location");
+      if (!location) return resp;
+
+      // 解析重定向目标并强制升级为 HTTPS（避免 QUIC 协议）
+      let redirectUrl: URL;
+      try {
+        redirectUrl = new URL(location, currentUrl);
+      } catch {
+        return resp;
+      }
+
+      // 强制升级为 HTTPS，避免 QUIC 协议错误
+      if (redirectUrl.protocol === "http:") {
+        redirectUrl.protocol = "https:";
+      }
+
+      currentUrl = redirectUrl.toString();
+    }
+
+    throw new Error("Too many redirects");
   }
 
   const isBilibiliTarget = isBilibiliHostname(parsed.hostname);

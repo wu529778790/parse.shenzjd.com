@@ -7,6 +7,30 @@ interface GenericParsedVideoProps {
   data: ApiResponse;
 }
 
+// 判断 URL 是否需要通过代理（避免 Mixed Content 和 CORS）
+function proxyUrl(url: string, referer?: string): string {
+  if (!url) return url;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (
+      hostname.includes("snssdk") ||
+      hostname.includes("douyinvod") ||
+      hostname.includes("douyinpic") ||
+      hostname.includes("iesdouyin") ||
+      hostname.includes("aweme") ||
+      hostname.includes("xhscdn") ||
+      hostname.includes("xhsimgs") ||
+      hostname.includes("redbook")
+    ) {
+      const ref = referer || (hostname.includes("xhscdn") || hostname.includes("xhsimgs") || hostname.includes("redbook")
+        ? "https://www.xiaohongshu.com/"
+        : "https://www.douyin.com/");
+      return `/api/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(ref)}`;
+    }
+  } catch {}
+  return url;
+}
+
 export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -25,7 +49,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
         <div className="flex items-center gap-4">
           {d.avatar && (
             <Image
-              src={d.avatar}
+              src={proxyUrl(d.avatar)}
               alt={d.author || ""}
               width={56}
               height={56}
@@ -51,7 +75,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
           <video
             ref={videoRef}
             src={videoUrl}
-            poster={d.cover || undefined}
+            poster={proxyUrl(d.cover)}
             controls
             playsInline
             className="w-full max-h-[70vh] bg-black"
@@ -69,7 +93,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
       {!videoUrl && d.cover && (
         <div className="glass-card overflow-hidden">
           <Image
-            src={d.cover}
+            src={proxyUrl(d.cover)}
             alt=""
             width={800}
             height={450}
@@ -84,12 +108,12 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
           {images.map((src, i) => (
             <a
               key={`${src}-${i}`}
-              href={src}
+              href={proxyUrl(src)}
               target="_blank"
               rel="noopener noreferrer"
               className="relative aspect-square rounded-lg overflow-hidden border border-border-subtle">
               <Image
-                src={src}
+                src={proxyUrl(src)}
                 alt=""
                 fill
                 className="object-cover"
