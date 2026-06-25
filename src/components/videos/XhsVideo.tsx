@@ -95,7 +95,6 @@ export default function XhsVideo({ data }: XhsVideoProps) {
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}
               onPlay={handlePlay}

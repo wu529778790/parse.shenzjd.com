@@ -219,6 +219,8 @@ const ALLOWED_DOMAINS = [
   "xiaohongshu.com",
   "xhslink.com",
   "xhscdn.com",
+  "xhsimgs.com",
+  "redbook.today",
   "pipigx.com",
   "pipix.com",
   "ippzone.com",
@@ -333,8 +335,9 @@ export async function GET(req: NextRequest) {
 
     if (
       lower.includes("xiaohongshu") ||
-      lower.includes("xhs") ||
-      lower.includes("xhscdn")
+      lower.includes("xhscdn") ||
+      lower.includes("xhsimgs") ||
+      lower.includes("redbook")
     ) {
       return "https://www.xiaohongshu.com/";
     }
@@ -494,7 +497,10 @@ export async function GET(req: NextRequest) {
   if (
     parsed.hostname.includes("snssdk") ||
     parsed.hostname.includes("douyinvod") ||
-    parsed.hostname.includes("aweme")
+    parsed.hostname.includes("aweme") ||
+    parsed.hostname.includes("xhscdn") ||
+    parsed.hostname.includes("xhsimgs") ||
+    parsed.hostname.includes("redbook")
   ) {
     const isImage = contentType.includes("image");
     if (
