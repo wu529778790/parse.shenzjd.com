@@ -7,14 +7,11 @@ RUN npm config set registry https://registry.npmmirror.com
 # 设置工作目录
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm
-
 # 复制 package 文件
-COPY package.json pnpm-lock.yaml ./
+COPY package.json package-lock.json ./
 
 # 安装依赖
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 # 复制所有文件
 COPY . .
@@ -25,10 +22,10 @@ ARG BUILD_ID=local
 ENV NEXT_BUILD_ID=${BUILD_ID}
 
 # 构建应用
-RUN pnpm build
+RUN npm run build
 
 # 暴露端口
 EXPOSE 3000
 
 # 启动应用
-CMD ["pnpm", "start"]
+CMD ["npm", "start"]

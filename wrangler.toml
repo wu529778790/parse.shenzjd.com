@@ -4,7 +4,7 @@ compatibility_date = "2025-08-14"
 compatibility_flags = ["nodejs_compat"]
 
 [build]
-command = "pnpm dlx @cloudflare/next-on-pages@1 && sh -c \"printf '_worker.js\\n' > .vercel/output/static/.assetsignore\""
+command = "npx @cloudflare/next-on-pages@1 && sh -c \"printf '_worker.js\\n' > .vercel/output/static/.assetsignore\""
 
 [assets]
 directory = ".vercel/output/static"

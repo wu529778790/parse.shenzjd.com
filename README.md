@@ -50,7 +50,7 @@ docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:
 ### 单元测试（默认，无需外网）
 
 ```bash
-pnpm test
+npm test
 ```
 
 包含 URL 提取 / 平台识别、`api-utils` 等本地逻辑，**不访问**各视频平台。
@@ -67,7 +67,7 @@ pnpm test
 2. 执行：
 
    ```bash
-   pnpm test:live
+   npm run test:live
    ```
 
    该命令会设置 `RUN_LIVE_PARSE=1`，并对 **24 个解析路由** 各跑一条用例；**缺少任一 `LIVE_URL_*` 时会在 `beforeAll` 中报错并列出变量名**。

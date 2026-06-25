@@ -9,16 +9,16 @@ ParseShort is a short video parsing and download service built with **Next.js 15
 ## Commands
 
 ```bash
-pnpm dev           # Dev server with Turbopack
-pnpm build         # Production build
-pnpm start         # Start production server
-pnpm lint          # ESLint (next lint)
-pnpm test          # Unit tests via Vitest (no network)
-pnpm test:watch    # Vitest in watch mode
-pnpm test:live     # Live integration tests (requires RUN_LIVE_PARSE=1 + URLs in .env.local)
+npm run dev       # Dev server with Turbopack
+npm run build     # Production build
+npm start         # Start production server
+npm run lint      # ESLint (next lint)
+npm test          # Unit tests via Vitest (no network)
+npm run test:watch # Vitest in watch mode
+npm run test:live  # Live integration tests (requires RUN_LIVE_PARSE=1 + URLs in .env.local)
 ```
 
-Run a single test file: `pnpm vitest run tests/share.test.ts`
+Run a single test file: `npx vitest run tests/share.test.ts`
 
 ## Architecture
 
@@ -67,7 +67,7 @@ Configure in `.env.local` for full functionality:
 
 - **Mixed JS/TS**: Core lib files are plain JS (`src/lib/*.js`), API routes are JS, components are TSX, types in `src/types/`
 - **Path alias**: `@/*` maps to `./src/*` (configured in tsconfig + vitest)
-- **pnpm** is the package manager
+- **npm** is the package manager
 - Test files use `@ts-nocheck` for flexibility
 - API response format: `{ code: 200, msg: "...", data: {...}, platform: "..." }`
 
