@@ -378,12 +378,12 @@ export async function GET(req: NextRequest) {
     return undefined;
   }
 
-  // 抖音视频特殊处理函数 — 自动跟随重定向（抖音 CDN 会 302 跳转）
-  async function fetchDouyinVideo(url: string): Promise<Response> {
-    const headers = {
+  // 视频 CDN 特殊处理 — 自动跟随重定向（抖音/小红书 CDN 会 302/QUIC 跳转）
+  async function fetchVideoWithFollow(url: string, referer: string): Promise<Response> {
+    const headers: Record<string, string> = {
       "User-Agent": MOBILE_UA,
-      Referer: "https://www.douyin.com/",
     };
+    if (referer) headers["Referer"] = referer;
 
     return await fetchWithTimeout(url, {
       headers,
@@ -424,9 +424,17 @@ export async function GET(req: NextRequest) {
       parsed.hostname.includes("douyinvod") ||
       parsed.hostname.includes("aweme");
 
-    if (isDouyinTarget) {
-      // 抖音视频：fetchDouyinVideo 内部使用 redirect: "follow"，自动跟随重定向链
-      upstreamResp = await fetchDouyinVideo(currentUrl);
+    const isXhsTarget =
+      parsed.hostname.includes("xhscdn") ||
+      parsed.hostname.includes("xhsimgs");
+
+    // 抖音/小红书视频 CDN：使用 redirect: "follow" 自动跟随重定向链
+    // 因为这些 CDN 使用 QUIC 协议或复杂的 302 跳转，手动处理会失败
+    if (isDouyinTarget || isXhsTarget) {
+      const referer = isXhsTarget
+        ? "https://www.xiaohongshu.com/"
+        : "https://www.douyin.com/";
+      upstreamResp = await fetchVideoWithFollow(currentUrl, referer);
     } else {
       // 其他资源：手动处理重定向，验证每次跳转目标
       for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount++) {
