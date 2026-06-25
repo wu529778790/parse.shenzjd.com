@@ -7,6 +7,23 @@ interface XhsVideoProps {
   data: ApiResponse;
 }
 
+// 判断 URL 是否为小红书 CDN（需要通过代理）
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    // 小红书 CDN 域名统一走代理，避免 Mixed Content 和 CORS 问题
+    if (
+      hostname.includes("xhscdn") ||
+      hostname.includes("xhsimgs") ||
+      hostname.includes("redbook")
+    ) {
+      return `/api/proxy?url=${encodeURIComponent(url)}&referer=https://www.xiaohongshu.com/`;
+    }
+  } catch {}
+  return url;
+}
+
 export default function XhsVideo({ data }: XhsVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -45,7 +62,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#ff2442] to-[#ff5c7c] blur-sm opacity-50" />
               <Image
-                src={xhsData.avatar}
+                src={proxyUrl(xhsData.avatar)}
                 alt={xhsData.author}
                 width={56}
                 height={56}
@@ -91,7 +108,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
             <video
               ref={videoRef}
               controls
-              poster={xhsData.cover}
+              poster={proxyUrl(xhsData.cover)}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
@@ -144,7 +161,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
                 <div className="absolute inset-0 bg-glass-2 animate-pulse" />
               )}
               <Image
-                src={xhsData.images[0]}
+                src={proxyUrl(xhsData.images[0])}
                 alt={xhsData.title || "图片"}
                 fill
                 sizes="(max-width: 800px) 100vw, 800px"
@@ -174,7 +191,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
                       : ""
                   }`}>
                   <Image
-                    src={imageUrl}
+                    src={proxyUrl(imageUrl)}
                     alt={`${xhsData.title || "图片"} ${index + 1}`}
                     fill
                     sizes="(max-width: 800px) 50vw, 400px"

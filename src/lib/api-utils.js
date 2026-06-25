@@ -75,7 +75,7 @@ export const setCacheResponse = (url, data) => {
 export const rateLimit = (() => {
   const requests = new Map();
   const WINDOW_SIZE = 60000; // 1分钟
-  const MAX_REQUESTS = 30; // 每分钟最多30次请求（视频播放需要更多）
+  const MAX_REQUESTS = 60; // 每分钟最多60次请求（视频播放+图片代理会产生大量请求）
 
   return (ip) => {
     // Vitest 单测会短时间触发大量解析请求，避免误触生产限流逻辑
