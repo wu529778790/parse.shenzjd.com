@@ -8,8 +8,8 @@ interface DouyinVideoProps {
 }
 
 // 判断 URL 是否为抖音/小红书 CDN（需要通过代理，避免 Mixed Content 和 CORS）
-function proxyUrl(url: string): string {
-  if (!url) return url;
+function proxyUrl(url: string | undefined): string {
+  if (!url) return url || "";
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     if (

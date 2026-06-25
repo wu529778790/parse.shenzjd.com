@@ -8,8 +8,8 @@ interface XhsVideoProps {
 }
 
 // 判断 URL 是否为小红书 CDN（需要通过代理）
-function proxyUrl(url: string): string {
-  if (!url) return url;
+function proxyUrl(url: string | undefined): string {
+  if (!url) return url || "";
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     // 小红书 CDN 域名统一走代理，避免 Mixed Content 和 CORS 问题
