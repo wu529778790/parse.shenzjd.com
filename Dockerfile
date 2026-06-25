@@ -1,5 +1,8 @@
-# 使用 Node.js 官方镜像
+# 使用 Node.js 官方镜像（添加镜像源加速，防止 Docker Hub 超时）
 FROM node:20-alpine
+
+# 设置 npm 镜像源（国内加速）
+RUN npm config set registry https://registry.npmmirror.com
 
 # 设置工作目录
 WORKDIR /app
