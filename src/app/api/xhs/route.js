@@ -238,6 +238,7 @@ async function xhs(url) {
     }
 
     if (videoUrl) {
+      console.log("[xhs] videoUrl:", videoUrl);
       // 视频内容
       data.cover = "";
       const imageList = noteData.imageList;

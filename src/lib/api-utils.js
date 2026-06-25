@@ -75,7 +75,7 @@ export const setCacheResponse = (url, data) => {
 export const rateLimit = (() => {
   const requests = new Map();
   const WINDOW_SIZE = 60000; // 1分钟
-  const MAX_REQUESTS = 10; // 每分钟最多10次请求
+  const MAX_REQUESTS = 30; // 每分钟最多30次请求（视频播放需要更多）
 
   return (ip) => {
     // Vitest 单测会短时间触发大量解析请求，避免误触生产限流逻辑
@@ -83,19 +83,21 @@ export const rateLimit = (() => {
       return true;
     }
     const now = Date.now();
-    const userRequests = requests.get(ip) || [];
+    // 取 x-forwarded-for 的第一个 IP（真实客户端 IP）
+    const realIp = ip.split(",")[0].trim();
+    const userRequests = requests.get(realIp) || [];
 
     // 清理过期请求
     const recentRequests = userRequests.filter(time => now - time < WINDOW_SIZE);
 
     if (recentRequests.length >= MAX_REQUESTS) {
-      logger.warn(`Rate limit exceeded for IP: ${ip}`);
+      logger.warn(`Rate limit exceeded for IP: ${realIp}`);
       return false; // 超出限制
     }
 
     recentRequests.push(now);
-    requests.set(ip, recentRequests);
-    logger.log(`Request allowed for IP: ${ip}, count: ${recentRequests.length}/${MAX_REQUESTS}`);
+    requests.set(realIp, recentRequests);
+    logger.log(`Request allowed for IP: ${realIp}, count: ${recentRequests.length}/${MAX_REQUESTS}`);
     return true; // 允许请求
   };
 })();

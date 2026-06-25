@@ -300,6 +300,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  console.log("[proxy] target:", targetUrl.substring(0, 120));
+  console.log("[proxy] hostname:", parsed.hostname);
+
   function guessRefererByHost(hostname: string): string | undefined {
     const lower = hostname.toLowerCase();
 
