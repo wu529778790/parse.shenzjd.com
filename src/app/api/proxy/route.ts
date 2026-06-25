@@ -378,7 +378,7 @@ export async function GET(req: NextRequest) {
     return undefined;
   }
 
-  // 抖音视频特殊处理函数
+  // 抖音视频特殊处理函数 — 自动跟随重定向（抖音 CDN 会 302 跳转）
   async function fetchDouyinVideo(url: string): Promise<Response> {
     const headers = {
       "User-Agent": MOBILE_UA,
@@ -387,7 +387,7 @@ export async function GET(req: NextRequest) {
 
     return await fetchWithTimeout(url, {
       headers,
-      redirect: "manual",
+      redirect: "follow",
     });
   }
 
@@ -424,56 +424,60 @@ export async function GET(req: NextRequest) {
       parsed.hostname.includes("douyinvod") ||
       parsed.hostname.includes("aweme");
 
-    for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount++) {
-      const resp = isDouyinTarget && redirectCount === 0
-        ? await fetchDouyinVideo(currentUrl)
-        : await fetchWithTimeout(currentUrl, {
-            headers: upstreamHeaders,
-            redirect: "manual",
+    if (isDouyinTarget) {
+      // 抖音视频：fetchDouyinVideo 内部使用 redirect: "follow"，自动跟随重定向链
+      upstreamResp = await fetchDouyinVideo(currentUrl);
+    } else {
+      // 其他资源：手动处理重定向，验证每次跳转目标
+      for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount++) {
+        const resp = await fetchWithTimeout(currentUrl, {
+          headers: upstreamHeaders,
+          redirect: "manual",
+        });
+
+        // 非重定向响应，直接返回
+        if (resp.status < 300 || resp.status >= 400) {
+          upstreamResp = resp;
+          break;
+        }
+
+        // 处理 3xx 重定向 — 验证目标地址
+        const location = resp.headers.get("location");
+        if (!location) {
+          upstreamResp = resp;
+          break;
+        }
+
+        // 解析重定向目标
+        let redirectUrl: URL;
+        try {
+          redirectUrl = new URL(location, currentUrl);
+        } catch {
+          upstreamResp = resp;
+          break;
+        }
+
+        // 验证重定向目标的 scheme
+        if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
+          logger.warn(`Redirect to non-http scheme blocked: ${redirectUrl.protocol}`);
+          return new Response("Redirect to non-http scheme blocked", {
+            status: 403,
+            headers: { "Access-Control-Allow-Origin": "*" },
           });
+        }
 
-      // 非重定向响应，直接返回
-      if (resp.status < 300 || resp.status >= 400) {
-        upstreamResp = resp;
-        break;
+        // 验证重定向目标不是内网地址
+        if (isPrivateHostname(redirectUrl.hostname)) {
+          logger.warn(`SSRF redirect blocked: ${redirectUrl.hostname}`);
+          return new Response("Access denied: redirect to private network", {
+            status: 403,
+            headers: { "Access-Control-Allow-Origin": "*" },
+          });
+        }
+
+        // 跟进重定向
+        currentUrl = redirectUrl.toString();
       }
-
-      // 处理 3xx 重定向 — 验证目标地址
-      const location = resp.headers.get("location");
-      if (!location) {
-        upstreamResp = resp;
-        break;
-      }
-
-      // 解析重定向目标
-      let redirectUrl: URL;
-      try {
-        redirectUrl = new URL(location, currentUrl);
-      } catch {
-        upstreamResp = resp;
-        break;
-      }
-
-      // 验证重定向目标的 scheme
-      if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
-        logger.warn(`Redirect to non-http scheme blocked: ${redirectUrl.protocol}`);
-        return new Response("Redirect to non-http scheme blocked", {
-          status: 403,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        });
-      }
-
-      // 验证重定向目标不是内网地址
-      if (isPrivateHostname(redirectUrl.hostname)) {
-        logger.warn(`SSRF redirect blocked: ${redirectUrl.hostname}`);
-        return new Response("Access denied: redirect to private network", {
-          status: 403,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        });
-      }
-
-      // 跟进重定向
-      currentUrl = redirectUrl.toString();
     }
 
     if (!upstreamResp) {

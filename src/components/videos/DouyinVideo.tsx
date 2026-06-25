@@ -7,6 +7,30 @@ interface DouyinVideoProps {
   data: ApiResponse;
 }
 
+// 判断 URL 是否为抖音/小红书 CDN（需要通过代理，避免 Mixed Content 和 CORS）
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (
+      hostname.includes("snssdk") ||
+      hostname.includes("douyinvod") ||
+      hostname.includes("douyinpic") ||
+      hostname.includes("iesdouyin") ||
+      hostname.includes("aweme") ||
+      hostname.includes("xhscdn") ||
+      hostname.includes("xhsimgs") ||
+      hostname.includes("redbook")
+    ) {
+      const referer = hostname.includes("xhscdn") || hostname.includes("xhsimgs") || hostname.includes("redbook")
+        ? "https://www.xiaohongshu.com/"
+        : "https://www.douyin.com/";
+      return `/api/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
+    }
+  } catch {}
+  return url;
+}
+
 export default function DouyinVideo({ data }: DouyinVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,7 +71,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
             <video
               ref={videoRef}
               controls
-              poster={douyinData.cover}
+              poster={proxyUrl(douyinData.cover)}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
@@ -125,7 +149,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                 <div className="absolute inset-0 bg-glass-2 animate-pulse" />
               )}
               <Image
-                src={douyinData.images[0]}
+                src={proxyUrl(douyinData.images[0])}
                 alt={douyinData.title || "图片"}
                 width={864}
                 height={1920}
@@ -142,7 +166,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                   key={index}
                   className="relative rounded-xl overflow-hidden group">
                   <Image
-                    src={imageUrl}
+                    src={proxyUrl(imageUrl)}
                     alt={`${douyinData.title || "图片"} ${index + 1}`}
                     width={864}
                     height={1920}
