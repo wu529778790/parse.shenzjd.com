@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "codebuddy-chat-web@cb_teams_marketplace": false,
+    "agent-sdk-dev@cb_teams_marketplace": false,
+    "modern-webapp@cb_teams_marketplace": true
+  }
+}
