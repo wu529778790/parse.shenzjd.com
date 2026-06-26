@@ -53,6 +53,22 @@ jobs:
           git checkout "${{ steps.b.outputs.local_default }}"
           # 保留 fork 的提交，合并上游最新提交
           git merge --no-edit "upstream/${{ steps.b.outputs.upstream_default }}"
+
+      - name: Setup Node.js for verification
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Verify (test + build) before pushing
+        run: |
+          # 合并后先验证，失败则不 push，避免破坏性改动无声进默认分支
+          npm ci
+          npm test
+          npm run build
+
+      - name: Push merged result
+        run: |
           git push origin "${{ steps.b.outputs.local_default }}"
 
       - name: Sync tags

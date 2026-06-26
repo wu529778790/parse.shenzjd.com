@@ -17,6 +17,21 @@ on:
       - "package-lock.json"
       - "tailwind.config.ts"
       - "postcss.config.mjs"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/deploy-to-docker.yaml"
+      - "src/**"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "public/**"
+      - "next.config.*"
+      - "tsconfig.json"
+      - "vitest.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tailwind.config.ts"
+      - "postcss.config.mjs"
   workflow_dispatch:
 
 permissions:
@@ -99,8 +114,9 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
           sbom: false
+          # 传入 git sha 作为稳定 buildId，避免滚动部署前后端 build 不一致
           build-args: |
-            BUILDKIT_INLINE_CACHE=1
+            BUILD_ID=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
