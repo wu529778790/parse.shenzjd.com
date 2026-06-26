@@ -428,6 +428,30 @@ export async function GET(req: NextRequest) {
         redirectUrl.protocol = "https:";
       }
 
+      // SSRF 防护：重定向目标也必须过内网检查与域名白名单
+      // 与下方"其他资源"分支保持一致，避免抖音/小红书路径成为绕过入口
+      if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
+        logger.warn(`Video CDN redirect to non-http scheme blocked: ${redirectUrl.protocol}`);
+        return new Response("Redirect to non-http scheme blocked", {
+          status: 403,
+          headers: { ...corsHeaders },
+        });
+      }
+      if (isPrivateHostname(redirectUrl.hostname)) {
+        logger.warn(`SSRF blocked (video CDN redirect): ${redirectUrl.hostname}`);
+        return new Response("Access denied: redirect to private network", {
+          status: 403,
+          headers: { ...corsHeaders },
+        });
+      }
+      if (!isAllowedDomain(redirectUrl.hostname)) {
+        logger.warn(`Domain not allowed (video CDN redirect): ${redirectUrl.hostname}`);
+        return new Response("Domain not allowed", {
+          status: 403,
+          headers: { ...corsHeaders },
+        });
+      }
+
       currentUrl = redirectUrl.toString();
     }
 
