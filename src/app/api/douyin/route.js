@@ -93,7 +93,7 @@ async function douyin(url) {
     };
   } catch (error) {
     logger.error("Error in douyin function:", error);
-    return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
+    return { code: 500, msg: "服务器内部错误" };
   }
 }
 
@@ -174,7 +174,7 @@ function parseVideoData(videoInfo) {
     };
   } catch (error) {
     logger.error("Error parsing video data:", error);
-    return { code: 500, msg: `服务器错误：${error.message || "未知错误"}` };
+    return { code: 500, msg: "服务器内部错误" };
   }
 }
 

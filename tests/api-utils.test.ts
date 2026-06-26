@@ -119,13 +119,15 @@ describe("api-utils", () => {
       });
     });
 
-    it("serverErrorResponse should create server error response", () => {
-      const error = new Error("服务器错误");
+    it("serverErrorResponse should return fixed message without leaking error details", () => {
+      const error = new Error("internal detail with /etc/passwd path");
       const response = serverErrorResponse(error);
+      // 对外只返回固定文案，不透传 error.message（避免泄漏内部实现）
       expect(response).toEqual({
         code: 500,
-        msg: "服务器错误",
+        msg: "服务器内部错误",
       });
+      expect(response.msg).not.toContain("internal detail");
     });
 
     it("parseErrorResponse should create parse error response", () => {

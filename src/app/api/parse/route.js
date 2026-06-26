@@ -185,7 +185,7 @@ async function unifiedParser(input, options = {}) {
     logger.error("统一解析器错误:", error);
     return {
       code: 500,
-      msg: `服务器错误：${error.message}`,
+      msg: "服务器内部错误",
     };
   }
 }

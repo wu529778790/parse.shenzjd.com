@@ -1,4 +1,5 @@
 import { createApiHandler } from "@/lib/api-middleware";
+import { logger } from "@/lib/api-utils";
 
 export const runtime = "edge";
 
@@ -285,7 +286,8 @@ async function xhs(url) {
 
     return output(404, "该内容不包含视频或图片");
   } catch (error) {
-    return output(500, `服务器错误：${error.message || "未知错误"}`);
+    logger.error("xhs parse error:", error);
+    return output(500, "服务器内部错误");
   }
 }
 

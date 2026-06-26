@@ -59,8 +59,8 @@ async function ppxiaParse(url) {
       },
     };
   } catch (error) {
-    logger.error("ppxia parse error:", error.message);
-    return { code: 500, msg: "解析失败：" + error.message };
+    logger.error("ppxia parse error:", error);
+    return { code: 500, msg: "服务器内部错误" };
   }
 }
 

@@ -1,4 +1,5 @@
 import { createApiHandler } from "@/lib/api-middleware";
+import { logger } from "@/lib/api-utils";
 import { parseKuaishou, formatResponse } from "@/lib/kuaishouCore";
 
 export const runtime = "edge";
@@ -12,7 +13,8 @@ async function kuaishouParse(url) {
     }
     return result;
   } catch (error) {
-    return formatResponse(500, "服务器错误", error.message);
+    logger.error("kuaishou parse error:", error);
+    return formatResponse(500, "服务器内部错误");
   }
 }
 

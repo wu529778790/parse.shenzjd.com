@@ -237,9 +237,12 @@ export const errorResponse = (msg, code = 400) => {
 };
 
 // 服务器错误响应
+// 对外只返回固定文案，不透传 error.message，避免泄漏内部实现细节
+// （如被 SSRF 防护拦下的内网地址、库版本、文件路径），形成探测回带通道。
+// 错误详情在此记入日志，确保可排查。
 export const serverErrorResponse = (error) => {
-  const message = error?.message || "服务器错误";
-  return createResponse(500, message);
+  logger.error("服务器错误:", error?.message || "unknown error");
+  return createResponse(500, "服务器内部错误");
 };
 
 // 解析失败响应

@@ -94,8 +94,8 @@ async function getMusicInfo(url) {
       },
     };
   } catch (error) {
-    logger.error("qsmusic parse error:", error.message);
-    return { code: 500, msg: "解析失败：" + error.message };
+    logger.error("qsmusic parse error:", error);
+    return { code: 500, msg: "服务器内部错误" };
   }
 }
 
