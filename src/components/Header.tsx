@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 const navLinks = [
+  { name: "首页", href: "https://shenzjd.com", icon: "🏠" },
   { name: "Alist", href: "https://alist.shenzjd.com", icon: "📁" },
   { name: "网盘搜索", href: "https://panhub.shenzjd.com", icon: "🔍" },
   { name: "视频解析", href: "https://parse.shenzjd.com", icon: "🎬", active: true },
