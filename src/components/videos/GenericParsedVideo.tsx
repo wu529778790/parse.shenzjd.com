@@ -40,7 +40,9 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   }
 
   const d = data.data as GenericParsedData;
-  const videoUrl = d.url || "";
+  // 视频源也需走代理：抖音/小红书 CDN 的直链需要正确 Referer 才能播放，
+  // 直接用 d.url 会因跨域/Referer 校验失败而无法加载（与 avatar/cover/images 保持一致）
+  const videoUrl = proxyUrl(d.url || "");
   const images = d.images?.filter(Boolean) || [];
 
   return (

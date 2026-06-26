@@ -33,6 +33,9 @@ function renderPlatformResult(result: ApiResponse) {
     case "ppxia":
       return <PpxiaVideo data={result} />;
     default:
+      // 头部 8 个平台有专属 UI；其余平台（huya/acfun/xigua/twitter 等）
+      // 后端返回的都是 GenericParsedData 扁平结构，由 GenericParsedVideo 统一渲染。
+      // 如需为某平台定制，新增对应组件并在此补充 case 即可。
       return <GenericParsedVideo data={result} />;
   }
 }
