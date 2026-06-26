@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { logger, rateLimit, getClientIP } from "@/lib/api-utils";
+import { logger, rateLimit, getClientIP, getCorsHeaders } from "@/lib/api-utils";
 
 const UPSTREAM_TIMEOUT_MS = Number(
   process.env.PROXY_UPSTREAM_TIMEOUT_MS || 30000
@@ -44,22 +44,30 @@ function rateLimitResponse(): Response {
   );
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(req: NextRequest) {
+  const corsHeaders = getCorsHeaders(req.headers.get("origin") || "") as Record<
+    string,
+    string
+  >;
   return new Response(null, {
     status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders,
       "Access-Control-Allow-Methods": "GET,OPTIONS",
-      "Access-Control-Allow-Headers": "*",
+      "Access-Control-Allow-Headers": "Range",
     },
   });
 }
 
-function proxyErrorResponse(message: string, status = 502): Response {
+function proxyErrorResponse(
+  message: string,
+  status = 502,
+  corsHeaders: Record<string, string> = {}
+): Response {
   return new Response(message, {
     status,
     headers: {
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders,
       "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
@@ -238,6 +246,12 @@ function isAllowedDomain(hostname: string): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  // 统一计算 CORS 头：仅允许 *.shenzjd.com（与解析接口策略一致）
+  // proxy 响应会喂给前端 <video crossOrigin="anonymous">，必须回显正确 Origin，否则浏览器拒绝加载
+  const corsHeaders = getCorsHeaders(
+    req.headers.get("origin") || ""
+  ) as Record<string, string>;
+
   // Basic Auth 验证
   if (!verifyBasicAuth(req)) {
     return unauthorizedResponse();
@@ -260,7 +274,7 @@ export async function GET(req: NextRequest) {
   if (!targetUrl) {
     return new Response("Missing url", {
       status: 400,
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders },
     });
   }
 
@@ -268,7 +282,7 @@ export async function GET(req: NextRequest) {
   if (!/^https?:\/\//i.test(targetUrl)) {
     return new Response("Invalid url scheme", {
       status: 400,
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders },
     });
   }
 
@@ -278,7 +292,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return new Response("Invalid url", {
       status: 400,
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders },
     });
   }
 
@@ -287,7 +301,7 @@ export async function GET(req: NextRequest) {
     logger.warn(`SSRF blocked: ${parsed.hostname}`);
     return new Response("Access denied: private network", {
       status: 403,
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders },
     });
   }
 
@@ -296,7 +310,7 @@ export async function GET(req: NextRequest) {
     logger.warn(`Domain not allowed: ${parsed.hostname}`);
     return new Response("Domain not allowed", {
       status: 403,
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders },
     });
   }
 
@@ -499,7 +513,7 @@ export async function GET(req: NextRequest) {
           logger.warn(`Redirect to non-http scheme blocked: ${redirectUrl.protocol}`);
           return new Response("Redirect to non-http scheme blocked", {
             status: 403,
-            headers: { "Access-Control-Allow-Origin": "*" },
+            headers: { ...corsHeaders },
           });
         }
 
@@ -508,7 +522,7 @@ export async function GET(req: NextRequest) {
           logger.warn(`SSRF redirect blocked: ${redirectUrl.hostname}`);
           return new Response("Access denied: redirect to private network", {
             status: 403,
-            headers: { "Access-Control-Allow-Origin": "*" },
+            headers: { ...corsHeaders },
           });
         }
 
@@ -520,14 +534,15 @@ export async function GET(req: NextRequest) {
     if (!upstreamResp) {
       return new Response("Too many redirects", {
         status: 502,
-        headers: { "Access-Control-Allow-Origin": "*" },
+        headers: { ...corsHeaders },
       });
     }
   } catch (error) {
     logger.error("Proxy upstream fetch failed:", error);
     return proxyErrorResponse(
       isTimeoutError(error) ? "Upstream request timed out" : "Upstream fetch failed",
-      isTimeoutError(error) ? 504 : 502
+      isTimeoutError(error) ? 504 : 502,
+      corsHeaders
     );
   }
 
@@ -567,7 +582,7 @@ export async function GET(req: NextRequest) {
   const finalFilename = sanitizeFilename(baseNameNoExt) + (ext || "");
 
   const respHeaders: Record<string, string> = {
-    "Access-Control-Allow-Origin": "*",
+    ...corsHeaders,
     "Content-Type": finalContentType,
     "Cache-Control": "no-store, no-cache, must-revalidate",
   };
