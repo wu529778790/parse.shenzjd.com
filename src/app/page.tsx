@@ -66,55 +66,18 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="relative min-h-screen" style={{ zIndex: 1 }}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
           {/* Hero Section */}
-          <header className="text-center mb-16 reveal">
-            {/* Logo Mark */}
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-2xl mb-8 float-animation">
-              <svg
-                className="w-10 h-10 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125-.504 1.125-1.125M12 14.625c0 .621.504 1.125 1.125 1.125m0 1.5c0 .621-.504 1.125-1.125 1.125m0 0c-.621 0-1.125.504-1.125 1.125M12 14.625v1.5m0-1.5c0 .621.504-1.125 1.125-1.125M12 14.625c0 .621-.504-1.125-1.125-1.125"
-                />
-              </svg>
-            </div>
-
+          <header className="text-center mb-8 reveal">
             {/* Title */}
-            <h1 className="text-5xl sm:text-6xl font-bold mb-4 glow-text">
+            <h1 className="text-3xl sm:text-4xl font-bold mb-2 glow-text">
               <span className="gradient-text">ParseShort</span>
             </h1>
 
             {/* Subtitle */}
-            <p className="text-lg sm:text-xl text-secondary max-w-xl mx-auto leading-relaxed">
-              精通各平台短视频解析
-              <span className="block mt-2 text-sm text-muted">
-                抖音 / B站 / 快手 / 小红书 / 虎牙 / 西瓜 / X…
-              </span>
+            <p className="text-sm text-muted max-w-md mx-auto">
+              抖音 / B站 / 快手 / 小红书 / 虎牙 / 西瓜 / X…
             </p>
-
-            {/* Platform Pills */}
-            <div className="flex flex-wrap justify-center gap-2 mt-6">
-              {[
-                { name: "抖音", color: "bg-[#fe2c55]/10 text-[#fe2c55]" },
-                { name: "B站", color: "bg-[#00aeec]/10 text-[#00aeec]" },
-                { name: "快手", color: "bg-[#ff6600]/10 text-[#ff6600]" },
-                { name: "小红书", color: "bg-[#ff2442]/10 text-[#ff2442]" },
-                { name: "虎牙", color: "bg-[#ff9f1a]/10 text-[#ff9f1a]" },
-                { name: "西瓜", color: "bg-[#ff6348]/10 text-[#ff6348]" },
-              ].map((platform, i) => (
-                <span
-                  key={platform.name}
-                  className={`px-3 py-1 rounded-full text-xs font-medium ${platform.color} reveal reveal-delay-${i + 1}`}>
-                  {platform.name}
-                </span>
-              ))}
-            </div>
           </header>
 
           {/* Form Section */}
