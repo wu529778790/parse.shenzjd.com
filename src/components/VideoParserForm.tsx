@@ -10,6 +10,7 @@ import {
   detectPlatform,
   hasValidVideoUrl,
 } from "@/utils/share";
+import { checkParseAuth, incrementParseCount } from "@/components/WxAuthInit";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
@@ -125,6 +126,13 @@ export default function VideoParserForm({
         return;
       }
 
+      // 微信认证检查：免费次数用完后需要关注公众号
+      const authOk = await checkParseAuth();
+      if (!authOk) {
+        onResult(null, "请先关注公众号完成认证后再解析");
+        return;
+      }
+
       // 取消上一次进行中的请求，确保同一时刻只有一个解析
       if (abortRef.current) abortRef.current.abort();
       const controller = new AbortController();
@@ -147,6 +155,7 @@ export default function VideoParserForm({
           data.platform = platform as VideoPlatformKey;
           onResult(data, "");
           writeCache(cacheKey, data);
+          incrementParseCount();
         } else {
           onResult(null, data.msg || "解析失败");
         }
