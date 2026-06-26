@@ -2,37 +2,11 @@ export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import { logger, rateLimit, getClientIP, getCorsHeaders } from "@/lib/api-utils";
+import { verifyBasicAuth, unauthorizedResponse } from "@/lib/auth";
 
 const UPSTREAM_TIMEOUT_MS = Number(
   process.env.PROXY_UPSTREAM_TIMEOUT_MS || 30000
 );
-
-// Basic Auth 配置（与 api-middleware 共享）
-const AUTH_USERNAME = process.env.API_AUTH_USERNAME;
-const AUTH_PASSWORD = process.env.API_AUTH_PASSWORD;
-
-function verifyBasicAuth(request: NextRequest): boolean {
-  if (!AUTH_USERNAME || !AUTH_PASSWORD) return true;
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Basic ")) return false;
-  try {
-    const credentials = atob(authHeader.slice(6));
-    const [username, password] = credentials.split(":");
-    return username === AUTH_USERNAME && password === AUTH_PASSWORD;
-  } catch {
-    return false;
-  }
-}
-
-function unauthorizedResponse(): Response {
-  return new Response(JSON.stringify({ code: 401, msg: "未授权访问" }), {
-    status: 401,
-    headers: {
-      "Content-Type": "application/json",
-      "WWW-Authenticate": 'Basic realm="Proxy API"',
-    },
-  });
-}
 
 function rateLimitResponse(): Response {
   return new Response(

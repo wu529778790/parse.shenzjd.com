@@ -12,6 +12,7 @@ import {
   serverErrorResponse,
   parseErrorResponse
 } from "@/lib/api-utils";
+import { verifyBasicAuth, unauthorizedResponse, isAuthEnabled } from "@/lib/auth";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -22,53 +23,6 @@ export function safeStatus(code: number): number {
   if (num < 200) return 500;
   if (num > 599) return 500;
   return Math.round(num);
-}
-
-// Basic Auth 配置（可选）
-const AUTH_USERNAME = process.env.API_AUTH_USERNAME;
-const AUTH_PASSWORD = process.env.API_AUTH_PASSWORD;
-
-/**
- * 验证 Basic Auth
- */
-function verifyBasicAuth(request: Request): boolean {
-  // 如果没有配置用户名密码，则跳过验证
-  if (!AUTH_USERNAME || !AUTH_PASSWORD) {
-    return true;
-  }
-
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Basic ")) {
-    return false;
-  }
-
-  try {
-    const base64Credentials = authHeader.slice(6);
-    const credentials = atob(base64Credentials);
-    const [username, password] = credentials.split(":");
-    return username === AUTH_USERNAME && password === AUTH_PASSWORD;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 返回 401 未授权响应
- */
-function unauthorizedResponse(): Response {
-  return new Response(
-    JSON.stringify({
-      code: 401,
-      msg: "未授权访问，请提供有效的认证信息",
-    }),
-    {
-      status: 401,
-      headers: {
-        "Content-Type": "application/json",
-        "WWW-Authenticate": 'Basic realm="Video Parser API"',
-      },
-    }
-  );
 }
 
 export interface ApiHandlerOptions {
@@ -100,7 +54,7 @@ export const createApiHandler = (
     const headers = { ...corsHeaders, ...extraHeaders };
 
     // Basic Auth 验证
-    if (requireAuth || AUTH_USERNAME) {
+    if (requireAuth || isAuthEnabled()) {
       if (!verifyBasicAuth(request)) {
         logger.warn(`Unauthorized access attempt from IP: ${getClientIP(request)}`);
         return unauthorizedResponse();
