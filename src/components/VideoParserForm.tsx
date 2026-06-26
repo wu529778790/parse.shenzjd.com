@@ -17,6 +17,60 @@ interface VideoParserFormProps {
   loading: boolean;
 }
 
+// 缓存：5 分钟有效，最多保留 20 条（LRU 粗略实现——写入时清最旧条目）
+// 纯 sessionStorage 操作，不依赖组件状态，放模块级避免重建
+const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_MAX = 20;
+
+// 读取缓存：命中且未过期返回数据，否则删除过期项
+function readCache(cacheKey: string): ApiResponse | null {
+  const raw = sessionStorage.getItem(cacheKey);
+  if (!raw) return null;
+  try {
+    const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(raw);
+    if (Date.now() - parsed.timestamp < CACHE_TTL) {
+      return parsed.data;
+    }
+    // 过期：立即删除，避免堆积
+    sessionStorage.removeItem(cacheKey);
+  } catch {
+    // 损坏的缓存条目：删除
+    sessionStorage.removeItem(cacheKey);
+  }
+  return null;
+}
+
+// 写入缓存：try/catch 防止 QuotaExceededError 中断流程；超限时清最旧条目
+function writeCache(cacheKey: string, data: ApiResponse) {
+  try {
+    // 粗略 LRU：达到上限时删除时间戳最旧的一条
+    if (sessionStorage.length >= CACHE_MAX) {
+      let oldestKey: string | null = null;
+      let oldestTime = Infinity;
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (!key || !key.includes(":")) continue;
+        try {
+          const v = JSON.parse(sessionStorage.getItem(key) || "{}");
+          if (typeof v.timestamp === "number" && v.timestamp < oldestTime) {
+            oldestTime = v.timestamp;
+            oldestKey = key;
+          }
+        } catch {
+          // 非缓存条目，跳过
+        }
+      }
+      if (oldestKey) sessionStorage.removeItem(oldestKey);
+    }
+    sessionStorage.setItem(
+      cacheKey,
+      JSON.stringify({ data, timestamp: Date.now() })
+    );
+  } catch {
+    // 配额满或不可写：静默失败，不影响解析主流程
+  }
+}
+
 export default function VideoParserForm({
   onResult,
   setLoading,
@@ -31,64 +85,109 @@ export default function VideoParserForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Parse function with cache and retry support
-  const parseVideo = useCallback(async (url: string, platform: string, retryCount = 0) => {
-    if (!url || loading) return;
+  // 请求生命周期管理：避免重复请求、卸载后仍执行
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const cacheKey = `${platform}:${url}`;
-    const cachedResult = sessionStorage.getItem(cacheKey);
-
-    // Check cache
-    if (cachedResult) {
-      try {
-        const parsed: { data: ApiResponse; timestamp: number } = JSON.parse(cachedResult);
-        if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
-          onResult(parsed.data, "");
-          return;
-        }
-      } catch {
-        // 缓存解析失败，忽略错误继续执行
-      }
+  // 取消所有进行中的请求与定时器（切换解析 / 卸载时调用）
+  const cancelPending = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, []);
 
-    setLoading(true);
-    onResult(null, "");
+  // 组件卸载时清理所有挂起的请求与定时器
+  useEffect(() => {
+    return () => cancelPending();
+  }, [cancelPending]);
 
-    try {
-      const response = await fetch(
-        `/api/${platform}?url=${encodeURIComponent(url)}`
-      );
-      const data: ApiResponse = await response.json();
-      
-      if (data.code === 1 || data.code === 200) {
-        data.platform = platform as VideoPlatformKey;
-        onResult(data, "");
+  // 解析函数（带缓存、重试、可取消）
+  const parseVideo = useCallback(
+    async (url: string, platform: string, retryCount = 0) => {
+      if (!url) return;
 
-        // Cache successful result
-        sessionStorage.setItem(cacheKey, JSON.stringify({
-          data,
-          timestamp: Date.now()
-        }));
-      } else {
-        onResult(null, data.msg || "解析失败");
-      }
-    } catch {
-      // Retry once on failure
-      if (retryCount < 1) {
-        setTimeout(() => parseVideo(url, platform, retryCount + 1), 1000);
+      const cacheKey = `${platform}:${url}`;
+
+      // 命中缓存：直接返回，不发请求
+      const cached = readCache(cacheKey);
+      if (cached) {
+        onResult(cached, "");
         return;
       }
-      onResult(null, "请求失败，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, onResult, setLoading]);
 
-  // Debounced parse function
+      // 取消上一次进行中的请求，确保同一时刻只有一个解析
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setLoading(true);
+      onResult(null, "");
+
+      try {
+        const response = await fetch(
+          `/api/${platform}?url=${encodeURIComponent(url)}`,
+          { signal: controller.signal }
+        );
+        const data: ApiResponse = await response.json();
+
+        // 请求已被取消（用户切换了新解析），丢弃结果
+        if (controller.signal.aborted) return;
+
+        if (data.code === 1 || data.code === 200) {
+          data.platform = platform as VideoPlatformKey;
+          onResult(data, "");
+          writeCache(cacheKey, data);
+        } else {
+          onResult(null, data.msg || "解析失败");
+        }
+      } catch (err) {
+        // 主动取消不算失败，静默处理
+        if (
+          controller.signal.aborted ||
+          (err instanceof DOMException && err.name === "AbortError")
+        ) {
+          return;
+        }
+        // 网络失败：重试一次
+        if (retryCount < 1) {
+          retryTimerRef.current = setTimeout(
+            () => parseVideo(url, platform, retryCount + 1),
+            1000
+          );
+          return;
+        }
+        onResult(null, "请求失败，请稍后重试");
+      } finally {
+        // 仅当这是当前活跃的请求时才清 loading
+        if (abortRef.current === controller) {
+          setLoading(false);
+          abortRef.current = null;
+        }
+      }
+    },
+    [onResult, setLoading]
+  );
+
+  // 防抖解析：每次先清掉前一个定时器，避免连续输入触发多次请求
   const debouncedParse = useCallback(
     (url: string, platform: string) => {
-      const timeoutId = setTimeout(() => parseVideo(url, platform), 500);
-      return () => clearTimeout(timeoutId);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(
+        () => parseVideo(url, platform),
+        500
+      );
     },
     [parseVideo]
   );
@@ -118,13 +217,13 @@ export default function VideoParserForm({
 
     const autoReadClipboard = async () => {
       try {
-        // 检查clipboard API是否可用
-        if (typeof navigator === 'undefined' || 
-            !navigator.clipboard || 
+        // 检查clipboard API是否可用（要求安全上下文 HTTPS）
+        if (typeof navigator === 'undefined' ||
+            !navigator.clipboard ||
             typeof navigator.clipboard.readText !== 'function') {
           return;
         }
-        
+
         const text = await navigator.clipboard.readText();
         if (text && text.trim() && hasValidVideoUrl(text)) {
           setInput(text);
@@ -149,13 +248,13 @@ export default function VideoParserForm({
   const handlePaste = async () => {
     try {
       // 检查clipboard API是否可用
-      if (typeof navigator === 'undefined' || 
-          !navigator.clipboard || 
+      if (typeof navigator === 'undefined' ||
+          !navigator.clipboard ||
           typeof navigator.clipboard.readText !== 'function') {
         onResult(null, "您的浏览器不支持自动粘贴，请手动粘贴（Ctrl+V）");
         return;
       }
-      
+
       const text = await navigator.clipboard.readText();
       setInput(text);
       processInputText(text);
@@ -165,6 +264,7 @@ export default function VideoParserForm({
   };
 
   const handleClear = () => {
+    cancelPending();
     setInput("");
     setUrl("");
     setDetectedPlatform(null);
@@ -178,26 +278,8 @@ export default function VideoParserForm({
       onResult(null, "请粘贴包含视频链接的文本");
       return;
     }
-
-    setLoading(true);
-    onResult(null, "");
-
-    try {
-      const response = await fetch(
-        `/api/${platform}?url=${encodeURIComponent(url)}`
-      );
-      const data: ApiResponse = await response.json();
-      if (data.code === 1 || data.code === 200) {
-        data.platform = platform as VideoPlatformKey;
-        onResult(data, "");
-      } else {
-        onResult(null, data.msg || "解析失败");
-      }
-    } catch {
-      onResult(null, "请求失败，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
+    // 复用 parseVideo，避免重复实现 fetch + 缓存逻辑
+    parseVideo(url, platform);
   };
 
   // Update CSS variable for platform accent
