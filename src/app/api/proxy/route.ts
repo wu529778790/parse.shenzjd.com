@@ -369,11 +369,12 @@ export async function GET(req: NextRequest) {
   // 视频 CDN 特殊处理 — 手动跟踪重定向，强制 HTTPS
   // 抖音/小红书 CDN 返回的 http:// 链接可能触发浏览器 QUIC 协议错误，
   // 这里手动处理重定向并将目标 URL 升级为 HTTPS
-  async function fetchVideoWithFollow(url: string, referer: string): Promise<Response> {
+  async function fetchVideoWithFollow(url: string, referer: string, isDouyin: boolean): Promise<Response> {
     const headers: Record<string, string> = {
-      "User-Agent": MOBILE_UA,
+      "User-Agent": DEFAULT_UA,
     };
-    if (referer) headers["Referer"] = referer;
+    // 抖音 CDN 可能因 Referer 被拦截（直接访问无 Referer 反而正常），故跳过
+    if (!isDouyin && referer) headers["Referer"] = referer;
 
     let currentUrl = url;
     for (let i = 0; i < 5; i++) {
@@ -475,7 +476,7 @@ export async function GET(req: NextRequest) {
       const referer = isXhsTarget
         ? "https://www.xiaohongshu.com/"
         : "https://www.douyin.com/";
-      upstreamResp = await fetchVideoWithFollow(currentUrl, referer);
+      upstreamResp = await fetchVideoWithFollow(currentUrl, referer, isDouyinTarget);
     } else {
       // 其他资源：手动处理重定向，验证每次跳转目标
       for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount++) {
