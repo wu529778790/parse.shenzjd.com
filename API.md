@@ -312,17 +312,7 @@ GET /api/health
 {
   "status": "ok",
   "timestamp": "2024-01-01T00:00:00.000Z",
-  "uptime": 3600,
-  "responseTime": 5,
-  "environment": "production",
-  "platform": {
-    "douyin": "configured",
-    "bilibili": "configured",
-    "weibo": "not_configured",
-    "kuaishou": "always_available",
-    "xhs": "always_available"
-  },
-  "clientIP": "192.168.1.1"
+  "responseTime": 5
 }
 ```
 
