@@ -81,7 +81,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
               onPlay={handlePlay}
               onPause={handlePause}
               x-webkit-airplay="allow">
-              <source src={`/api/proxy?url=${encodeURIComponent(douyinData.url)}&disposition=inline`} type="video/mp4" />
+              <source src={proxyUrl(douyinData.url) + '&disposition=inline'} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
