@@ -43,3 +43,10 @@ next-env.d.ts
 # Development
 tests/
 README.md
+CLAUDE.md
+API.md
+
+# Local agent / tool directories（含本地路径与可能的 token 片段，不应进镜像）
+.claude/
+.codebuddy/
+.playwright-mcp/
