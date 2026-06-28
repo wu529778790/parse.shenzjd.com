@@ -16,7 +16,7 @@ function loadWxAuth() {
 const API_BASE = "https://wx-auth.shenzjd.com";
 const SITE_ID = "parse.shenzjd.com";
 const PARSE_COUNT_KEY = "parse_count";
-const FREE_PARSES = 1; // 免费解析次数
+export const FREE_PARSES = 1; // 免费解析次数
 
 /**
  * 获取已解析次数
@@ -39,6 +39,10 @@ export function incrementParseCount(): void {
  * @returns true=允许解析, false=需要认证/认证失败
  */
 export async function checkParseAuth(): Promise<boolean> {
+  // 暂时禁用微信公众号认证（图片问题修复中）
+  // TODO: 恢复认证逻辑
+  return true;
+
   const count = getParseCount();
 
   // 免费次数内，直接放行
