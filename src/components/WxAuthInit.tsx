@@ -13,7 +13,6 @@ function loadWxAuth() {
   return wxAuthPromise;
 }
 
-const API_BASE = "https://wx-auth.shenzjd.com";
 const SITE_ID = "parse.shenzjd.com";
 const PARSE_COUNT_KEY = "parse_count";
 export const FREE_PARSES = 1; // 免费解析次数
@@ -61,13 +60,13 @@ export async function checkParseAuth(): Promise<boolean> {
       const { WxAuth } = await loadWxAuth();
       // 还没初始化过则初始化
       if (!(window as unknown as Record<string, unknown>).WxAuth) {
-        WxAuth.init({ apiBase: API_BASE, siteId: SITE_ID });
+        WxAuth.init({ siteId: SITE_ID });
       }
       const openid = cookies
         .find((c) => c.trim().startsWith("wxauth-openid="))
         ?.split("=")[1];
       const res = await fetch(
-        `${API_BASE}/api/auth/check?openid=${openid}&siteId=${encodeURIComponent(SITE_ID)}`
+        `/api/auth/check?openid=${openid}&siteId=${encodeURIComponent(SITE_ID)}`
       );
       const data = await res.json();
       if (data.authenticated) return true;
@@ -79,7 +78,7 @@ export async function checkParseAuth(): Promise<boolean> {
   // 需要认证：加载 SDK 并弹窗
   try {
     const { WxAuth } = await loadWxAuth();
-    WxAuth.init({ apiBase: API_BASE, siteId: SITE_ID });
+    WxAuth.init({ siteId: SITE_ID });
     const ok = await WxAuth.requireAuth();
     return ok;
   } catch {

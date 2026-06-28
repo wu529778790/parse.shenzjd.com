@@ -41,7 +41,14 @@
       "mcp__plugin_playwright_playwright__browser_navigate",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "mcp__plugin_playwright_playwright__browser_close"
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(npm info *)",
+      "Bash(npm view *)",
+      "Bash(npm pack *)",
+      "Bash(tar -xzf wx-auth-sdk-1.2.4.tgz)",
+      "Bash(npm install *)",
+      "Bash(npm list *)",
+      "Bash(npm test *)"
     ]
   }
 }
