@@ -10,7 +10,7 @@ import {
   detectPlatform,
   hasValidVideoUrl,
 } from "@/utils/share";
-import { checkParseAuth, incrementParseCount, getParseCount, FREE_PARSES } from "@/components/WxAuthInit";
+import { incrementParseCount } from "@/components/WxAuthInit";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
