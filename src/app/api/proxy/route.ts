@@ -182,6 +182,7 @@ const ALLOWED_DOMAINS = [
   "douyinpic.com",
   "snssdk.com",
   "douyinvod.com",
+  "zjcdn.com",
   "aweme.com",
   "iesdouyin.com",
   "hdslb.com",
@@ -298,6 +299,7 @@ export async function GET(req: NextRequest) {
       lower.includes("douyinpic") ||
       lower.includes("snssdk") ||
       lower.includes("douyinvod") ||
+      lower.includes("zjcdn") ||
       lower.includes("aweme") ||
       lower.includes("iesdouyin")
     ) {
@@ -465,6 +467,7 @@ export async function GET(req: NextRequest) {
     const isDouyinTarget =
       parsed.hostname.includes("snssdk") ||
       parsed.hostname.includes("douyinvod") ||
+      parsed.hostname.includes("zjcdn") ||
       parsed.hostname.includes("aweme");
 
     const isXhsTarget =
@@ -559,6 +562,7 @@ export async function GET(req: NextRequest) {
   if (
     parsed.hostname.includes("snssdk") ||
     parsed.hostname.includes("douyinvod") ||
+    parsed.hostname.includes("zjcdn") ||
     parsed.hostname.includes("aweme") ||
     parsed.hostname.includes("xhscdn") ||
     parsed.hostname.includes("xhsimgs") ||
