@@ -280,7 +280,8 @@ export async function GET(req: NextRequest) {
   // 域名白名单检查
   if (!isAllowedDomain(parsed.hostname)) {
     logger.warn(`Domain not allowed: ${parsed.hostname}`);
-    return new Response("Domain not allowed", {
+    logger.warn(`Allowed domains: ${ALLOWED_DOMAINS.join(", ")}`);
+    return new Response(`Domain not allowed: ${parsed.hostname}`, {
       status: 403,
       headers: { ...corsHeaders },
     });
@@ -376,10 +377,12 @@ export async function GET(req: NextRequest) {
 
     let currentUrl = url;
     for (let i = 0; i < 5; i++) {
+      logger.log(`[proxy] fetchVideoWithFollow step ${i}: ${currentUrl.substring(0, 100)}`);
       const resp = await fetchWithTimeout(currentUrl, {
         headers,
         redirect: "manual",
       });
+      logger.log(`[proxy] step ${i} response: HTTP ${resp.status}`);
 
       if (resp.status < 300 || resp.status >= 400) {
         return resp;
@@ -418,7 +421,7 @@ export async function GET(req: NextRequest) {
         });
       }
       if (!isAllowedDomain(redirectUrl.hostname)) {
-        logger.warn(`Domain not allowed (video CDN redirect): ${redirectUrl.hostname}`);
+        logger.warn(`Domain not allowed (video CDN redirect): ${redirectUrl.hostname} (allowed: ${ALLOWED_DOMAINS.join(", ")})`);
         return new Response("Domain not allowed", {
           status: 403,
           headers: { ...corsHeaders },
@@ -468,13 +471,16 @@ export async function GET(req: NextRequest) {
       parsed.hostname.includes("xhscdn") ||
       parsed.hostname.includes("xhsimgs");
 
-    // 抖音/小红书视频 CDN：使用 redirect: "follow" 自动跟随重定向链
-    // 因为这些 CDN 使用 QUIC 协议或复杂的 302 跳转，手动处理会失败
+    // 抖音/小红书视频 CDN：手动跟随重定向链
     if (isDouyinTarget || isXhsTarget) {
       const referer = isXhsTarget
         ? "https://www.xiaohongshu.com/"
         : "https://www.douyin.com/";
+      logger.log(`[proxy] Douyin/XHS target detected, url: ${currentUrl.substring(0, 100)}`);
       upstreamResp = await fetchVideoWithFollow(currentUrl, referer, isDouyinTarget);
+      if (upstreamResp && upstreamResp.status === 403) {
+        logger.warn(`[proxy] Douyin CDN returned 403. Target: ${currentUrl.substring(0, 80)}`);
+      }
     } else {
       // 其他资源：手动处理重定向，验证每次跳转目标
       for (let redirectCount = 0; redirectCount < MAX_REDIRECTS; redirectCount++) {

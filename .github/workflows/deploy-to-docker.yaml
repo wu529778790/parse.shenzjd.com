@@ -120,32 +120,34 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          password: ${{ secrets.DEPLOY_PASSWORD }}
-          script: |
-            IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest"
-            CONTAINER="${{ github.event.repository.name }}"
-            ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/shenzjd.com/index/.env"
-            sudo docker pull "$IMAGE"
-            sudo docker stop "$CONTAINER" || true
-            sudo docker rm "$CONTAINER" || true
-            ENV_FLAGS=""
-            if [ -f "$ENV_FILE" ]; then
-              ENV_FLAGS="--env-file $ENV_FILE"
-            fi
-            sudo docker run -d \
-              --name "$CONTAINER" \
-              --restart unless-stopped \
-              $ENV_FLAGS \
-              -p 5269:3000 \
-              "$IMAGE"
-            sudo docker image prune -f
+  # deploy job 已注释：当前部署目标已切换到 Vercel，Docker 自托管暂时停用。
+  # 需要恢复时取消注释并确保 DEPLOY_HOST/USER/PASSWORD secret 已配置。
+  # deploy:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - name: Deploy to server
+  #       uses: appleboy/ssh-action@v1
+  #       with:
+  #         host: ${{ secrets.DEPLOY_HOST }}
+  #         username: ${{ secrets.DEPLOY_USER }}
+  #         password: ${{ secrets.DEPLOY_PASSWORD }}
+  #         script: |
+  #           IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest"
+  #           CONTAINER="${{ github.event.repository.name }}"
+  #           ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/shenzjd.com/index/.env"
+  #           sudo docker pull "$IMAGE"
+  #           sudo docker stop "$CONTAINER" || true
+  #           sudo docker rm "$CONTAINER" || true
+  #           ENV_FLAGS=""
+  #           if [ -f "$ENV_FILE" ]; then
+  #             ENV_FLAGS="--env-file $ENV_FILE"
+  #           fi
+  #           sudo docker run -d \
+  #             --name "$CONTAINER" \
+  #             --restart unless-stopped \
+  #             $ENV_FLAGS \
+  #             -p 5269:3000 \
+  #             "$IMAGE"
+  #           sudo docker image prune -f
