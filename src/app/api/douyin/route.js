@@ -28,7 +28,7 @@ async function douyin(url) {
     const { id, type: contentType, redirectUrl } = extractResult;
     const sharePath = contentType === "note" ? "note" : "video";
 
-    // ---- Step 2: 从 iesdouyin.com 分享页获取 SSR 数据 ----
+    // ---- Step 2: 从分享页获取 SSR 数据 ----
     // 优先使用完整重定向 URL（含 share_version / share_sign 等参数）以降低被过滤概率
     let shareUrl = redirectUrl || `https://www.iesdouyin.com/share/${sharePath}/${id}`;
     // 如果 redirectUrl 是 douyin.com 域名，替换为 iesdouyin.com
@@ -42,29 +42,59 @@ async function douyin(url) {
       fetchHeaders.Cookie = DOUYIN_COOKIE;
     }
 
-    const response = await fetch(shareUrl, { headers: fetchHeaders });
-    const html = await response.text();
+    // 尝试多个域名 / 路径以应对机房 IP 被反爬的情况
+    const tryUrls = [
+      shareUrl,
+      `https://www.iesdouyin.com/share/${sharePath}/${id}`,
+      `https://m.douyin.com/share/${sharePath}/${id}`,
+      `https://www.douyin.com/video/${id}`,
+    ];
 
-    // 检查是否被重定向到国际版
-    if (html.includes("tiktok.com") || html.includes("访问受限")) {
-      return {
-        code: 403,
-        msg: "解析失败：当前服务器IP无法访问抖音，请使用代理服务器或更换部署区域",
-      };
+    let videoInfo = null;
+    let lastHtml = "";
+    for (const url of tryUrls) {
+      try {
+        const response = await fetch(url, { headers: fetchHeaders });
+        const html = await response.text();
+        lastHtml = html;
+
+        // 检查是否被重定向到国际版
+        if (html.includes("tiktok.com") || html.includes("访问受限")) {
+          logger.warn(`Douyin redirected to tiktok for URL: ${url}`);
+          continue;
+        }
+
+        const routerMatch = html.match(
+          /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s
+        );
+        if (routerMatch && routerMatch[1]) {
+          videoInfo = JSON.parse(routerMatch[1].trim());
+          logger.log(`Got _ROUTER_DATA from: ${url}`);
+          break;
+        }
+      } catch (e) {
+        logger.warn(`Failed to fetch ${url}: ${e.message}`);
+      }
     }
 
-    const routerMatch = html.match(
-      /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s
-    );
-    if (!routerMatch || !routerMatch[1]) {
-      logger.warn("No _ROUTER_DATA found in Douyin share page");
+    if (!videoInfo) {
+      // 记录部分响应内容用于诊断（截取前 500 字符）
+      const snippet = lastHtml.replace(/\s+/g, " ").slice(0, 500);
+      logger.warn(
+        `No _ROUTER_DATA found for video ${id}. Response snippet: ${snippet}`
+      );
+      // 判断是否因为缺少 Cookie 导致
+      if (!DOUYIN_COOKIE) {
+        return {
+          code: 201,
+          msg: "解析失败：未配置 DOUYIN_COOKIE，机房 IP 访问抖音需要 Cookie 才能获取数据。请在 .env.local 中配置 DOUYIN_COOKIE 后重新构建",
+        };
+      }
       return {
         code: 201,
         msg: "解析失败：未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除",
       };
     }
-
-    const videoInfo = JSON.parse(routerMatch[1].trim());
 
     if (!videoInfo.loaderData) {
       return {
