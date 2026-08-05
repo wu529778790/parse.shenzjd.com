@@ -10,7 +10,7 @@ import {
   detectPlatform,
   hasValidVideoUrl,
 } from "@/utils/share";
-import { incrementParseCount } from "@/components/WxAuthInit";
+import { showWxAuth } from "@/components/WxAuthInit";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
@@ -117,6 +117,9 @@ export default function VideoParserForm({
     async (url: string, platform: string, retryCount = 0) => {
       if (!url) return;
 
+      // 微信关注弹窗：每次发起解析都弹出（可关闭，不阻塞解析流程）
+      showWxAuth().catch(() => {});
+
       const cacheKey = `${platform}:${url}`;
 
       // 命中缓存：直接返回，不发请求
@@ -125,12 +128,6 @@ export default function VideoParserForm({
         onResult(cached, "");
         return;
       }
-
-      // 微信关注提醒：暂时禁用（图片问题修复中）
-      // const count = getParseCount();
-      // if (count >= FREE_PARSES) {
-      //   checkParseAuth().catch(() => {});
-      // }
 
       // 取消上一次进行中的请求，确保同一时刻只有一个解析
       if (abortRef.current) abortRef.current.abort();
@@ -154,7 +151,6 @@ export default function VideoParserForm({
           data.platform = platform as VideoPlatformKey;
           onResult(data, "");
           writeCache(cacheKey, data);
-          incrementParseCount();
         } else {
           onResult(null, data.msg || "解析失败");
         }
