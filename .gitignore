@@ -42,3 +42,11 @@ next-env.d.ts
 
 # playwright mcp
 .playwright-mcp/
+
+# workbuddy 项目记忆（本地工具数据，不进版本库）
+.workbuddy/
+
+# PWA 构建产物（构建时由 next-pwa 自动生成到 public/）
+/public/sw.js
+/public/workbox-*.js
+/public/swe-worker-*.js
