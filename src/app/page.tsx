@@ -13,6 +13,10 @@ import {
   GenericParsedVideo,
 } from "@/components/videos";
 import { ApiResponse } from "@/types/api";
+import { VIDEO_PLATFORMS } from "@/config/video-platforms";
+
+// 平台名称单一数据源：从配置读取，避免与代码脱节（之前 README/SEO 只列了 7 个，实际 24 个）
+const PLATFORM_NAMES = Object.values(VIDEO_PLATFORMS).map((p) => p.name);
 
 function renderPlatformResult(result: ApiResponse) {
   switch (result.platform) {
@@ -79,7 +83,7 @@ export default function Home() {
 
             {/* Subtitle */}
             <p className="text-sm text-muted max-w-md mx-auto">
-              抖音 / B站 / 快手 / 小红书 / 虎牙 / 西瓜 / X…
+              {PLATFORM_NAMES.slice(0, 8).join(" / ")} / 等 {PLATFORM_NAMES.length}+ 平台
             </p>
           </header>
 

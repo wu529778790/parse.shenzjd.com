@@ -1,3 +1,36 @@
+import withPWAInit from "@ducanh2912/next-pwa";
+
+const withPWA = withPWAInit({
+  dest: "public",
+  // 开发模式下关闭 SW，避免缓存干扰热更新
+  disable: process.env.NODE_ENV === "development",
+  workboxOptions: {
+    runtimeCaching: [
+      // 解析 API 与代理：绝不在 SW 层缓存（视频流/接口不应被缓存）
+      {
+        urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+        handler: "NetworkOnly",
+        method: "GET",
+      },
+      // 页面导航：网络优先，超时回退缓存
+      {
+        urlPattern: ({ request }) => request.destination === "document",
+        handler: "NetworkFirst",
+        options: { cacheName: "pages", networkTimeoutSeconds: 10 },
+      },
+      // 静态资源：后台重新校验
+      {
+        urlPattern: ({ request }) =>
+          ["style", "script", "worker", "image", "font"].includes(
+            request.destination
+          ),
+        handler: "StaleWhileRevalidate",
+        options: { cacheName: "assets" },
+      },
+    ],
+  },
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // standalone：构建时裁剪出最小运行时依赖（仅生产所需 node_modules 子集），
@@ -33,4 +66,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);
