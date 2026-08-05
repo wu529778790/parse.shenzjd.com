@@ -12,7 +12,6 @@ import {
   serverErrorResponse,
   parseErrorResponse
 } from "@/lib/api-utils";
-import { verifyBasicAuth, unauthorizedResponse, isAuthEnabled } from "@/lib/auth";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -28,7 +27,6 @@ export function safeStatus(code: number): number {
 export interface ApiHandlerOptions {
   shouldCache?: boolean;
   responseHeaders?: Record<string, string>;
-  requireAuth?: boolean;
 }
 
 type ParseFunction = (url: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
@@ -41,7 +39,6 @@ export const createApiHandler = (
   const {
     shouldCache = true,
     responseHeaders = {},
-    requireAuth = false, // 是否需要认证
   } = options;
 
   const extraHeaders = {
@@ -52,14 +49,6 @@ export const createApiHandler = (
     const startTime = Date.now();
     const corsHeaders = getCorsHeaders(request.headers.get('origin') || '') as Record<string, string>;
     const headers = { ...corsHeaders, ...extraHeaders };
-
-    // Basic Auth 验证
-    if (requireAuth || isAuthEnabled()) {
-      if (!verifyBasicAuth(request)) {
-        logger.warn(`Unauthorized access attempt from IP: ${getClientIP(request)}`);
-        return unauthorizedResponse();
-      }
-    }
 
     // 获取客户端IP
     const clientIP = getClientIP(request);

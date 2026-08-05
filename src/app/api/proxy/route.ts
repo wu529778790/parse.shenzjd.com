@@ -2,7 +2,6 @@ export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import { logger, rateLimit, getClientIP, getCorsHeaders } from "@/lib/api-utils";
-import { verifyBasicAuth, unauthorizedResponse } from "@/lib/auth";
 
 const UPSTREAM_TIMEOUT_MS = Number(
   process.env.PROXY_UPSTREAM_TIMEOUT_MS || 30000
@@ -224,11 +223,6 @@ export async function GET(req: NextRequest) {
   const corsHeaders = getCorsHeaders(
     req.headers.get("origin") || ""
   ) as Record<string, string>;
-
-  // Basic Auth 验证
-  if (!verifyBasicAuth(req)) {
-    return unauthorizedResponse();
-  }
 
   // 速率限制
   const clientIP = getClientIP(req);
