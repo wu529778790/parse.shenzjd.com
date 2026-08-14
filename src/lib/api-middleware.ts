@@ -54,6 +54,20 @@ export const createApiHandler = (
     const clientIP = getClientIP(request);
     logger.log(`API request from IP: ${clientIP}`);
 
+    // 平台使用统计：生产环境 logger.log 不输出，这里用 console.log 确保线上可观测。
+    // 从 URL 路径推断平台（如 /api/bilibili -> bilibili），用于排查各平台是否有人使用。
+    try {
+      const pathname = new URL(request.url).pathname;
+      const routeMatch = pathname.match(/\/api\/([a-z0-9]+)/i);
+      if (routeMatch) {
+        console.log(
+          `[usage] route=${routeMatch[1]} time=${new Date().toISOString()}`
+        );
+      }
+    } catch {
+      // 日志失败不影响主流程
+    }
+
     // 检查速率限制
     if (!rateLimit(clientIP)) {
       return Response.json(
