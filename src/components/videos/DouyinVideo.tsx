@@ -42,6 +42,7 @@ interface DouyinVideoProps {
 
 export default function DouyinVideo({ data }: DouyinVideoProps) {
   const [imageLoading, setImageLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   if (!data.data) {
     return null;
@@ -53,6 +54,30 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
     !isImageType &&
     !!douyinData.url &&
     (douyinData.duration || 0) > LONG_VIDEO_DURATION_MS;
+
+  const handleCopy = async () => {
+    if (!douyinData.url) return;
+    try {
+      await navigator.clipboard.writeText(douyinData.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 降级：旧浏览器 / 非安全上下文
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = douyinData.url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // 复制失败时提示用户手动复制
+        window.prompt("请手动复制视频链接：", douyinData.url);
+      }
+    }
+  };
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
@@ -69,7 +94,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                 unoptimized
               />
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white p-6 gap-4">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white p-6 gap-3">
                 <svg className="w-12 h-12 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -86,22 +111,65 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                     <p className="text-base font-medium mb-1">视频已就绪 🎬</p>
                   )}
                 </div>
-                <a
-                  href={douyinData.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/25 hover:-translate-y-0.5">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                  </svg>
-                  打开新链接
-                </a>
-                <p className="text-xs text-gray-400">
-                  打开后点击视频右下角「⋯」三个点，就能下载
-                </p>
+                <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+                  <button
+                    onClick={handleCopy}
+                    className={`group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 ${
+                      copied
+                        ? "bg-green-600 hover:bg-green-600 text-white"
+                        : "bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                    }`}>
+                    <svg
+                      className="w-5 h-5 transition-transform group-hover:scale-110"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}>
+                      {copied ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      ) : (
+                        <>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3" />
+                        </>
+                      )}
+                    </svg>
+                    {copied ? "已复制 ✓" : "复制链接"}
+                  </button>
+                  <a
+                    href={douyinData.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/25 hover:-translate-y-0.5">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                    </svg>
+                    新页面打开链接
+                  </a>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 三步引导：打开新链接 → 右下角三个点 → 下载 */}
+      {!isImageType && douyinData.url && (
+        <div className="glass-card p-4">
+          <p className="text-sm font-medium text-primary mb-3">下载指引</p>
+          <ol className="space-y-2.5 text-sm text-muted">
+            <li className="flex items-start gap-2.5">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500/15 text-amber-600 text-xs font-medium flex items-center justify-center mt-0.5">1</span>
+              <span>打开新链接</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500/15 text-amber-600 text-xs font-medium flex items-center justify-center mt-0.5">2</span>
+              <span>点击视频右下角「⋯」三个点</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500/15 text-amber-600 text-xs font-medium flex items-center justify-center mt-0.5">3</span>
+              <span>点击「下载更清晰」</span>
+            </li>
+          </ol>
         </div>
       )}
 
@@ -162,51 +230,6 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
           <p className="text-sm text-muted line-clamp-2">{douyinData.title}</p>
         </div>
       )}
-
-      {/* Download Button: 一律打开直链新窗口，不经过服务器代理 */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {!isImageType && douyinData.url && (
-          <a
-            href={douyinData.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5">
-            <svg
-              className="w-5 h-5 transition-transform group-hover:scale-110"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            打开新链接下载
-          </a>
-        )}
-
-        <a
-          href={douyinData.url || douyinData.images?.[0]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle hover:border-accent/30">
-          <svg
-            className="w-5 h-5 text-muted group-hover:text-accent transition-colors"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={2}>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-            />
-          </svg>
-          打开原链接
-        </a>
-      </div>
     </div>
   );
 }
