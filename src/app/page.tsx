@@ -50,6 +50,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // 公众号浮窗可见性：用户可关闭，关闭状态不持久化（刷新页面后重新显示）
+  const [showWxQr, setShowWxQr] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -88,17 +90,15 @@ export default function Home() {
             </p>
           </header>
 
-          {/* Body: Form/Results + 右侧公众号引流 */}
-          <div className="lg:flex lg:items-start lg:justify-center lg:gap-6">
-            {/* 主交互区：Form / Error / Results — lg 下强制 768px，不被 flex 压缩 */}
-            <div className="lg:w-[48rem] lg:flex-shrink-0">
-              <div className={`reveal reveal-delay-2 ${mounted ? "opacity-100" : "opacity-0"}`}>
-                <VideoParserForm
-                  onResult={handleParseResult}
-                  setLoading={setLoading}
-                  loading={loading}
-                />
-              </div>
+          {/* Body: Form/Results（公众号浮窗挪到 body 末尾做 fixed，不挤压主结构） */}
+          <div className="max-w-3xl mx-auto">
+            <div className={`reveal reveal-delay-2 ${mounted ? "opacity-100" : "opacity-0"}`}>
+              <VideoParserForm
+                onResult={handleParseResult}
+                setLoading={setLoading}
+                loading={loading}
+              />
+            </div>
 
               {/* Error State */}
               {error && (
@@ -183,26 +183,36 @@ export default function Home() {
                   </div>
                 </div>
               )}
-            </div>
+          </div>
 
-            {/* 右侧公众号引流（lg+ 才显示，sticky 跟随滚动） */}
-            <aside className="hidden lg:block lg:w-56 lg:flex-shrink-0 lg:sticky lg:top-8">
-              <div className="glass-card iridescent-border p-4 text-center">
-                <p className="text-sm font-medium text-primary mb-3">📱 关注公众号</p>
+          {/* 右侧悬浮公众号浮窗：lg+ 显示，可关闭，刷新页面后重新显示。
+              fixed 定位，不占文档流、不挤压主结构；滚动时保持在视口右侧垂直正中央。 */}
+          {showWxQr && (
+            <div className="hidden lg:block fixed right-4 top-1/2 -translate-y-1/2 z-40">
+              <div className="glass-card iridescent-border p-3 w-32 relative shadow-2xl">
+                <button
+                  onClick={() => setShowWxQr(false)}
+                  aria-label="关闭公众号卡片"
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white text-xs flex items-center justify-center transition-colors leading-none">
+                  ×
+                </button>
+                <p className="text-xs font-medium text-primary text-center mb-2">
+                  📱 公众号
+                </p>
                 <Image
                   src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/wp/1782738963299-5wrchz.jpg"
                   alt="公众号二维码"
-                  width={200}
-                  height={200}
-                  className="rounded-lg w-full h-auto"
+                  width={120}
+                  height={120}
+                  className="rounded w-full h-auto"
                   unoptimized
                 />
-                <p className="text-xs text-muted mt-3 leading-relaxed">
-                  获取最新功能更新<br />反馈建议更优先处理
+                <p className="text-[10px] text-muted mt-2 text-center leading-tight">
+                  关注获取最新更新
                 </p>
               </div>
-            </aside>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </>
