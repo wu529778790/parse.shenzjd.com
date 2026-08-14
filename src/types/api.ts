@@ -56,6 +56,8 @@ export interface DouyinData {
   url?: string;
   type?: "video" | "image";
   images?: string[];
+  /** 视频时长（毫秒），长视频（>3min）前端引导新窗口播放、不走代理 */
+  duration?: number;
 }
 
 // 快手数据类型

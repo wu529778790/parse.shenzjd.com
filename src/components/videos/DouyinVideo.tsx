@@ -3,9 +3,8 @@ import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { ApiResponse, DouyinData } from "@/types/api";
 
-interface DouyinVideoProps {
-  data: ApiResponse;
-}
+// 长视频阈值：超过该时长（毫秒）不走服务器代理，引导用户新窗口播放/下载，节省服务器流量
+const LONG_VIDEO_DURATION_MS = 3 * 60 * 1000; // 3 分钟
 
 // 判断 URL 是否为抖音/小红书 CDN（需要通过代理，避免 Mixed Content 和 CORS）
 function proxyUrl(url: string | undefined): string {
@@ -31,6 +30,19 @@ function proxyUrl(url: string | undefined): string {
   return url;
 }
 
+// 格式化时长：ms -> "3分25秒" / "34分钟"
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}秒`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes}分${seconds}秒` : `${minutes}分钟`;
+}
+
+interface DouyinVideoProps {
+  data: ApiResponse;
+}
+
 export default function DouyinVideo({ data }: DouyinVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -43,6 +55,12 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
 
   const douyinData = data.data as DouyinData;
   const isImageType = douyinData.type === "image";
+
+  // 长视频：不走代理内嵌播放，引导新窗口打开原始直链（浏览器 video 标签内可点击下载）
+  const isLongVideo =
+    !isImageType &&
+    !!douyinData.url &&
+    (douyinData.duration || 0) > LONG_VIDEO_DURATION_MS;
 
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     const video = e.currentTarget;
@@ -65,7 +83,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Video Content */}
-      {!isImageType && douyinData.url && (
+      {!isImageType && douyinData.url && !isLongVideo && (
         <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl" style={{ touchAction: 'manipulation' }}>
           <div className="aspect-[9/16] sm:aspect-video w-full">
             <video
@@ -140,6 +158,44 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
         </div>
       )}
 
+      {/* Long Video: 不走代理，引导新窗口直接播放/下载（节省服务器流量） */}
+      {!isImageType && isLongVideo && (
+        <div className="rounded-2xl overflow-hidden bg-black shadow-2xl">
+          <div className="relative">
+            <div className="aspect-[9/16] sm:aspect-video w-full relative">
+              <Image
+                src={proxyUrl(douyinData.cover)}
+                alt={douyinData.title || "视频封面"}
+                fill
+                className="object-contain"
+                unoptimized
+              />
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white p-6 gap-4">
+                <svg className="w-12 h-12 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-base font-medium mb-1">长视频（约 {formatDuration(douyinData.duration || 0)}）</p>
+                  <p className="text-sm text-gray-300">为避免占用服务器带宽，请在浏览器新窗口打开，播放器内可点击下载</p>
+                </div>
+                <a
+                  href={douyinData.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/25 hover:-translate-y-0.5">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                  新窗口播放
+                </a>
+                <p className="text-xs text-gray-400">打开后浏览器播放器内可直接点击下载</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Image Gallery */}
       {isImageType && douyinData.images && douyinData.images.length > 0 && (
         <div className="glass-card p-3">
@@ -200,7 +256,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
 
       {/* Download Button */}
       <div className="flex flex-col sm:flex-row gap-3">
-        {!isImageType && douyinData.url && (
+        {!isImageType && douyinData.url && !isLongVideo && (
           <a
             href={`/api/proxy?url=${encodeURIComponent(
               douyinData.url
@@ -221,6 +277,28 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
               />
             </svg>
             下载视频
+          </a>
+        )}
+
+        {!isImageType && isLongVideo && (
+          <a
+            href={douyinData.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5">
+            <svg
+              className="w-5 h-5 transition-transform group-hover:scale-110"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            新窗口下载
           </a>
         )}
 

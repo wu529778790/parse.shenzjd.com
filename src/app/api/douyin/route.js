@@ -238,6 +238,8 @@ function parseVideoData(videoInfo) {
         type: isVideo ? "video" : "image",
         url: videoResUrl || undefined,
         images: images.length > 0 ? images : undefined,
+        // 视频时长（毫秒），前端据此判断长视频不走代理、引导新窗口播放
+        duration: videoData.video?.duration || 0,
         music: {
           author: videoData.music?.author || "未知音乐作者",
           avatar: videoData.music?.cover_large?.url_list?.[0] || "",
