@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import VideoParserForm from "@/components/VideoParserForm";
 import {
   BilibiliVideo,
@@ -73,7 +74,7 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="relative min-h-screen" style={{ zIndex: 1 }}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
           {/* Hero Section */}
           <header className="text-center mb-8 reveal">
             {/* Title */}
@@ -87,98 +88,121 @@ export default function Home() {
             </p>
           </header>
 
-          {/* Form Section */}
-          <div className={`reveal reveal-delay-2 ${mounted ? "opacity-100" : "opacity-0"}`}>
-            <VideoParserForm
-              onResult={handleParseResult}
-              setLoading={setLoading}
-              loading={loading}
-            />
-          </div>
-
-          {/* Error State */}
-          {error && (
-            <div className="reveal max-w-3xl mx-auto mt-8">
-              <div className="glass-card iridescent-border p-6 border-l-4 border-l-red-500">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 text-red-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-red-400 mb-1">解析失败</h3>
-                    <p className="text-sm text-red-300/80">{error}</p>
-                  </div>
-                  <button
-                    onClick={() => setError("")}
-                    className="p-1 hover:bg-red-500/10 rounded-lg transition-colors">
-                    <svg
-                      className="w-5 h-5 text-red-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
+          {/* Body: Form/Results + 右侧公众号引流 */}
+          <div className="lg:flex lg:items-start lg:justify-center lg:gap-6">
+            {/* 主交互区：Form / Error / Results */}
+            <div className="max-w-3xl w-full lg:flex-shrink-0 lg:w-auto">
+              <div className={`reveal reveal-delay-2 ${mounted ? "opacity-100" : "opacity-0"}`}>
+                <VideoParserForm
+                  onResult={handleParseResult}
+                  setLoading={setLoading}
+                  loading={loading}
+                />
               </div>
-            </div>
-          )}
 
-          {/* Results Section */}
-          {result && (result.code === 1 || result.code === 200) && (
-            <div className="reveal max-w-3xl mx-auto mt-8">
-              <div className="glass-card iridescent-border">
-                {/* Result Header */}
-                <div className="px-6 py-4 border-b border-border-subtle bg-glass-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-sm font-medium text-primary">
-                        解析成功
-                      </span>
+              {/* Error State */}
+              {error && (
+                <div className="reveal max-w-3xl mt-8">
+                  <div className="glass-card iridescent-border p-6 border-l-4 border-l-red-500">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                        <svg
+                          className="w-5 h-5 text-red-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2}>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                          />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-red-400 mb-1">解析失败</h3>
+                        <p className="text-sm text-red-300/80">{error}</p>
+                      </div>
+                      <button
+                        onClick={() => setError("")}
+                        className="p-1 hover:bg-red-500/10 rounded-lg transition-colors">
+                        <svg
+                          className="w-5 h-5 text-red-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2}>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setResult(null)}
-                      className="p-2 hover:bg-glass-3 rounded-lg transition-colors group">
-                      <svg
-                        className="w-5 h-5 text-muted group-hover:text-primary transition-colors"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
                   </div>
                 </div>
+              )}
 
-                {/* Result Content */}
-                <div className="p-6" style={{ touchAction: 'manipulation' }}>
-                  {renderPlatformResult(result)}
+              {/* Results Section */}
+              {result && (result.code === 1 || result.code === 200) && (
+                <div className="reveal max-w-3xl mt-8">
+                  <div className="glass-card iridescent-border">
+                    {/* Result Header */}
+                    <div className="px-6 py-4 border-b border-border-subtle bg-glass-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                          <span className="text-sm font-medium text-primary">
+                            解析成功
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setResult(null)}
+                          className="p-2 hover:bg-glass-3 rounded-lg transition-colors group">
+                          <svg
+                            className="w-5 h-5 text-muted group-hover:text-primary transition-colors"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Result Content */}
+                    <div className="p-6" style={{ touchAction: 'manipulation' }}>
+                      {renderPlatformResult(result)}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+
+            {/* 右侧公众号引流（lg+ 才显示，sticky 跟随滚动） */}
+            <aside className="hidden lg:block lg:w-56 lg:flex-shrink-0 lg:sticky lg:top-8">
+              <div className="glass-card iridescent-border p-4 text-center">
+                <p className="text-sm font-medium text-primary mb-3">📱 关注公众号</p>
+                <Image
+                  src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/wp/1782738963299-5wrchz.jpg"
+                  alt="公众号二维码"
+                  width={200}
+                  height={200}
+                  className="rounded-lg w-full h-auto"
+                  unoptimized
+                />
+                <p className="text-xs text-muted mt-3 leading-relaxed">
+                  获取最新功能更新<br />反馈建议更优先处理
+                </p>
+              </div>
+            </aside>
+          </div>
         </div>
       </div>
     </>
