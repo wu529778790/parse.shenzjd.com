@@ -176,8 +176,11 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                  <p className="text-base font-medium mb-1">长视频（约 {formatDuration(douyinData.duration || 0)}）</p>
-                  <p className="text-sm text-gray-300">为避免占用服务器带宽，请在浏览器新窗口打开，播放器内可点击下载</p>
+                  <p className="text-base font-medium mb-1">服务器扛不住了 🙏</p>
+                  <p className="text-sm text-gray-300">
+                    这个视频太长了（约 {formatDuration(douyinData.duration || 0)}），
+                    走咱家服务器太费流量，大家体谅一下～
+                  </p>
                 </div>
                 <a
                   href={douyinData.url}
@@ -187,9 +190,11 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                   </svg>
-                  新窗口播放
+                  打开新链接
                 </a>
-                <p className="text-xs text-gray-400">打开后浏览器播放器内可直接点击下载</p>
+                <p className="text-xs text-gray-400">
+                  打开后点击视频右下角「⋯」三个点，就能下载
+                </p>
               </div>
             </div>
           </div>
@@ -298,7 +303,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
             </svg>
-            新窗口下载
+            打开新链接下载
           </a>
         )}
 
