@@ -90,8 +90,8 @@ export default function Home() {
 
           {/* Body: Form/Results + 右侧公众号引流 */}
           <div className="lg:flex lg:items-start lg:justify-center lg:gap-6">
-            {/* 主交互区：Form / Error / Results */}
-            <div className="max-w-3xl w-full lg:flex-shrink-0 lg:w-auto">
+            {/* 主交互区：Form / Error / Results — lg 下强制 768px，不被 flex 压缩 */}
+            <div className="lg:w-[48rem] lg:flex-shrink-0">
               <div className={`reveal reveal-delay-2 ${mounted ? "opacity-100" : "opacity-0"}`}>
                 <VideoParserForm
                   onResult={handleParseResult}
