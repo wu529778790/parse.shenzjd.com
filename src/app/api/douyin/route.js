@@ -25,7 +25,7 @@ async function douyin(url) {
         msg: "无法解析视频 ID：请确保链接格式正确且视频可访问",
       };
     }
-    const { id, type: contentType, redirectUrl } = extractResult;
+    const { id, type: contentType, redirectUrl, ttwid } = extractResult;
     const sharePath = contentType === "note" ? "note" : "video";
 
     // ---- Step 2: 从分享页获取 SSR 数据 ----
@@ -37,10 +37,23 @@ async function douyin(url) {
       shareUrl = `https://www.iesdouyin.com/share/${sharePath}/${id}${params ? "?" + params : ""}`;
     }
 
-    const fetchHeaders = { ...MOBILE_HEADERS };
-    if (DOUYIN_COOKIE) {
-      fetchHeaders.Cookie = DOUYIN_COOKIE;
-    }
+    // 抖音二次握手机制：匿名首次访问只下发 ttwid cookie（无需登录），
+    // 带 ttwid 的第二次请求才会返回视频数据。维护一个极简 cookie jar。
+    let ttwidCookie = ttwid || "";
+    const buildFetchHeaders = () => {
+      const headers = { ...MOBILE_HEADERS };
+      const cookies = [];
+      if (ttwidCookie && !DOUYIN_COOKIE.includes("ttwid=")) {
+        cookies.push(ttwidCookie);
+      }
+      if (DOUYIN_COOKIE) {
+        cookies.push(DOUYIN_COOKIE);
+      }
+      if (cookies.length > 0) {
+        headers.Cookie = cookies.join("; ");
+      }
+      return headers;
+    };
 
     // 尝试多个域名 / 路径以应对机房 IP 被反爬的情况
     const tryUrls = [
@@ -52,28 +65,63 @@ async function douyin(url) {
 
     let videoInfo = null;
     let lastHtml = "";
-    for (const url of tryUrls) {
-      try {
-        const response = await fetch(url, { headers: fetchHeaders });
-        const html = await response.text();
-        lastHtml = html;
 
-        // 检查是否被重定向到国际版
-        if (html.includes("tiktok.com") || html.includes("访问受限")) {
-          logger.warn(`Douyin redirected to tiktok for URL: ${url}`);
-          continue;
-        }
+    // 判断 _ROUTER_DATA 是否包含有效视频数据
+    // 抖音二次握手下，首次请求只下发 ttwid cookie、数据为空壳，需带 cookie 重试
+    const hasValidData = (info) => {
+      if (!info?.loaderData) return false;
+      const keys = ["video_(id)/page", "note_(id)/page", "story_(id)/page"];
+      return keys.some(
+        (k) => info.loaderData[k]?.videoInfoRes?.item_list?.length > 0
+      );
+    };
 
-        const routerMatch = html.match(
-          /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s
-        );
-        if (routerMatch && routerMatch[1]) {
-          videoInfo = JSON.parse(routerMatch[1].trim());
-          logger.log(`Got _ROUTER_DATA from: ${url}`);
-          break;
+    // 最多两轮：第一轮拿 ttwid（可能无数据），第二轮带 ttwid 拿数据
+    for (let round = 0; round < 2 && !videoInfo; round++) {
+      for (const fetchUrl of tryUrls) {
+        if (videoInfo) break;
+        try {
+          const response = await fetch(fetchUrl, { headers: buildFetchHeaders() });
+          const html = await response.text();
+          lastHtml = html;
+
+          // 从响应头收集 ttwid，供后续请求使用
+          const newTtwid = extractTtwid(response);
+          if (newTtwid) {
+            if (ttwidCookie !== newTtwid) {
+              ttwidCookie = newTtwid;
+              logger.log(`Got ttwid from: ${fetchUrl}`);
+            }
+          }
+
+          // 检查是否被重定向到国际版
+          if (html.includes("tiktok.com") || html.includes("访问受限")) {
+            logger.warn(`Douyin redirected to tiktok for URL: ${fetchUrl}`);
+            continue;
+          }
+
+          const routerMatch = html.match(
+            /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s
+          );
+          if (routerMatch && routerMatch[1]) {
+            const parsed = JSON.parse(routerMatch[1].trim());
+            if (hasValidData(parsed)) {
+              videoInfo = parsed;
+              logger.log(
+                `Got valid _ROUTER_DATA from: ${fetchUrl} (round ${round + 1})`
+              );
+              break;
+            }
+            logger.log(
+              `Got empty _ROUTER_DATA shell from: ${fetchUrl}, retrying with cookie...`
+            );
+          }
+        } catch (e) {
+          logger.warn(`Failed to fetch ${fetchUrl}: ${e.message}`);
         }
-      } catch (e) {
-        logger.warn(`Failed to fetch ${url}: ${e.message}`);
+      }
+      if (!videoInfo && ttwidCookie && round === 0) {
+        logger.log("Round 1 got ttwid, retrying with cookie...");
       }
     }
 
@@ -83,16 +131,10 @@ async function douyin(url) {
       logger.warn(
         `No _ROUTER_DATA found for video ${id}. Response snippet: ${snippet}`
       );
-      // 判断是否因为缺少 Cookie 导致
-      if (!DOUYIN_COOKIE) {
-        return {
-          code: 201,
-          msg: "解析失败：未配置 DOUYIN_COOKIE，机房 IP 访问抖音需要 Cookie 才能获取数据。请在 .env.local 中配置 DOUYIN_COOKIE 后重新构建",
-        };
-      }
+      // 已自动携带匿名 ttwid 仍拿不到数据：多为视频不存在 / 已删除 / 被过滤
       return {
         code: 201,
-        msg: "解析失败：未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除",
+        msg: "解析失败：未能从页面获取视频数据，可能是视频不存在、已删除或页面结构变化",
       };
     }
 
@@ -235,9 +277,12 @@ async function extractIdAndRedirectUrl(url) {
     });
     const finalUrl = response.url || url;
 
+    // 从响应头收集匿名 ttwid（首次访问抖音会自动下发，无需登录）
+    const ttwid = extractTtwid(response);
+
     // 从最终 URL 中提取 ID
     const result = extractIdFromUrl(finalUrl);
-    if (result) return { ...result, redirectUrl: finalUrl };
+    if (result) return { ...result, redirectUrl: finalUrl, ttwid };
 
     // 如果 URL 中找不到，尝试从 HTML 中找
     const html = await response.text();
@@ -245,13 +290,13 @@ async function extractIdAndRedirectUrl(url) {
       /href="https:\/\/www\.iesdouyin\.com\/share\/video\/(\d+)/
     );
     if (videoCanonical) {
-      return { id: videoCanonical[1], type: "video", redirectUrl: finalUrl };
+      return { id: videoCanonical[1], type: "video", redirectUrl: finalUrl, ttwid };
     }
     const noteCanonical = html.match(
       /href="https:\/\/www\.iesdouyin\.com\/share\/note\/(\d+)/
     );
     if (noteCanonical) {
-      return { id: noteCanonical[1], type: "note", redirectUrl: finalUrl };
+      return { id: noteCanonical[1], type: "note", redirectUrl: finalUrl, ttwid };
     }
 
     // 尝试从 canonical 中提取
@@ -261,7 +306,7 @@ async function extractIdAndRedirectUrl(url) {
     if (canonical) {
       const canonicalResult = extractIdFromUrl(canonical[1]);
       if (canonicalResult) {
-        return { ...canonicalResult, redirectUrl: canonical[1] };
+        return { ...canonicalResult, redirectUrl: canonical[1], ttwid };
       }
     }
 
@@ -270,6 +315,29 @@ async function extractIdAndRedirectUrl(url) {
     logger.error("Error extracting ID:", error);
     return null;
   }
+}
+
+/**
+ * 从响应头 Set-Cookie 中提取指定名称的 cookie（兼容 undici 的多 Set-Cookie 头）
+ */
+function extractTtwid(response) {
+  try {
+    const setCookies = [];
+    if (typeof response.headers.getSetCookie === "function") {
+      setCookies.push(...response.headers.getSetCookie());
+    } else {
+      for (const [key, value] of response.headers.entries()) {
+        if (key.toLowerCase() === "set-cookie") setCookies.push(value);
+      }
+    }
+    for (const sc of setCookies) {
+      const match = sc.match(/ttwid=([^;]+)/);
+      if (match) return `ttwid=${match[1]}`;
+    }
+  } catch (e) {
+    logger.warn(`Failed to extract ttwid: ${e.message}`);
+  }
+  return "";
 }
 
 /**
