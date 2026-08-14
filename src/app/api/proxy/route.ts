@@ -7,6 +7,11 @@ const UPSTREAM_TIMEOUT_MS = Number(
   process.env.PROXY_UPSTREAM_TIMEOUT_MS || 30000
 );
 
+// body 流空闲超时：仅当长时间无数据才中断（默认 60s，正常播放/下载不受影响）
+const UPSTREAM_IDLE_TIMEOUT_MS = Number(
+  process.env.PROXY_UPSTREAM_IDLE_TIMEOUT_MS || 60000
+);
+
 function rateLimitResponse(): Response {
   return new Response(
     JSON.stringify({ code: 429, msg: "请求过于频繁，请稍后再试" }),
@@ -64,10 +69,46 @@ function wrapUpstreamBody(
   const reader = body.getReader();
   let closed = false;
 
+  // body 流空闲保护：超过 idle 时长无数据则中断，避免连接悬挂
+  // （不用 AbortSignal.timeout 一刀切——它会掐断正常的长视频播放流）
+  let idleTimer: NodeJS.Timeout | null = null;
+  let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+
+  const startIdleTimer = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (!closed) {
+        closed = true;
+        logger.warn(
+          `Upstream proxy stream idle timeout after ${UPSTREAM_IDLE_TIMEOUT_MS}ms, closing`
+        );
+        try {
+          streamController?.error(new Error("Upstream idle timeout"));
+        } catch {
+          // controller may already be errored/closed
+        }
+        reader.cancel().catch(() => {});
+      }
+    }, UPSTREAM_IDLE_TIMEOUT_MS);
+  };
+  const clearIdleTimer = () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+  };
+
   return new ReadableStream<Uint8Array>({
+    start(controller) {
+      streamController = controller;
+    },
     async pull(controller) {
+      // 开始读取数据，启动 idle 计时
+      startIdleTimer();
       try {
         const { done, value } = await reader.read();
+        clearIdleTimer();
+
         if (done) {
           if (!closed) {
             closed = true;
@@ -77,6 +118,7 @@ function wrapUpstreamBody(
         }
         controller.enqueue(value);
       } catch (error) {
+        clearIdleTimer();
         if (!closed) {
           closed = true;
           logger.warn("Upstream proxy stream terminated early:", error);
@@ -86,6 +128,7 @@ function wrapUpstreamBody(
     },
     async cancel(reason) {
       closed = true;
+      clearIdleTimer();
       try {
         await reader.cancel(reason);
       } catch {
@@ -99,10 +142,23 @@ async function fetchWithTimeout(
   url: string,
   init: RequestInit
 ): Promise<Response> {
-  return fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  });
+  // 连接阶段超时：仅限制「建立连接 + 收到响应头」。
+  // 不能用 AbortSignal.timeout 直接传给 fetch——它会在 body 流式传输
+  // 到达超时时长后强制中断（长视频播放必断流）。这里在拿到响应头后
+  // 清除定时器，body 流改由 wrapUpstreamBody 的 idle 超时保护。
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return response;
+  } catch (error) {
+    clearTimeout(timer);
+    throw error;
+  }
 }
 
 const DEFAULT_UA =
