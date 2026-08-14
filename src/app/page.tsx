@@ -98,7 +98,7 @@ export default function Home() {
 
           {/* Error State */}
           {error && (
-            <div className="reveal max-w-2xl mx-auto mt-8">
+            <div className="reveal max-w-3xl mx-auto mt-8">
               <div className="glass-card iridescent-border p-6 border-l-4 border-l-red-500">
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">

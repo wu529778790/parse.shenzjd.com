@@ -297,7 +297,7 @@ export default function VideoParserForm({
   }, [detectedPlatform]);
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Input Card */}
         <div className={`glass-card iridescent-border p-1 transition-all duration-500 ${isFocused ? 'shadow-2xl shadow-indigo-500/10' : ''}`}>
