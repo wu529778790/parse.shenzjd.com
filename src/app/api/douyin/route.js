@@ -28,6 +28,18 @@ async function douyin(url) {
     const { id, type: contentType, redirectUrl, ttwid } = extractResult;
     const sharePath = contentType === "note" ? "note" : "video";
 
+    // ---- ID 合法性预校验 ----
+    // 抖音标准 aweme_id 为 19 位数字（首位通常为 7）。17-19 位视为合法
+    // （兼容历史/note/story 类型）；明显非法的伪 ID（如日志中出现的
+    // 000000000503073 这类 15 位）直接返回，不发请求，节省服务器流量。
+    if (!/^\d{17,19}$/.test(id)) {
+      logger.warn(`Douyin invalid video id format: ${id}`);
+      return {
+        code: 400,
+        msg: "解析失败：链接中的视频 ID 格式不正确，请确认链接来自抖音分享",
+      };
+    }
+
     // ---- Step 2: 从分享页获取 SSR 数据 ----
     // 优先使用完整重定向 URL（含 share_version / share_sign 等参数）以降低被过滤概率
     let shareUrl = redirectUrl || `https://www.iesdouyin.com/share/${sharePath}/${id}`;
