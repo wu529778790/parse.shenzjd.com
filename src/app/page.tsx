@@ -221,7 +221,7 @@ export default function Home() {
                   ☕ 赞赏
                 </p>
                 <Image
-                  src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/blog/imgx-20260815-095440-uc4a.png"
+                  src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/blog/imgx-20260815-100157-net7.png"
                   alt="赞赏码"
                   width={120}
                   height={120}
