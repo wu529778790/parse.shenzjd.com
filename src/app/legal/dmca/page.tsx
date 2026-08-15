@@ -3,8 +3,8 @@ import LegalLayout from "@/components/LegalLayout";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
-  title: "权利通知 - ParseShort",
-  description: "ParseShort 权利通知与版权投诉流程，尊重并保护知识产权。",
+  title: `权利通知 - ${siteConfig.name}`,
+  description: `${siteConfig.name} 权利通知与版权投诉流程，尊重并保护知识产权。`,
   robots: { index: true, follow: true },
 };
 
@@ -15,7 +15,7 @@ export default function DmcaPage() {
       subtitle="我们尊重知识产权。若你认为本服务影响了你的合法权益，请按以下流程联系我们。">
       <h2>一、我们的立场</h2>
       <p>
-        ParseShort 尊重并致力于保护知识产权及其他合法权益。
+        {siteConfig.name} 尊重并致力于保护知识产权及其他合法权益。
         本服务本身不存储、不托管、不上传任何视频或图片内容，
         仅作为链接解析工具，帮助从分享文本中提取链接并尝试解析其公开信息。
       </p>

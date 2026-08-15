@@ -54,7 +54,7 @@ export default function Header() {
             href="https://parse.shenzjd.com"
             className="flex items-center gap-2 text-primary hover:text-accent transition-colors duration-300 shrink-0"
           >
-            <span className="text-lg font-bold gradient-text">ParseShort</span>
+            <span className="text-lg font-bold gradient-text">神族九帝</span>
           </a>
 
           {/* Center: Desktop Nav */}

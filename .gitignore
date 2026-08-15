@@ -50,3 +50,6 @@ next-env.d.ts
 /public/sw.js
 /public/workbox-*.js
 /public/swe-worker-*.js
+
+# 运行时日志（本地启动产生的 .log 文件，不进版本库）
+/data/

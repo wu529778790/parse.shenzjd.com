@@ -15,6 +15,7 @@ import {
 } from "@/components/videos";
 import { ApiResponse } from "@/types/api";
 import { VIDEO_PLATFORMS } from "@/config/video-platforms";
+import { siteConfig } from "@/config/site";
 
 // 平台名称单一数据源：从配置读取，避免与代码脱节（之前 README/SEO 只列了 7 个，实际 24 个）
 const PLATFORM_NAMES = Object.values(VIDEO_PLATFORMS).map((p) => p.name);
@@ -81,14 +82,28 @@ export default function Home() {
           <header className="text-center mb-8 reveal">
             {/* Title */}
             <h1 className="text-3xl sm:text-4xl font-bold mb-2 glow-text">
-              <span className="gradient-text">ParseShort</span>
+              <span className="gradient-text">神族九帝</span>
             </h1>
 
             {/* Subtitle */}
             <p className="text-sm text-muted max-w-md mx-auto">
-              {PLATFORM_NAMES.slice(0, 8).join(" / ")} / 等 {PLATFORM_NAMES.length}+ 平台
+              免费短视频解析 · {PLATFORM_NAMES.slice(0, 8).join(" / ")} / 等 {PLATFORM_NAMES.length}+ 平台
             </p>
           </header>
+
+          {/* Platform Links（内部链接，利于 SEO 收录平台落地页） */}
+          <nav
+            className="flex flex-wrap justify-center gap-2 mb-8"
+            aria-label="支持平台导航">
+            {Object.entries(VIDEO_PLATFORMS).map(([key, p]) => (
+              <a
+                key={key}
+                href={`/platform/${key}`}
+                className="px-3 py-1.5 rounded-full text-xs bg-glass-2 hover:bg-glass-3 text-secondary hover:text-primary transition-colors">
+                {p.emoji} {p.name}解析
+              </a>
+            ))}
+          </nav>
 
           {/* Body: Form/Results（公众号浮窗挪到 body 末尾做 fixed，不挤压主结构） */}
           <div className="max-w-3xl mx-auto">
@@ -122,6 +137,10 @@ export default function Home() {
                       <div className="flex-1">
                         <h3 className="font-semibold text-red-400 mb-1">解析失败</h3>
                         <p className="text-sm text-red-300/80">{error}</p>
+                        <p className="text-xs text-muted mt-3 leading-relaxed">
+                          遇到问题？关注公众号「神族九帝」并给公众号发消息，
+                          向站长反馈失败链接，我们会尽快排查处理。
+                        </p>
                       </div>
                       <button
                         onClick={() => setError("")}
@@ -199,18 +218,18 @@ export default function Home() {
 
                 {/* 公众号 */}
                 <p className="text-xs font-medium text-primary text-center mb-2">
-                  📱 公众号
+                  📱 公众号 · 神族九帝
                 </p>
                 <Image
                   src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/wp/1782738963299-5wrchz.jpg"
-                  alt="公众号二维码"
+                  alt="神族九帝公众号二维码"
                   width={120}
                   height={120}
                   className="rounded w-full h-auto"
                   unoptimized
                 />
                 <p className="text-[10px] text-muted mt-2 text-center leading-tight">
-                  关注获取最新更新
+                  长按识别 · 关注神族九帝
                 </p>
 
                 {/* 分隔线 */}
@@ -236,6 +255,43 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* FAQ 结构化数据（SEO） */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: [
+              {
+                "@type": "Question",
+                name: "短视频怎么去水印下载？",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: "复制视频分享链接或完整分享文案，粘贴到神族九帝输入框，点击解析即可获得无水印视频下载地址，全程免费在线使用，无需安装软件。",
+                },
+              },
+              {
+                "@type": "Question",
+                name: "支持哪些平台的视频解析？",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: `支持 ${PLATFORM_NAMES.join("、")} 等 ${PLATFORM_NAMES.length}+ 平台的视频解析与无水印下载。`,
+                },
+              },
+              {
+                "@type": "Question",
+                name: "解析失败怎么办？",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: `部分视频受平台风控或地区限制可能暂时无法解析，可更换网络环境后重试；如仍失败，关注公众号「${siteConfig.name}」并反馈链接，站长会协助排查。`,
+                },
+              },
+            ],
+          }),
+        }}
+      />
     </>
   );
 }

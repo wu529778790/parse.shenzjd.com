@@ -1,6 +1,6 @@
 {
-  "name": "ParseShort 短视频解析",
-  "short_name": "ParseShort",
+  "name": "神族九帝 短视频解析",
+  "short_name": "神族九帝",
   "description": "支持抖音、快手、B站、微博、小红书等 24+ 平台的短视频解析与下载工具",
   "start_url": "/",
   "display": "standalone",

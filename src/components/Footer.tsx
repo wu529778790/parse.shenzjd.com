@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteConfig } from "@/config/site";
 
 export default function Footer() {
   return (
@@ -28,7 +29,7 @@ export default function Footer() {
 
           {/* Copyright */}
           <p className="text-center text-xs text-muted/60">
-            &copy; {new Date().getFullYear()} ParseShort · shenzjd.com
+            &copy; {new Date().getFullYear()} {siteConfig.name} · {siteConfig.domain}
           </p>
         </div>
       </div>

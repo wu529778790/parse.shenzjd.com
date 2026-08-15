@@ -3,8 +3,8 @@ import LegalLayout from "@/components/LegalLayout";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
-  title: "隐私政策 - ParseShort",
-  description: "ParseShort 隐私政策，说明我们如何处理你的信息与日志。",
+  title: `隐私政策 - ${siteConfig.name}`,
+  description: `${siteConfig.name} 隐私政策，说明我们如何处理你的信息与日志。`,
   robots: { index: true, follow: true },
 };
 
@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       subtitle="我们高度重视你的隐私，本政策说明我们处理哪些信息。">
       <h2>一、总则</h2>
       <p>
-        本服务（ParseShort）无需注册账号即可使用，我们不要求你提供姓名、手机号、邮箱等个人身份信息。
+        本服务（{siteConfig.name}）无需注册账号即可使用，我们不要求你提供姓名、手机号、邮箱等个人身份信息。
         本政策说明我们在你使用过程中会接触哪些数据，以及如何处理它们。
       </p>
 

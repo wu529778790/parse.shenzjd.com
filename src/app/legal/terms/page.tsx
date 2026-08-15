@@ -3,8 +3,8 @@ import LegalLayout from "@/components/LegalLayout";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
-  title: "用户协议 - ParseShort",
-  description: "ParseShort 用户服务协议，明确服务内容、使用条件与用户责任。",
+  title: `用户协议 - ${siteConfig.name}`,
+  description: `${siteConfig.name} 用户服务协议，明确服务内容、使用条件与用户责任。`,
   robots: { index: true, follow: true },
 };
 
@@ -15,7 +15,7 @@ export default function TermsPage() {
       subtitle="使用本服务前，请仔细阅读并同意以下条款。">
       <h2>一、服务说明</h2>
       <p>
-        ParseShort（以下简称&ldquo;本服务&rdquo;）是一个短视频链接解析工具，帮助你从分享文本中提取链接，
+        {siteConfig.name}（以下简称&ldquo;本服务&rdquo;）是一个短视频链接解析工具，帮助你从分享文本中提取链接，
         并尝试解析其对应的公开信息（如标题、封面、播放地址等）。
       </p>
       <p>

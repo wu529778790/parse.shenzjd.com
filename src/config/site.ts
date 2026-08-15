@@ -1,7 +1,7 @@
-// 站点级配置：集中管理联系邮箱、域名等信息
-// 修改邮箱时只需改这一处，所有法律页面与页脚会同步更新
+// 站点级配置：集中管理品牌名、联系邮箱、域名等信息
+// 修改品牌名/邮箱时只需改这一处，所有页面、页脚、法律页面会同步更新
 export const siteConfig = {
-  name: "ParseShort",
+  name: "神族九帝",
   domain: "shenzjd.com",
   url: "https://parse.shenzjd.com",
 
