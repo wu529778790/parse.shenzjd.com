@@ -229,7 +229,7 @@ export default function Home() {
                   unoptimized
                 />
                 <p className="text-[10px] text-muted mt-2 text-center leading-tight">
-                  长按识别支持一下
+                  扫码支持一下
                 </p>
               </div>
             </div>
