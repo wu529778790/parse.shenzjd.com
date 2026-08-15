@@ -185,7 +185,7 @@ export default function Home() {
               )}
           </div>
 
-          {/* 右侧悬浮公众号浮窗：lg+ 显示，可关闭，刷新页面后重新显示。
+          {/* 右侧悬浮公众号+赞赏码浮窗：lg+ 显示，可关闭，刷新页面后重新显示。
               fixed 定位，不占文档流、不挤压主结构；滚动时保持在视口右侧垂直正中央。 */}
           {showWxQr && (
             <div className="hidden lg:block fixed right-4 top-1/2 -translate-y-1/2 z-40">
@@ -193,9 +193,11 @@ export default function Home() {
                 <button
                   onClick={() => setShowWxQr(false)}
                   aria-label="关闭公众号卡片"
-                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white text-xs flex items-center justify-center transition-colors leading-none">
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white text-xs flex items-center justify-center transition-colors leading-none z-10">
                   ×
                 </button>
+
+                {/* 公众号 */}
                 <p className="text-xs font-medium text-primary text-center mb-2">
                   📱 公众号
                 </p>
@@ -209,6 +211,25 @@ export default function Home() {
                 />
                 <p className="text-[10px] text-muted mt-2 text-center leading-tight">
                   关注获取最新更新
+                </p>
+
+                {/* 分隔线 */}
+                <hr className="my-3 border-border-subtle" />
+
+                {/* 赞赏码 */}
+                <p className="text-xs font-medium text-primary text-center mb-2">
+                  ☕ 赞赏
+                </p>
+                <Image
+                  src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/blog/imgx-20260815-095440-uc4a.png"
+                  alt="赞赏码"
+                  width={120}
+                  height={120}
+                  className="rounded w-full h-auto"
+                  unoptimized
+                />
+                <p className="text-[10px] text-muted mt-2 text-center leading-tight">
+                  长按识别支持一下
                 </p>
               </div>
             </div>
