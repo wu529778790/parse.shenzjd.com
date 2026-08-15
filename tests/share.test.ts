@@ -194,8 +194,28 @@ const cases: ShareParseCase[] = [
   {
     name: "无效-不包含支持平台域名",
     input: "这是一个普通文本，没有任何视频链接。",
-    expectPlatform: "douyin",
+    expectPlatform: null,
     expectUrl: null,
+  },
+  {
+    name: "无效-图床CDN图片链接（jsdmirror）",
+    input:
+      "https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/wp/1782738963299-5wrchz.jpg",
+    expectPlatform: null,
+    expectUrl:
+      "https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/wp/1782738963299-5wrchz.jpg",
+  },
+  {
+    name: "无效-普通网站链接（github）",
+    input: "https://github.com/wu529778790/parse.shenzjd.com",
+    expectPlatform: null,
+    expectUrl: "https://github.com/wu529778790/parse.shenzjd.com",
+  },
+  {
+    name: "无效-微信链接（mp.weixin）",
+    input: "https://mp.weixin.qq.com/s/abc123def456",
+    expectPlatform: null,
+    expectUrl: "https://mp.weixin.qq.com/s/abc123def456",
   },
   {
     name: "同域多URL-取第一个",
@@ -222,9 +242,7 @@ describe("share utils", () => {
     } else {
       expect(url).toBe(c.expectUrl);
     }
-    // 是否包含有效域名
-    expect(hasValidVideoUrl(c.input)).toBe(
-      c.expectUrl !== null && c.expectUrl !== ""
-    );
+    // 是否包含有效域名（与平台识别结果一致：识别到平台 = 有效视频链接）
+    expect(hasValidVideoUrl(c.input)).toBe(c.expectPlatform !== null);
   });
 });

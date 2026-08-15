@@ -204,13 +204,19 @@ export default function VideoParserForm({
         setUrl(extractedUrl);
         const detected = detectPlatform(text);
         setDetectedPlatform(detected);
+        // 识别不到平台：提示用户链接不对，不发起解析
+        // （去掉兜底 douyin 后，任意 URL 不再被默认当抖音解析）
+        if (!detected) {
+          onResult(null, "无法识别的视频平台，请粘贴支持的平台链接（如抖音/快手/B站等）");
+          return;
+        }
         setPlatform(detected);
         debouncedParse(extractedUrl, detected);
       } else {
         setDetectedPlatform(null);
       }
     },
-    [debouncedParse]
+    [debouncedParse, onResult]
   );
 
   // Auto-read clipboard on mount
@@ -280,6 +286,11 @@ export default function VideoParserForm({
     e.preventDefault();
     if (!url) {
       onResult(null, "请粘贴包含视频链接的文本");
+      return;
+    }
+    // 链接不在任何受支持平台：提示用户，不发起解析
+    if (!hasValidVideoUrl(url)) {
+      onResult(null, "无法识别的视频平台，请粘贴支持的平台链接（如抖音/快手/B站等）");
       return;
     }
     // 复用 parseVideo，避免重复实现 fetch + 缓存逻辑

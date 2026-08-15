@@ -67,8 +67,9 @@ export function hasValidVideoUrl(text: string): boolean {
 
 /**
  * 根据文本粗略检测平台（先匹配更具体的域名）
+ * 识别不到时返回 null（不再兜底返回 douyin——任意 URL 都被当抖音解析会误导用户）
  */
-export function detectPlatform(text: string): VideoPlatformKey {
+export function detectPlatform(text: string): VideoPlatformKey | null {
   const firstUrl = extractUrl(text) || "";
   const lower = firstUrl.toLowerCase();
 
@@ -125,7 +126,7 @@ export function detectPlatform(text: string): VideoPlatformKey {
   if (lower.includes("snssdk.com") || lower.includes("douyin.com"))
     return "douyin";
 
-  return "douyin";
+  return null;
 }
 
 export function extractUrlFromText(text: string): string | null {
