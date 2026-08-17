@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import FloatingQR from "@wu529778790/floating-qr";
+import "@wu529778790/floating-qr/style.css";
 import VideoParserForm from "@/components/VideoParserForm";
 import {
   BilibiliVideo,
@@ -51,11 +52,20 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  // 公众号浮窗可见性：用户可关闭，关闭状态不持久化（刷新页面后重新显示）
-  const [showWxQr, setShowWxQr] = useState(true);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // 右侧悬浮公众号+赞赏码浮窗：由 @wu529778790/floating-qr 提供
+  // （right-center = 视口右侧垂直居中，与原手写实现一致；不持久化关闭状态，刷新重新出现）
+  useEffect(() => {
+    const fq = new FloatingQR({
+      position: "right-center",
+      wechat: { title: "公众号 · 神族九帝", desc: "长按识别 · 关注神族九帝" },
+      donate: { title: "赞赏", desc: "扫码支持一下" },
+    });
+    return () => fq?.destroy();
   }, []);
 
   const handleParseResult = (
@@ -203,56 +213,6 @@ export default function Home() {
                 </div>
               )}
           </div>
-
-          {/* 右侧悬浮公众号+赞赏码浮窗：lg+ 显示，可关闭，刷新页面后重新显示。
-              fixed 定位，不占文档流、不挤压主结构；滚动时保持在视口右侧垂直正中央。 */}
-          {showWxQr && (
-            <div className="hidden lg:block fixed right-4 top-1/2 -translate-y-1/2 z-40">
-              <div className="glass-card iridescent-border p-3 w-32 relative shadow-2xl">
-                <button
-                  onClick={() => setShowWxQr(false)}
-                  aria-label="关闭公众号卡片"
-                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white text-xs flex items-center justify-center transition-colors leading-none z-10">
-                  ×
-                </button>
-
-                {/* 公众号 */}
-                <p className="text-xs font-medium text-primary text-center mb-2">
-                  📱 公众号 · 神族九帝
-                </p>
-                <Image
-                  src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/wp/1782738963299-5wrchz.jpg"
-                  alt="神族九帝公众号二维码"
-                  width={120}
-                  height={120}
-                  className="rounded w-full h-auto"
-                  unoptimized
-                />
-                <p className="text-[10px] text-muted mt-2 text-center leading-tight">
-                  长按识别 · 关注神族九帝
-                </p>
-
-                {/* 分隔线 */}
-                <hr className="my-3 border-border-subtle" />
-
-                {/* 赞赏码 */}
-                <p className="text-xs font-medium text-primary text-center mb-2">
-                  ☕ 赞赏
-                </p>
-                <Image
-                  src="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/blog/imgx-20260815-100157-net7.png"
-                  alt="赞赏码"
-                  width={120}
-                  height={120}
-                  className="rounded w-full h-auto"
-                  unoptimized
-                />
-                <p className="text-[10px] text-muted mt-2 text-center leading-tight">
-                  扫码支持一下
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
