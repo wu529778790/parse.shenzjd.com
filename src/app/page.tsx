@@ -97,19 +97,29 @@ export default function Home() {
 
             {/* Subtitle */}
             <p className="text-sm text-muted max-w-md mx-auto">
-              免费短视频解析 · {PLATFORM_NAMES.slice(0, 8).join(" / ")} / 等 {PLATFORM_NAMES.length}+ 平台
+              支持 {PLATFORM_NAMES.length}+ 平台视频解析下载 · 免费在线 · 粘贴链接即用
             </p>
           </header>
 
-          {/* Platform Links（内部链接，利于 SEO 收录平台落地页） */}
+          {/* Platform Chips（首页「SEO 收录入口」，对用户不可点击 —— 解析仍走上方输入框）
+              HTML 保留 <a href> 让爬虫跟随、传递首页→落地页的内链权重；
+              前端拦截点击/回车 + 视觉降透明度，让用户一眼看出是展示项。 */}
           <nav
-            className="flex flex-wrap justify-center gap-2 mb-8"
-            aria-label="支持平台导航">
+            className="flex flex-wrap justify-center gap-2 mb-8 items-center"
+            aria-label="支持平台列表（SEO 收录入口，解析请使用上方输入框）">
+            <span className="text-xs text-muted/70 mr-1" aria-hidden="true">
+              SEO 收录 ·
+            </span>
             {Object.entries(VIDEO_PLATFORMS).map(([key, p]) => (
               <a
                 key={key}
                 href={`/platform/${key}`}
-                className="px-3 py-1.5 rounded-full text-xs bg-glass-2 hover:bg-glass-3 text-secondary hover:text-primary transition-colors">
+                onClick={(e) => e.preventDefault()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") e.preventDefault();
+                }}
+                title={`${p.name} - 仅供搜索引擎收录，解析请粘贴链接到上方输入框`}
+                className="px-3 py-1.5 rounded-full text-xs bg-glass-2 text-secondary opacity-60 hover:opacity-90 cursor-default transition-opacity select-none">
                 {p.emoji} {p.name}解析
               </a>
             ))}
