@@ -58,12 +58,10 @@ export default function Home() {
   }, []);
 
   // 右侧悬浮公众号+赞赏码浮窗：由 @wu529778790/floating-qr 提供
-  // （right-center = 视口右侧垂直居中，与原手写实现一致；不持久化关闭状态，刷新重新出现）
+  // 全部走包默认值（标题/文案/二维码图都是为本站预设的），不传自定义文案
   useEffect(() => {
     const fq = new FloatingQR({
       position: "right-center",
-      wechat: { title: "公众号 · 神族九帝", desc: "长按识别 · 关注神族九帝" },
-      donate: { title: "赞赏", desc: "扫码支持一下" },
     });
     return () => fq?.destroy();
   }, []);
