@@ -1,7 +1,8 @@
 # Cloudflare Workers 部署配置（OpenNext 方案，替代原 next-on-pages）
-# 构建：npm run cf:build  → 产出 .open-next/ 目录
-# 本地预览：npm run cf:preview
-# 部署：npm run cf:deploy（push 到 main 时由 GitHub Actions 自动执行）
+# 构建：npm run build:cf  → 产出 .open-next/ 目录
+# 本地预览：npm run preview:cf
+# 部署：npm run deploy:cf（手动）；自动部署由 Cloudflare Git 集成完成（Dashboard
+# 关联本仓库后，Build command=npm run build:cf，Deploy command=npx wrangler deploy）
 name = "parse-shenzjd-com"
 main = ".open-next/worker.js"
 compatibility_date = "2025-08-14"
@@ -12,6 +13,6 @@ directory = ".open-next/assets"
 binding = "ASSETS"
 
 # 非敏感环境变量（DOUYIN_COOKIE / WEIBO_COOKIE / BILIBILI_COOKIE 等敏感值
-# 通过 `wrangler secret put` 注入，CI 中由 GitHub Secrets 下发，不写入本文件）
+# 在 Worker 的 Settings → Variables and Secrets 中添加，不写入本文件）
 [vars]
 BILIBILI_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

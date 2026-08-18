@@ -36,7 +36,7 @@
 
 1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Worker** → 选择 **Import a repository**（首次使用按引导授权 GitHub）。
 2. 选择仓库 `wu529778790/parse.shenzjd.com`，进入构建设置，配置两个命令：
-   - **Build command（构建命令）**：`npm run cf:build`
+   - **Build command（构建命令）**：`npm run build:cf`
    - **Deploy command（部署命令）**：`npx wrangler deploy`
 3. 部署成功后，在 Worker 的 **Settings → Variables and Secrets → Secrets** 中添加（可选，用于提升解析成功率）：
    - `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`
@@ -48,9 +48,9 @@
 **本地构建与预览**：
 
 ```bash
-npm run cf:build    # 构建 .open-next/ 产物
-npm run cf:preview  # wrangler 本地预览
-npm run cf:deploy   # 手动部署到 Workers
+npm run build:cf    # 构建 .open-next/ 产物
+npm run preview:cf  # wrangler 本地预览
+npm run deploy:cf   # 手动部署到 Workers
 ```
 
 > 说明：Cloudflare 免费层不支持流式响应，`/api/proxy` 视频代理已移除，视频/图片一律直链；B站/小红书等防盗链平台直链 403 时页面会提示在新窗口打开。免费层另有 CPU 10ms/请求与内存限流隔离限制，解析成功率建议上线后实测。

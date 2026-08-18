@@ -15,9 +15,9 @@
     "test": "vitest run",
     "test:live": "RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts",
     "test:watch": "vitest",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:preview": "opennextjs-cloudflare preview",
-    "cf:deploy": "opennextjs-cloudflare deploy"
+    "build:cf": "opennextjs-cloudflare build",
+    "preview:cf": "opennextjs-cloudflare preview",
+    "deploy:cf": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
