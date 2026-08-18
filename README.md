@@ -45,11 +45,15 @@
 
 > 前置要求：仓库根目录的 `wrangler.toml`（`main` 指向 `.open-next/worker.js`、`nodejs_compat`、`assets` 绑定）与 `open-next.config.ts` 已就绪——Cloudflare 的 Git 集成依赖这两份文件，二者均已提交。
 
-**本地构建与预览**：
+**本地开发与构建（默认，与 Cloudflare 无关）**：
 
 ```bash
-npm run build:cf    # 构建 .open-next/ 产物（仅需此命令，本地开发用 npm run dev）
+npm run dev      # 本地开发（next dev --turbopack）
+npm run build    # 本地构建（Next.js 默认产物，供 Docker 等使用）
+npm test         # 单元测试
 ```
+
+> `npm run build:cf` 是 **Cloudflare 部署专用**的构建命令（产出 OpenNext 的 `.open-next/` 产物），仅需填在 Cloudflare Dashboard 的 Build command 里，本地开发/构建不使用它。
 
 > 说明：Cloudflare 免费层不支持流式响应，`/api/proxy` 视频代理已移除，视频/图片一律直链；B站/小红书等防盗链平台直链 403 时页面会提示在新窗口打开。免费层另有 CPU 10ms/请求与内存限流隔离限制，解析成功率建议上线后实测。
 
