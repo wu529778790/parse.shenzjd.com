@@ -7,30 +7,6 @@ interface GenericParsedVideoProps {
   data: ApiResponse;
 }
 
-// 判断 URL 是否需要通过代理（避免 Mixed Content 和 CORS）
-function proxyUrl(url: string | undefined, referer?: string): string {
-  if (!url) return url || "";
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (
-      hostname.includes("snssdk") ||
-      hostname.includes("douyinvod") ||
-      hostname.includes("douyinpic") ||
-      hostname.includes("iesdouyin") ||
-      hostname.includes("aweme") ||
-      hostname.includes("xhscdn") ||
-      hostname.includes("xhsimgs") ||
-      hostname.includes("redbook")
-    ) {
-      const ref = referer || (hostname.includes("xhscdn") || hostname.includes("xhsimgs") || hostname.includes("redbook")
-        ? "https://www.xiaohongshu.com/"
-        : "https://www.douyin.com/");
-      return `/api/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(ref)}`;
-    }
-  } catch {}
-  return url;
-}
-
 export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -40,9 +16,9 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
   }
 
   const d = data.data as GenericParsedData;
-  // 视频源也需走代理：抖音/小红书 CDN 的直链需要正确 Referer 才能播放，
-  // 直接用 d.url 会因跨域/Referer 校验失败而无法加载（与 avatar/cover/images 保持一致）
-  const videoUrl = proxyUrl(d.url || "");
+  // 视频/图片一律直链，不再走 /api/proxy：
+  // Cloudflare 免费层不支持流式代理；防盗链平台直链 403 时由 onError 提示复制直链打开
+  const videoUrl = d.url || "";
   const images = d.images?.filter(Boolean) || [];
 
   return (
@@ -51,7 +27,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
         <div className="flex items-center gap-4">
           {d.avatar && (
             <Image
-              src={proxyUrl(d.avatar)}
+              src={d.avatar}
               alt={d.author || ""}
               width={56}
               height={56}
@@ -77,7 +53,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
           <video
             ref={videoRef}
             src={videoUrl}
-            poster={proxyUrl(d.cover)}
+            poster={d.cover}
             controls
             playsInline
             className="w-full max-h-[70vh] bg-black"
@@ -95,7 +71,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
       {!videoUrl && d.cover && (
         <div className="glass-card overflow-hidden">
           <Image
-            src={proxyUrl(d.cover)}
+            src={d.cover}
             alt=""
             width={800}
             height={450}
@@ -110,12 +86,12 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
           {images.map((src, i) => (
             <a
               key={`${src}-${i}`}
-              href={proxyUrl(src)}
+              href={src}
               target="_blank"
               rel="noopener noreferrer"
               className="relative aspect-square rounded-lg overflow-hidden border border-border-subtle">
               <Image
-                src={proxyUrl(src)}
+                src={src}
                 alt=""
                 fill
                 className="object-cover"

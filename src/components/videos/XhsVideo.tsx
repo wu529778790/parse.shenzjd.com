@@ -7,23 +7,6 @@ interface XhsVideoProps {
   data: ApiResponse;
 }
 
-// 判断 URL 是否为小红书 CDN（需要通过代理）
-function proxyUrl(url: string | undefined): string {
-  if (!url) return url || "";
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    // 小红书 CDN 域名统一走代理，避免 Mixed Content 和 CORS 问题
-    if (
-      hostname.includes("xhscdn") ||
-      hostname.includes("xhsimgs") ||
-      hostname.includes("redbook")
-    ) {
-      return `/api/proxy?url=${encodeURIComponent(url)}&referer=https://www.xiaohongshu.com/`;
-    }
-  } catch {}
-  return url;
-}
-
 export default function XhsVideo({ data }: XhsVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -62,7 +45,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#ff2442] to-[#ff5c7c] blur-sm opacity-50" />
               <Image
-                src={proxyUrl(xhsData.avatar)}
+                src={xhsData.avatar}
                 alt={xhsData.author}
                 width={56}
                 height={56}
@@ -101,14 +84,14 @@ export default function XhsVideo({ data }: XhsVideoProps) {
         </div>
       )}
 
-      {/* Video Content */}
+      {/* Video Content：直链播放；小红书 CDN 防盗链导致 403 时走兜底提示 */}
       {!isImageType && xhsData.url && (
         <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
           <div className="aspect-[9/16] sm:aspect-video w-full">
             <video
               ref={videoRef}
               controls
-              poster={proxyUrl(xhsData.cover)}
+              poster={xhsData.cover}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
@@ -116,12 +99,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
               onLoadedData={handleVideoLoad}
               onPlay={handlePlay}
               onPause={handlePause}>
-              <source
-                src={`/api/proxy?url=${encodeURIComponent(
-                  xhsData.url
-                )}&referer=https://www.xiaohongshu.com/&disposition=inline`}
-                type="video/mp4"
-              />
+              <source src={xhsData.url} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
@@ -161,7 +139,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
                 <div className="absolute inset-0 bg-glass-2 animate-pulse" />
               )}
               <Image
-                src={proxyUrl(xhsData.images[0])}
+                src={xhsData.images[0]}
                 alt={xhsData.title || "图片"}
                 fill
                 sizes="(max-width: 800px) 100vw, 800px"
@@ -191,7 +169,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
                       : ""
                   }`}>
                   <Image
-                    src={proxyUrl(imageUrl)}
+                    src={imageUrl}
                     alt={`${xhsData.title || "图片"} ${index + 1}`}
                     fill
                     sizes="(max-width: 800px) 50vw, 400px"
@@ -206,14 +184,12 @@ export default function XhsVideo({ data }: XhsVideoProps) {
         </div>
       )}
 
-      {/* Download Actions */}
+      {/* Download Actions：直链新标签（跨域 download 属性失效，交由浏览器打开后另存） */}
       <div className="flex flex-col sm:flex-row gap-3">
         {!isImageType && xhsData.url && (
           <a
-            href={`/api/proxy?url=${encodeURIComponent(
-              xhsData.url
-            )}&referer=https://www.xiaohongshu.com/&filename=${encodeURIComponent(xhsData.title || "xhs")}&disposition=attachment`}
-            download
+            href={xhsData.url}
+            target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ff2442] to-[#ff5c7c] hover:from-[#e61f3a] hover:to-[#ff4d6a] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#ff2442]/25 hover:-translate-y-0.5">
             <svg

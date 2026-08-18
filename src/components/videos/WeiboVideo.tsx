@@ -77,7 +77,7 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
         </div>
       </div>
 
-      {/* Video Player */}
+      {/* Video Player：直链播放（不再走 /api/proxy） */}
       {weiboData.url && (
         <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
           <div className="aspect-video w-full">
@@ -88,17 +88,11 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}
               onPlay={handlePlay}
               onPause={handlePause}>
-              <source
-                src={`/api/proxy?url=${encodeURIComponent(
-                  weiboData.url
-                )}&disposition=inline`}
-                type="video/mp4"
-              />
+              <source src={weiboData.url} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
@@ -129,14 +123,12 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
         </div>
       )}
 
-      {/* Download Actions */}
+      {/* Download Actions：直链新标签 */}
       <div className="flex flex-col sm:flex-row gap-3">
         {weiboData.url && (
           <a
-            href={`/api/proxy?url=${encodeURIComponent(
-              weiboData.url
-            )}&filename=${encodeURIComponent(weiboData.title || "weibo")}&disposition=attachment`}
-            download
+            href={weiboData.url}
+            target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#e6162d] to-[#ff4d6a] hover:from-[#c91227] hover:to-[#e6162d] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#e6162d]/25 hover:-translate-y-0.5">
             <svg

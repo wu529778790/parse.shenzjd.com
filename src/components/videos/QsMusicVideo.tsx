@@ -55,9 +55,7 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
         <div className="flex gap-2">
           {musicData.url && (
             <a
-              href={`/api/proxy?url=${encodeURIComponent(
-                musicData.url
-              )}&filename=${encodeURIComponent(musicData.name || "music")}`}
+              href={musicData.url}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium">

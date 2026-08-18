@@ -6,28 +6,7 @@ import { ApiResponse, DouyinData } from "@/types/api";
 // 长视频阈值：超过该时长（毫秒）展示「服务器扛不住」话术，但所有视频统一走直链
 const LONG_VIDEO_DURATION_MS = 3 * 60 * 1000; // 3 分钟
 
-// 封面/头像等图片资源仍走代理（图片小、流量可控），视频一律直链不代理
-function proxyUrl(url: string | undefined): string {
-  if (!url) return url || "";
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (
-      hostname.includes("douyinpic") ||
-      hostname.includes("iesdouyin") ||
-      hostname.includes("xhscdn") ||
-      hostname.includes("xhsimgs") ||
-      hostname.includes("redbook")
-    ) {
-      const referer = hostname.includes("xhscdn") || hostname.includes("xhsimgs") || hostname.includes("redbook")
-        ? "https://www.xiaohongshu.com/"
-        : "https://www.douyin.com/";
-      return `/api/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
-    }
-  } catch {}
-  return url;
-}
-
-// 格式化时长：ms -> "3分25秒" / "34分钟"
+// 封面/头像/图片一律直链（不再走 /api/proxy）
 function formatDuration(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
   if (totalSeconds < 60) return `${totalSeconds}秒`;
@@ -87,7 +66,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
           <div className="relative">
             <div className="aspect-[9/16] sm:aspect-video w-full relative">
               <Image
-                src={proxyUrl(douyinData.cover)}
+                src={douyinData.cover}
                 alt={douyinData.title || "视频封面"}
                 fill
                 className="object-contain"
@@ -182,7 +161,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                 <div className="absolute inset-0 bg-glass-2 animate-pulse" />
               )}
               <Image
-                src={proxyUrl(douyinData.images[0])}
+                src={douyinData.images[0]}
                 alt={douyinData.title || "图片"}
                 width={864}
                 height={1920}
@@ -199,7 +178,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
                   key={index}
                   className="relative rounded-xl overflow-hidden group">
                   <Image
-                    src={proxyUrl(imageUrl)}
+                    src={imageUrl}
                     alt={`${douyinData.title || "图片"} ${index + 1}`}
                     width={864}
                     height={1920}

@@ -11,14 +11,9 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoItems = data.data && Array.isArray(data.data) ? data.data : [];
   const hasVideo = videoItems.length > 0;
-  const primaryVideoProxyUrl = hasVideo
-    ? `/api/proxy?url=${encodeURIComponent(
-        videoItems[0].video_url
-      )}&disposition=inline`
-    : "";
-  const posterProxyUrl = data.imgurl
-    ? `/api/proxy?url=${encodeURIComponent(data.imgurl)}&disposition=inline`
-    : undefined;
+  // 直链播放（不再走 /api/proxy）。B站 CDN 防盗链严格，直链 403 时走 onError 兜底提示
+  const primaryVideoUrl = hasVideo ? videoItems[0].video_url : "";
+  const posterUrl = data.imgurl || undefined;
 
   const handleVideoError = (
     e: React.SyntheticEvent<HTMLVideoElement, Event>
@@ -79,13 +74,13 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
           <div className="aspect-video w-full">
             <video
               controls
-              poster={posterProxyUrl}
+              poster={posterUrl}
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}>
-              <source src={primaryVideoProxyUrl} type="video/mp4" />
+              <source src={primaryVideoUrl} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
@@ -97,7 +92,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               <div className="text-center text-white p-6">
                 <p className="mb-4 text-sm">{videoError}</p>
                 <a
-                  href={primaryVideoProxyUrl}
+                  href={primaryVideoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00aeec] hover:bg-[#0099d4] text-white rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25">
@@ -109,7 +104,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
         </div>
       )}
 
-      {/* Download Options */}
+      {/* Download Options：直链新标签 */}
       {hasVideo && (
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold text-primary mb-4 flex items-center gap-2">
@@ -150,12 +145,8 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
                 </div>
 
                 <a
-                  href={`/api/proxy?url=${encodeURIComponent(
-                    item.video_url
-                  )}&filename=${encodeURIComponent(
-                    (data.title || "bilibili") + `-${index + 1}`
-                  )}&disposition=attachment`}
-                  download
+                  href={item.video_url}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00aeec] to-[#4dc9ff] hover:from-[#0099d4] hover:to-[#3db8e8] text-white rounded-lg text-sm font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25 hover:-translate-y-0.5">
                   <svg

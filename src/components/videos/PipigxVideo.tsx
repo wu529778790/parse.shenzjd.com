@@ -46,15 +46,9 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
               className="w-full h-auto bg-black rounded-lg"
               preload="none"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}>
-              <source
-                src={`/api/proxy?url=${encodeURIComponent(
-                  pipigxData.video
-                )}&disposition=inline`}
-                type="video/mp4"
-              />
+              <source src={pipigxData.video} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
@@ -76,12 +70,10 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
             )}
           </div>
 
-          {/* 下载按钮 */}
+          {/* 下载按钮：直链新标签 */}
           <div className="flex items-center justify-between">
             <a
-              href={`/api/proxy?url=${encodeURIComponent(
-                pipigxData.video
-              )}&filename=${encodeURIComponent(pipigxData.title || "pipigx")}`}
+              href={pipigxData.video}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">

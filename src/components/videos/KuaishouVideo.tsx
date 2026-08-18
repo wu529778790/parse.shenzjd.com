@@ -56,7 +56,7 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         </div>
       )}
 
-      {/* Video Player */}
+      {/* Video Player：直链播放（不再走 /api/proxy） */}
       {kuaishouData.photoUrl && (
         <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
           <div className="aspect-[9/16] sm:aspect-video w-full">
@@ -67,17 +67,11 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
               className="w-full h-full object-contain"
               preload="metadata"
               playsInline
-              crossOrigin="anonymous"
               onError={handleVideoError}
               onLoadedData={handleVideoLoad}
               onPlay={handlePlay}
               onPause={handlePause}>
-              <source
-                src={`/api/proxy?url=${encodeURIComponent(
-                  kuaishouData.photoUrl
-                )}&disposition=inline`}
-                type="video/mp4"
-              />
+              <source src={kuaishouData.photoUrl} type="video/mp4" />
               <p className="text-center text-gray-500 p-4">
                 您的浏览器不支持视频播放
               </p>
@@ -108,15 +102,11 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         </div>
       )}
 
-      {/* Download Button */}
+      {/* Download Button：直链新标签 */}
       <div className="flex flex-col sm:flex-row gap-3">
         <a
-          href={`/api/proxy?url=${encodeURIComponent(
-            kuaishouData.photoUrl || ""
-          )}&filename=${encodeURIComponent(
-            kuaishouData.caption || "kuaishou"
-          )}&disposition=attachment`}
-          download
+          href={kuaishouData.photoUrl || ""}
+          target="_blank"
           rel="noopener noreferrer"
           className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ff6600] to-[#ff9933] hover:from-[#e65c00] hover:to-[#ff8800] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:-translate-y-0.5">
           <svg
