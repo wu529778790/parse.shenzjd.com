@@ -26,14 +26,30 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com&project-name=parse&repository-name=parse.shenzjd.com)
 
-### Cloudflare（Workers）
+### Cloudflare（Workers / OpenNext）
 
-## 一键部署到 Cloudflare Workers
+本项目通过 [OpenNext](https://opennext.js.org/cloudflare) 适配器部署到 **Cloudflare Workers 免费层**（无需付费计划）。部署内容为静态页面 + 解析 API；视频不再走代理，解析结果直链播放/下载。
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wu529778790/parse.shenzjd.com)
+**推送即自动部署**：仓库已配置 [`.github/workflows/deploy-to-cloudflare.yaml`](.github/workflows/deploy-to-cloudflare.yaml)，push 到 `main` 时自动执行：单元测试 → OpenNext 构建 → `wrangler deploy` → 注入 Cookie 环境变量。
 
-- 点击上方按钮，按向导授权并创建项目即可自动构建与发布。
-- 若你已 fork 本仓库，点击后可在向导中选择你的 fork 进行部署。
+**首次配置（一次性）**：
+
+1. 创建 Cloudflare API Token：Cloudflare Dashboard → My Profile → API Tokens → Create Token，选择 **Edit Cloudflare Workers** 模板（权限含 `Workers Scripts: Edit`），记录 Token 与 Account ID。
+2. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 添加：
+   - `CLOUDFLARE_API_TOKEN`：上一步创建的 Token
+   - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账号 ID
+   - 可选（用于提升解析成功率）：`DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`
+3. 之后每次 push 到 `main` 即自动部署。
+
+**本地构建与预览**：
+
+```bash
+npm run cf:build    # 构建 .open-next/ 产物
+npm run cf:preview  # wrangler 本地预览
+npm run cf:deploy   # 手动部署到 Workers
+```
+
+> 说明：Cloudflare 免费层不支持流式响应，`/api/proxy` 视频代理已移除，视频/图片一律直链；B站/小红书等防盗链平台直链 403 时页面会提示在新窗口打开。免费层另有 CPU 10ms/请求与内存限流隔离限制，解析成功率建议上线后实测。
 
 ---
 

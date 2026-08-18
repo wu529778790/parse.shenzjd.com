@@ -1,7 +1,7 @@
 import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 /** 小红书 H5：桌面 Chrome UA，短链统一走 https */
 const XHS_USER_AGENT =

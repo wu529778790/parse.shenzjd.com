@@ -15,8 +15,9 @@
     "test": "vitest run",
     "test:live": "RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts",
     "test:watch": "vitest",
-    "wrk:dev": "npx -y wrangler@4.29.1 dev --local",
-    "wrk:deploy": "npx -y wrangler@4.29.1 deploy"
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@opennextjs/cloudflare": "^1.20.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

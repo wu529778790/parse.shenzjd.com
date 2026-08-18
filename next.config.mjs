@@ -46,6 +46,8 @@ const nextConfig = {
     );
   },
   images: {
+    // Cloudflare Workers 上无内置图片优化器，禁用优化、原图直出（配合前端 <Image unoptimized>）
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

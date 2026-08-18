@@ -1,7 +1,7 @@
 import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 async function getMusicInfo(url) {
   try {

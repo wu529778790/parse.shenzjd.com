@@ -1,7 +1,7 @@
 import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 // 从环境变量获取配置
 const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT || 

@@ -1,13 +1,17 @@
+# Cloudflare Workers 部署配置（OpenNext 方案，替代原 next-on-pages）
+# 构建：npm run cf:build  → 产出 .open-next/ 目录
+# 本地预览：npm run cf:preview
+# 部署：npm run cf:deploy（push 到 main 时由 GitHub Actions 自动执行）
 name = "parse-shenzjd-com"
-main = ".vercel/output/static/_worker.js/index.js"
+main = ".open-next/worker.js"
 compatibility_date = "2025-08-14"
 compatibility_flags = ["nodejs_compat"]
 
-[build]
-command = "npx @cloudflare/next-on-pages@1 && sh -c \"printf '_worker.js\\n' > .vercel/output/static/.assetsignore\""
-
 [assets]
-directory = ".vercel/output/static"
+directory = ".open-next/assets"
 binding = "ASSETS"
 
-
+# 非敏感环境变量（DOUYIN_COOKIE / WEIBO_COOKIE / BILIBILI_COOKIE 等敏感值
+# 通过 `wrangler secret put` 注入，CI 中由 GitHub Secrets 下发，不写入本文件）
+[vars]
+BILIBILI_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

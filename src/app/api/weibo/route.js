@@ -1,6 +1,6 @@
 import { createApiHandler } from "@/lib/api-middleware";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 async function weibo(url) {
   try {

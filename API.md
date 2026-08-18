@@ -321,7 +321,7 @@ GET /api/health
 ## 限制说明
 
 ### 速率限制
-- 每个 IP 每分钟最多 **60** 次请求（单次解析后会触发视频流、封面图等多个代理请求，故阈值较高）
+- 每个 IP 每分钟最多 **60** 次请求（单次解析会触发多次上游请求，故阈值较高）
 - 超出限制返回 `429` 状态码
 
 ### 缓存机制
@@ -339,10 +339,13 @@ DOUYIN_USER_AGENT=your_user_agent
 
 # 哔哩哔哩
 BILIBILI_COOKIE=your_cookie
+BILIBILI_USER_AGENT=your_user_agent
 
 # 微博
 WEIBO_COOKIE=your_cookie
 ```
+
+> Cloudflare Workers 部署时：`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`；Cookie 类敏感值在 CI 中由 GitHub Secrets 自动 `wrangler secret put` 注入，无需手动配置。
 
 ---
 

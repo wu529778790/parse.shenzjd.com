@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# OpenNext Cloudflare 构建产物（push 由 CI 构建生成）
+/.open-next/
+
 # production
 /build
 

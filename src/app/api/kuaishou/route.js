@@ -2,7 +2,7 @@ import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
 import { parseKuaishou, formatResponse } from "@/lib/kuaishouCore";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 // 使用中间件处理请求
 async function kuaishouParse(url) {
