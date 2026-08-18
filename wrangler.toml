@@ -1,8 +1,7 @@
 # Cloudflare Workers 部署配置（OpenNext 方案，替代原 next-on-pages）
-# 构建：npm run build:cf  → 产出 .open-next/ 目录
-# 本地预览：npm run preview:cf
-# 部署：npm run deploy:cf（手动）；自动部署由 Cloudflare Git 集成完成（Dashboard
-# 关联本仓库后，Build command=npm run build:cf，Deploy command=npx wrangler deploy）
+# 构建：npm run build:cf → 产出 .open-next/ 目录（供 Cloudflare Git 集成构建使用）
+# 自动部署：Dashboard 关联本仓库后，Build command=npm run build:cf，
+# Deploy command=npx wrangler deploy；每次 push 到 main 由 Cloudflare 自动构建部署
 name = "parse-shenzjd-com"
 main = ".open-next/worker.js"
 compatibility_date = "2025-08-14"

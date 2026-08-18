@@ -48,9 +48,7 @@
 **本地构建与预览**：
 
 ```bash
-npm run build:cf    # 构建 .open-next/ 产物
-npm run preview:cf  # wrangler 本地预览
-npm run deploy:cf   # 手动部署到 Workers
+npm run build:cf    # 构建 .open-next/ 产物（仅需此命令，本地开发用 npm run dev）
 ```
 
 > 说明：Cloudflare 免费层不支持流式响应，`/api/proxy` 视频代理已移除，视频/图片一律直链；B站/小红书等防盗链平台直链 403 时页面会提示在新窗口打开。免费层另有 CPU 10ms/请求与内存限流隔离限制，解析成功率建议上线后实测。
