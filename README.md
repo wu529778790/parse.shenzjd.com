@@ -30,16 +30,20 @@
 
 本项目通过 [OpenNext](https://opennext.js.org/cloudflare) 适配器部署到 **Cloudflare Workers 免费层**（无需付费计划）。部署内容为静态页面 + 解析 API；视频不再走代理，解析结果直链播放/下载。
 
-**推送即自动部署**：仓库已配置 [`.github/workflows/deploy-to-cloudflare.yaml`](.github/workflows/deploy-to-cloudflare.yaml)，push 到 `main` 时自动执行：单元测试 → OpenNext 构建 → `wrangler deploy` → 注入 Cookie 环境变量。
+**推送即自动部署（Cloudflare Git 集成，无需 GitHub Actions）**：将本仓库关联到 Cloudflare Worker 后，每次 push 到 `main`（或合并 PR），Cloudflare 会自动拉取代码、构建并部署，全程由 Cloudflare 托管，仓库内不写任何 workflow 文件。
 
-**首次配置（一次性）**：
+**首次配置（一次性，约 5 分钟）**：
 
-1. 创建 Cloudflare API Token：Cloudflare Dashboard → My Profile → API Tokens → Create Token，选择 **Edit Cloudflare Workers** 模板（权限含 `Workers Scripts: Edit`），记录 Token 与 Account ID。
-2. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 添加：
-   - `CLOUDFLARE_API_TOKEN`：上一步创建的 Token
-   - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账号 ID
-   - 可选（用于提升解析成功率）：`DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`
-3. 之后每次 push 到 `main` 即自动部署。
+1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Worker** → 选择 **Import a repository**（首次使用按引导授权 GitHub）。
+2. 选择仓库 `wu529778790/parse.shenzjd.com`，进入构建设置，配置两个命令：
+   - **Build command（构建命令）**：`npm run cf:build`
+   - **Deploy command（部署命令）**：`npx wrangler deploy`
+3. 部署成功后，在 Worker 的 **Settings → Variables and Secrets → Secrets** 中添加（可选，用于提升解析成功率）：
+   - `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`
+   - （`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`，无需配置）
+4. 之后每次 push 到 `main`，Cloudflare 自动重新构建并部署。
+
+> 前置要求：仓库根目录的 `wrangler.toml`（`main` 指向 `.open-next/worker.js`、`nodejs_compat`、`assets` 绑定）与 `open-next.config.ts` 已就绪——Cloudflare 的 Git 集成依赖这两份文件，二者均已提交。
 
 **本地构建与预览**：
 
