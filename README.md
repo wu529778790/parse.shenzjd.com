@@ -28,6 +28,10 @@
 
 ### Cloudflare（Workers / OpenNext）
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wu529778790/parse.shenzjd.com)
+
+点击上方按钮，按向导授权 GitHub 并确认后即可一键部署（Cloudflare 会自动克隆仓库到你的账户并配置 Workers Builds 自动 CI/CD；若向导未自动识别构建命令，请填 `npm run build:cf`）。
+
 本项目通过 [OpenNext](https://opennext.js.org/cloudflare) 适配器部署到 **Cloudflare Workers 免费层**（无需付费计划）。部署内容为静态页面 + 解析 API；视频不再走代理，解析结果直链播放/下载。
 
 **推送即自动部署（Cloudflare Git 集成，无需 GitHub Actions）**：将本仓库关联到 Cloudflare Worker 后，每次 push 到 `main`（或合并 PR），Cloudflare 会自动拉取代码、构建并部署，全程由 Cloudflare 托管，仓库内不写任何 workflow 文件。
