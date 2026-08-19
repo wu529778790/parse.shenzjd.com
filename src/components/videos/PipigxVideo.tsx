@@ -1,30 +1,18 @@
 "use client";
-import React, { useState } from "react";
+import React from "react";
 import { ApiResponse, PipigxData } from "@/types/api";
+import VideoPosterCard from "./VideoPosterCard";
 
 interface PipigxVideoProps {
   data: ApiResponse;
 }
 
 export default function PipigxVideo({ data }: PipigxVideoProps) {
-  const [videoError, setVideoError] = useState<string | null>(null);
-
   if (!data.data) {
     return null;
   }
 
   const pipigxData = data.data as PipigxData;
-
-  const handleVideoError = (
-    e: React.SyntheticEvent<HTMLVideoElement, Event>
-  ) => {
-    const video = e.currentTarget;
-    setVideoError(`视频加载失败: ${video.error?.message || "网络错误"}`);
-  };
-
-  const handleVideoLoad = () => {
-    setVideoError(null);
-  };
 
   return (
     <>
@@ -37,38 +25,13 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
       )}
       {pipigxData.video && (
         <div className="space-y-4">
-          <div
-            className="relative w-full rounded-lg overflow-hidden"
-            style={{ maxWidth: 800 }}>
-            <video
-              controls
-              poster={pipigxData.cover}
-              className="w-full h-auto bg-black rounded-lg"
-              preload="none"
-              playsInline
-              onError={handleVideoError}
-              onLoadedData={handleVideoLoad}>
-              <source src={pipigxData.video} type="video/mp4" />
-              <p className="text-center text-gray-500 p-4">
-                您的浏览器不支持视频播放
-              </p>
-            </video>
-
-            {videoError && (
-              <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
-                <div className="text-center text-white p-4">
-                  <p className="mb-4">{videoError}</p>
-                  <a
-                    href={pipigxData.video}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
-                    在新窗口打开
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
+          <VideoPosterCard
+            url={pipigxData.video}
+            cover={pipigxData.cover}
+            alt={pipigxData.title || "视频封面"}
+            accent="blue"
+            headline="视频已就绪 🎬"
+          />
 
           {/* 下载按钮：直链新标签 */}
           <div className="flex items-center justify-between">

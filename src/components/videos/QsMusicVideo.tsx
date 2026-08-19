@@ -36,22 +36,6 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
           </div>
         </div>
 
-        {musicData.url && (
-          <div className="mb-4">
-            <audio
-              controls
-              className="w-full"
-              style={{
-                filter:
-                  "sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)",
-                borderRadius: "8px",
-              }}>
-              <source src={musicData.url} type="audio/mpeg" />
-              您的浏览器不支持音频播放
-            </audio>
-          </div>
-        )}
-
         <div className="flex gap-2">
           {musicData.url && (
             <a
@@ -60,6 +44,15 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
               rel="noopener noreferrer"
               className="px-4 py-2 bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium">
               下载音乐
+            </a>
+          )}
+          {musicData.url && (
+            <a
+              href={musicData.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors font-medium">
+              新窗口打开
             </a>
           )}
           {musicData.lyrics && (

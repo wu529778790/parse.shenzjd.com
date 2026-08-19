@@ -1,23 +1,20 @@
 "use client";
-import React, { useState, useRef } from "react";
+import React from "react";
 import Image from "next/image";
 import { ApiResponse, GenericParsedData } from "@/types/api";
+import VideoPosterCard from "./VideoPosterCard";
 
 interface GenericParsedVideoProps {
   data: ApiResponse;
 }
 
 export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
   if (!data.data) {
     return null;
   }
 
   const d = data.data as GenericParsedData;
-  // 视频/图片一律直链，不再走 /api/proxy：
-  // Cloudflare 免费层不支持流式代理；防盗链平台直链 403 时由 onError 提示复制直链打开
+  // 视频/图片一律直链 + 窗口展示（不再直接 <video> 播放、不再走 /api/proxy）
   const videoUrl = d.url || "";
   const images = d.images?.filter(Boolean) || [];
 
@@ -49,23 +46,14 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
       </div>
 
       {videoUrl && (
-        <div className="glass-card overflow-hidden">
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            poster={d.cover}
-            controls
-            playsInline
-            className="w-full max-h-[70vh] bg-black"
-            onError={() =>
-              setVideoError("视频加载失败，可复制直链在浏览器打开")
-            }
-            onLoadedData={() => setVideoError(null)}
-          />
-          {videoError && (
-            <p className="p-3 text-sm text-amber-400">{videoError}</p>
-          )}
-        </div>
+        <VideoPosterCard
+          url={videoUrl}
+          cover={d.cover}
+          alt={d.title || "视频封面"}
+          accent="neutral"
+          tall
+          headline="视频已就绪 🎬"
+        />
       )}
 
       {!videoUrl && d.cover && (

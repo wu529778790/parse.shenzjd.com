@@ -1,36 +1,18 @@
 "use client";
-import React, { useState, useRef } from "react";
+import React from "react";
 import { ApiResponse, KuaishouData } from "@/types/api";
+import VideoPosterCard from "./VideoPosterCard";
 
 interface KuaishouVideoProps {
   data: ApiResponse;
 }
 
 export default function KuaishouVideo({ data }: KuaishouVideoProps) {
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
   if (!data.data) {
     return null;
   }
 
   const kuaishouData = data.data as KuaishouData;
-
-  const handleVideoError = (
-    e: React.SyntheticEvent<HTMLVideoElement, Event>
-  ) => {
-    const video = e.currentTarget;
-    setVideoError(`视频加载失败: ${video.error?.message || "网络错误"}`);
-    setIsPlaying(false);
-  };
-
-  const handleVideoLoad = () => {
-    setVideoError(null);
-  };
-
-  const handlePlay = () => setIsPlaying(true);
-  const handlePause = () => setIsPlaying(false);
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
@@ -56,50 +38,16 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
         </div>
       )}
 
-      {/* Video Player：直链播放（不再走 /api/proxy） */}
+      {/* Video：统一窗口展示（封面 + 复制/新窗口播放） */}
       {kuaishouData.photoUrl && (
-        <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
-          <div className="aspect-[9/16] sm:aspect-video w-full">
-            <video
-              ref={videoRef}
-              controls
-              poster={kuaishouData.coverUrl || undefined}
-              className="w-full h-full object-contain"
-              preload="metadata"
-              playsInline
-              onError={handleVideoError}
-              onLoadedData={handleVideoLoad}
-              onPlay={handlePlay}
-              onPause={handlePause}>
-              <source src={kuaishouData.photoUrl} type="video/mp4" />
-              <p className="text-center text-gray-500 p-4">
-                您的浏览器不支持视频播放
-              </p>
-            </video>
-          </div>
-
-          {videoError && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-              <div className="text-center text-white p-6">
-                <p className="mb-4 text-sm">{videoError}</p>
-                <a
-                  href={kuaishouData.photoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#ff6600] hover:bg-[#e65c00] text-white rounded-xl transition-all duration-300">
-                  在新窗口打开
-                </a>
-              </div>
-            </div>
-          )}
-
-          {isPlaying && !videoError && (
-            <div className="absolute top-4 right-4 px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-sm flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs text-white font-medium">播放中</span>
-            </div>
-          )}
-        </div>
+        <VideoPosterCard
+          url={kuaishouData.photoUrl}
+          cover={kuaishouData.coverUrl || undefined}
+          alt={kuaishouData.caption || "视频封面"}
+          accent="orange"
+          tall
+          headline="视频已就绪 🎬"
+        />
       )}
 
       {/* Download Button：直链新标签 */}

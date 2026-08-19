@@ -1,30 +1,19 @@
 "use client";
-import React, { useState } from "react";
+import React from "react";
 import Image from "next/image";
 import { ApiResponse } from "@/types/api";
+import VideoPosterCard from "./VideoPosterCard";
 
 interface BilibiliVideoProps {
   data: ApiResponse;
 }
 
 export default function BilibiliVideo({ data }: BilibiliVideoProps) {
-  const [videoError, setVideoError] = useState<string | null>(null);
   const videoItems = data.data && Array.isArray(data.data) ? data.data : [];
   const hasVideo = videoItems.length > 0;
-  // 直链播放（不再走 /api/proxy）。B站 CDN 防盗链严格，直链 403 时走 onError 兜底提示
+  // 统一窗口展示：不直接 <video> 播放（服务器出口 IP 拿到的直链为海外 CDN 节点）
   const primaryVideoUrl = hasVideo ? videoItems[0].video_url : "";
   const posterUrl = data.imgurl || undefined;
-
-  const handleVideoError = (
-    e: React.SyntheticEvent<HTMLVideoElement, Event>
-  ) => {
-    const video = e.currentTarget;
-    setVideoError(`视频加载失败: ${video.error?.message || "网络错误"}`);
-  };
-
-  const handleVideoLoad = () => {
-    setVideoError(null);
-  };
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
@@ -68,40 +57,16 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
         </div>
       )}
 
-      {/* Video Player */}
-      {data.imgurl && hasVideo && (
-        <div className="relative rounded-2xl overflow-hidden bg-black shadow-2xl">
-          <div className="aspect-video w-full">
-            <video
-              controls
-              poster={posterUrl}
-              className="w-full h-full object-contain"
-              preload="metadata"
-              playsInline
-              onError={handleVideoError}
-              onLoadedData={handleVideoLoad}>
-              <source src={primaryVideoUrl} type="video/mp4" />
-              <p className="text-center text-gray-500 p-4">
-                您的浏览器不支持视频播放
-              </p>
-            </video>
-          </div>
-
-          {videoError && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-              <div className="text-center text-white p-6">
-                <p className="mb-4 text-sm">{videoError}</p>
-                <a
-                  href={primaryVideoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00aeec] hover:bg-[#0099d4] text-white rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25">
-                  在新窗口打开
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Video：统一窗口展示（封面 + 复制/新窗口播放） */}
+      {hasVideo && primaryVideoUrl && (
+        <VideoPosterCard
+          url={primaryVideoUrl}
+          cover={posterUrl}
+          alt={data.title || "视频封面"}
+          accent="blue"
+          tall
+          headline="视频已就绪 🎬"
+        />
       )}
 
       {/* Download Options：直链新标签 */}
