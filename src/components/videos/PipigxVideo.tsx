@@ -24,29 +24,12 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
         </div>
       )}
       {pipigxData.video && (
-        <div className="space-y-4">
-          <VideoPosterCard
-            url={pipigxData.video}
-            cover={pipigxData.cover}
-            alt={pipigxData.title || "视频封面"}
-            accent="blue"
-            headline="视频已就绪 🎬"
-          />
-
-          {/* 下载按钮：直链新标签 */}
-          <div className="flex items-center justify-between">
-            <a
-              href={pipigxData.video}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              下载视频
-            </a>
-            <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-              皮皮虾
-            </span>
-          </div>
-        </div>
+        <VideoPosterCard
+          url={pipigxData.video}
+          cover={pipigxData.cover}
+          alt={pipigxData.title || "视频封面"}
+          accent="blue"
+        />
       )}
     </>
   );

@@ -57,7 +57,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
         </div>
       )}
 
-      {/* Video：统一窗口展示（封面 + 复制/新窗口播放） */}
+      {/* Video：封面 + 播放/下载（直链新窗口） */}
       {hasVideo && primaryVideoUrl && (
         <VideoPosterCard
           url={primaryVideoUrl}
@@ -65,7 +65,6 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
           alt={data.title || "视频封面"}
           accent="blue"
           tall
-          headline="视频已就绪 🎬"
         />
       )}
 

@@ -52,7 +52,6 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
           alt={d.title || "视频封面"}
           accent="neutral"
           tall
-          headline="视频已就绪 🎬"
         />
       )}
 

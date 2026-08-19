@@ -40,29 +40,12 @@ export default function PpxiaVideo({ data }: PpxiaVideoProps) {
         </div>
       </div>
       {ppxiaData.url && (
-        <div className="space-y-4">
-          <VideoPosterCard
-            url={ppxiaData.url}
-            cover={ppxiaData.cover}
-            alt={ppxiaData.title || "视频封面"}
-            accent="blue"
-            headline="视频已就绪 🎬"
-          />
-
-          {/* 下载按钮：直链新标签 */}
-          <div className="flex items-center justify-between">
-            <a
-              href={ppxiaData.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              下载视频
-            </a>
-            <span className="inline-block px-3 py-1 bg-orange-100 text-orange-800 text-sm rounded-full">
-              皮皮虾
-            </span>
-          </div>
-        </div>
+        <VideoPosterCard
+          url={ppxiaData.url}
+          cover={ppxiaData.cover}
+          alt={ppxiaData.title || "视频封面"}
+          accent="blue"
+        />
       )}
     </>
   );

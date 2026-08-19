@@ -67,7 +67,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
         </div>
       )}
 
-      {/* Video：统一窗口展示（封面 + 复制/新窗口播放） */}
+      {/* Video：封面 + 播放/下载（直链新窗口） */}
       {!isImageType && xhsData.url && (
         <VideoPosterCard
           url={xhsData.url}
@@ -75,7 +75,6 @@ export default function XhsVideo({ data }: XhsVideoProps) {
           alt={xhsData.title || "视频封面"}
           accent="pink"
           tall
-          headline="视频已就绪 🎬"
         />
       )}
 
@@ -132,53 +131,6 @@ export default function XhsVideo({ data }: XhsVideoProps) {
           )}
         </div>
       )}
-
-      {/* Download Actions：直链新标签（跨域 download 属性失效，交由浏览器打开后另存） */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {!isImageType && xhsData.url && (
-          <a
-            href={xhsData.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ff2442] to-[#ff5c7c] hover:from-[#e61f3a] hover:to-[#ff4d6a] text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#ff2442]/25 hover:-translate-y-0.5">
-            <svg
-              className="w-5 h-5 transition-transform group-hover:scale-110"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            {isImageType ? "下载图片" : "下载视频"}
-          </a>
-        )}
-
-        {(xhsData.url || xhsData.images) && (
-          <a
-            href={xhsData.url || xhsData.images?.[0]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle">
-            <svg
-              className="w-5 h-5 text-muted group-hover:text-accent transition-colors"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-              />
-            </svg>
-            打开原链接
-          </a>
-        )}
-      </div>
     </div>
   );
 }
