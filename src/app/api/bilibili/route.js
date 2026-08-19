@@ -9,6 +9,24 @@ const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT ||
 
 const BILIBILI_COOKIE = process.env.BILIBILI_COOKIE || "";
 
+// B站按请求出口 IP 分配 CDN 节点：海外出口（如本服务器在新加坡）拿到 akamaized.net
+// 海外节点，大陆用户浏览器无法播放。直链签名（upsig/uparams）不绑定 host，
+// 把海外 host 归一化为国内镜像节点（bilivideo.com）即可在大陆正常播放。
+const BILI_CN_HOST = "upos-sz-mirrorbd.bilivideo.com";
+
+function normalizeCdnHost(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith(".akamaized.net")) {
+      parsed.hostname = BILI_CN_HOST;
+      return parsed.toString();
+    }
+  } catch (error) {
+    logger.error("Error normalizing CDN host:", error.message);
+  }
+  return url;
+}
+
 function cleanUrlParameters(url) {
   try {
     const parsed = new URL(url);
@@ -86,8 +104,8 @@ async function getBilibiliVideoInfo(url) {
       );
       
       if (playUrl && playUrl.data?.durl?.[0]?.url) {
-        // 直接使用接口返回的直链（CDN 可能是 bilivideo / akamaized 等，硬拼 mirror 会导致地址错误、播放失败）
-        const video_url = playUrl.data.durl[0].url;
+        // 直链 host 归一化：海外 akamaized 节点 → 国内 bilivideo.com 节点（签名不绑定 host）
+        const video_url = normalizeCdnHost(playUrl.data.durl[0].url);
         return {
           title: page.part,
           duration: page.duration,
