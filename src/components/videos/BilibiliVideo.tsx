@@ -57,7 +57,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
         </div>
       )}
 
-      {/* Video：封面 + 播放/下载（直链新窗口） */}
+      {/* Video：封面 + 播放。多分P 下载由下方「下载选项」列表提供，避免重复 */}
       {hasVideo && primaryVideoUrl && (
         <VideoPosterCard
           url={primaryVideoUrl}
@@ -65,6 +65,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
           alt={data.title || "视频封面"}
           accent="blue"
           tall
+          showDownload={false}
         />
       )}
 
