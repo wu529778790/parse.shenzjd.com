@@ -146,6 +146,16 @@ function extractInitialStateJson(html) {
 }
 
 /**
+ * 把第三方图片 URL 包成站内代理路径，绕过 Referer 防盗链
+ * （如小红书 sns-webpic 只允许 Referer: xiaohongshu.com）。
+ * 视频不代理（耗资源），仅图片走 /api/image。
+ */
+function proxifyImage(url) {
+  if (!url) return "";
+  return `/api/image?url=${encodeURIComponent(url)}`;
+}
+
+/**
  * 选取稳定可用的视频直链。
  * backupUrls 为裸直链（无短时效签名，长期有效），优先使用；
  * masterUrl 带约 30 分钟签名，仅作兜底。
@@ -281,12 +291,14 @@ async function xhs(url) {
       const imageList = noteData.imageList;
       if (Array.isArray(imageList) && imageList.length > 0 && imageList[0]) {
         const first = imageList[0];
-        data.cover = (
-          first.urlDefault ||
-          first.url ||
-          safeGet(first, "infoList.0.url") ||
-          ""
-        ).replace(/^http:/i, "https:");
+        data.cover = proxifyImage(
+          (
+            first.urlDefault ||
+            first.url ||
+            safeGet(first, "infoList.0.url") ||
+            ""
+          ).replace(/^http:/i, "https:")
+        );
       }
       data.url = videoUrl;
       data.type = "video";
@@ -309,8 +321,8 @@ async function xhs(url) {
             ""
           ).replace(/^http:/i, "https:");
           if (imageUrl) {
-            images.push(imageUrl);
-            if (i === 0) cover = imageUrl;
+            images.push(proxifyImage(imageUrl));
+            if (i === 0) cover = proxifyImage(imageUrl);
           }
         }
       }
