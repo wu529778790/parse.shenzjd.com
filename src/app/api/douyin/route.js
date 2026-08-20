@@ -290,6 +290,7 @@ function parseVideoData(videoInfo) {
  * 从 loaderData 中提取 filter_list 的过滤原因
  */
 function extractFilterReason(videoInfo) {
+  if (!videoInfo || typeof videoInfo !== "object") return null;
   for (const val of Object.values(videoInfo.loaderData || {})) {
     if (val && typeof val === "object") {
       const filterList = val.videoInfoRes?.filter_list;
