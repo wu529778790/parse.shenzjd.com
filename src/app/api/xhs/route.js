@@ -145,6 +145,40 @@ function extractInitialStateJson(html) {
   return inline?.[1]?.trim() ?? null;
 }
 
+/**
+ * 选取稳定可用的视频直链。
+ * backupUrls 为裸直链（无短时效签名，长期有效），优先使用；
+ * masterUrl 带约 30 分钟签名，仅作兜底。
+ * 统一转 https，避免 https 站点下 http 直链的 mixed content 问题。
+ */
+async function pickStableVideoUrl(entry) {
+  if (!entry || typeof entry !== "object") return null;
+
+  const toHttps = (u) => (u ? u.replace(/^http:/i, "https:") : u);
+
+  const candidates = [];
+  if (Array.isArray(entry.backupUrls)) {
+    for (const u of entry.backupUrls) {
+      if (u) candidates.push(toHttps(u));
+    }
+  }
+  if (entry.masterUrl) candidates.push(toHttps(entry.masterUrl));
+
+  // HEAD 轻量验证可用性（部分 CDN 节点 404，如 bak-v6），取第一个可用的
+  for (const u of candidates) {
+    try {
+      const head = await fetch(u, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (head.ok) return u;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
 async function xhs(url) {
   try {
     const { html, finalUrl } = await fetchXhsNoteHtml(url);
@@ -227,17 +261,15 @@ async function xhs(url) {
     const videoStream = safeGet(noteData, "video.media.stream");
 
     if (videoStream && typeof videoStream === "object") {
-      // 尝试h265格式
-      const h265List = videoStream.h265;
-      if (Array.isArray(h265List) && h265List.length > 0 && h265List[0]) {
-        videoUrl = h265List[0].masterUrl;
+      // h264 优先（浏览器兼容性最好），h265 兜底；均优先取裸直链
+      const h264List = videoStream.h264;
+      if (Array.isArray(h264List) && h264List.length > 0 && h264List[0]) {
+        videoUrl = await pickStableVideoUrl(h264List[0]);
       }
-
-      // 如果没有h265，尝试h264
       if (!videoUrl) {
-        const h264List = videoStream.h264;
-        if (Array.isArray(h264List) && h264List.length > 0 && h264List[0]) {
-          videoUrl = h264List[0].masterUrl;
+        const h265List = videoStream.h265;
+        if (Array.isArray(h265List) && h265List.length > 0 && h265List[0]) {
+          videoUrl = await pickStableVideoUrl(h265List[0]);
         }
       }
     }
@@ -249,11 +281,12 @@ async function xhs(url) {
       const imageList = noteData.imageList;
       if (Array.isArray(imageList) && imageList.length > 0 && imageList[0]) {
         const first = imageList[0];
-        data.cover =
+        data.cover = (
           first.urlDefault ||
           first.url ||
           safeGet(first, "infoList.0.url") ||
-          "";
+          ""
+        ).replace(/^http:/i, "https:");
       }
       data.url = videoUrl;
       data.type = "video";
@@ -269,10 +302,12 @@ async function xhs(url) {
       for (let i = 0; i < imageList.length; i++) {
         const img = imageList[i];
         if (img && typeof img === "object") {
-          let imageUrl =
+          let imageUrl = (
             img.urlDefault ||
             img.url ||
-            safeGet(img, "infoList.0.url");
+            safeGet(img, "infoList.0.url") ||
+            ""
+          ).replace(/^http:/i, "https:");
           if (imageUrl) {
             images.push(imageUrl);
             if (i === 0) cover = imageUrl;
