@@ -13,6 +13,21 @@ const MOBILE_HEADERS = {
   "Accept-Language": "zh-CN,zh;q=0.9",
 };
 
+// 北京时间格式化（日志用）：YYYY-MM-DD HH:mm:ss
+function beijingNow() {
+  const fmt = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return fmt.format(new Date()).replace(/\//g, "-");
+}
+
 async function douyin(url) {
   try {
     const DOUYIN_COOKIE = process.env.DOUYIN_COOKIE || "";
@@ -20,6 +35,9 @@ async function douyin(url) {
     // ---- Step 1: 从短链 / 分享链接中提取视频 ID 和完整重定向 URL ----
     const extractResult = await extractIdAndRedirectUrl(url);
     if (!extractResult) {
+      logger.warn(
+        `[${beijingNow()}] 解析抖音链接失败：无法提取视频 ID（${url.slice(0, 60)}）`
+      );
       return {
         code: 400,
         msg: "无法解析视频 ID：请确保链接格式正确且视频可访问",
@@ -80,6 +98,8 @@ async function douyin(url) {
     // 记录最后一次成功解析出 _ROUTER_DATA 的数据（即使 item_list 为空）：
     // 抖音对已删除/不存在的视频会返回 filter_list 而非数据，需要据此给准确报错
     let lastRouterData = null;
+    // 反爬命中的域名计数（用于最终一行汇总，避免逐 URL 刷日志）
+    let challengeCount = 0;
 
     // 判断 _ROUTER_DATA 是否包含有效视频数据
     // 抖音二次握手下，首次请求只下发 ttwid cookie、数据为空壳，需带 cookie 重试
@@ -102,16 +122,12 @@ async function douyin(url) {
 
           // 从响应头收集 ttwid，供后续请求使用
           const newTtwid = extractTtwid(response);
-          if (newTtwid) {
-            if (ttwidCookie !== newTtwid) {
-              ttwidCookie = newTtwid;
-              logger.log(`Got ttwid from: ${fetchUrl}`);
-            }
+          if (newTtwid && ttwidCookie !== newTtwid) {
+            ttwidCookie = newTtwid;
           }
 
           // 检查是否被重定向到国际版
           if (html.includes("tiktok.com") || html.includes("访问受限")) {
-            logger.warn(`Douyin redirected to tiktok for URL: ${fetchUrl}`);
             continue;
           }
 
@@ -123,9 +139,7 @@ async function douyin(url) {
             html.includes("argus-csp-token") ||
             html.includes("precollect")
           ) {
-            logger.warn(
-              `Douyin anti-bot challenge for URL: ${fetchUrl} (round ${round + 1})`
-            );
+            challengeCount++;
             continue;
           }
 
@@ -136,23 +150,14 @@ async function douyin(url) {
             const parsed = JSON.parse(routerMatch[1].trim());
             if (hasValidData(parsed)) {
               videoInfo = parsed;
-              logger.log(
-                `Got valid _ROUTER_DATA from: ${fetchUrl} (round ${round + 1})`
-              );
               break;
             }
             // 空壳 / 被过滤：保留结构供后续给出准确报错
             lastRouterData = parsed;
-            logger.log(
-              `Got empty _ROUTER_DATA shell from: ${fetchUrl}, retrying with cookie...`
-            );
           }
-        } catch (e) {
-          logger.warn(`Failed to fetch ${fetchUrl}: ${e.message}`);
+        } catch {
+          /* 网络异常跳过该 URL，尝试下一个 */
         }
-      }
-      if (!videoInfo && ttwidCookie && round === 0) {
-        logger.log("Round 1 got ttwid, retrying with cookie...");
       }
     }
 
@@ -160,7 +165,9 @@ async function douyin(url) {
       // 优先给出抖音服务端的过滤原因（如 SYSTEM_ITEM_NOT_EXIST = 视频不存在/已删除）
       const filterReason = extractFilterReason(lastRouterData);
       if (filterReason) {
-        logger.warn(`Douyin share page filtered video ${id}: ${filterReason}`);
+        logger.warn(
+          `[${beijingNow()}] 解析抖音链接 ${id} 失败：抖音服务端过滤（${filterReason}）`
+        );
         return {
           code: 201,
           msg: `解析失败：抖音服务端过滤了该内容（${filterReason}），视频可能已删除或为隐私内容`,
@@ -168,12 +175,10 @@ async function douyin(url) {
       }
       // 所有请求都命中反爬 JS challenge（argus / _$jsvmprt）：IP 被抖音风控，
       // 需配置 DOUYIN_COOKIE（带有效浏览器 cookie）或更换网络出口
-      const isAntiBot = ["_$jsvmprt", "argus-csp-token", "precollect"].some(
-        (sig) => lastHtml.includes(sig)
-      );
+      const isAntiBot = challengeCount > 0;
       if (isAntiBot) {
         logger.warn(
-          `Douyin anti-bot blocked for video ${id}: all responses are JS challenge`
+          `[${beijingNow()}] 解析抖音链接 ${id} 失败：抖音风控拦截（${challengeCount} 次请求均被反爬）`
         );
         return {
           code: 201,
@@ -183,7 +188,7 @@ async function douyin(url) {
       // 记录部分响应内容用于诊断（截取前 500 字符）
       const snippet = lastHtml.replace(/\s+/g, " ").slice(0, 500);
       logger.warn(
-        `No _ROUTER_DATA found for video ${id}. Response snippet: ${snippet}`
+        `[${beijingNow()}] 解析抖音链接 ${id} 失败：未获取到页面数据。Response: ${snippet}`
       );
       // 已自动携带匿名 ttwid 仍拿不到数据：多为视频不存在 / 已删除 / 被过滤
       return {
@@ -193,6 +198,9 @@ async function douyin(url) {
     }
 
     if (!videoInfo.loaderData) {
+      logger.warn(
+        `[${beijingNow()}] 解析抖音链接 ${id} 失败：视频数据结构异常`
+      );
       return {
         code: 201,
         msg: "解析失败：视频数据结构异常，可能是抖音接口发生变化",
@@ -201,18 +209,35 @@ async function douyin(url) {
 
     // ---- Step 3: 提取视频 / 图文数据 ----
     const parseResult = parseVideoData(videoInfo);
-    if (parseResult) return parseResult;
+    if (parseResult) {
+      if (parseResult.code === 200) {
+        const t = parseResult.data?.title || "";
+        logger.log(
+          `[${beijingNow()}] 解析抖音链接 ${id} 成功${t ? `：《${t.slice(0, 30)}》` : ""}`
+        );
+      } else {
+        logger.warn(
+          `[${beijingNow()}] 解析抖音链接 ${id} 失败：${parseResult.msg}`
+        );
+      }
+      return parseResult;
+    }
 
     // ---- Step 4: 分享页数据为空 — 提取 filter_list 给出明确错误 ----
     const filterReason = extractFilterReason(videoInfo);
     if (filterReason) {
-      logger.warn(`Douyin share page filtered video ${id}: ${filterReason}`);
+      logger.warn(
+        `[${beijingNow()}] 解析抖音链接 ${id} 失败：抖音服务端过滤（${filterReason}）`
+      );
       return {
         code: 201,
         msg: `解析失败：抖音服务端过滤了该内容（${filterReason}），部分视频（如实况图、刚发布的内容）暂不支持解析`,
       };
     }
 
+    logger.warn(
+      `[${beijingNow()}] 解析抖音链接 ${id} 失败：未能从页面获取视频数据`
+    );
     return {
       code: 201,
       msg: "解析失败：未能从页面获取视频数据，可能是页面结构变化、接口受限或视频已被删除",
