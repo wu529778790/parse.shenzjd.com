@@ -301,6 +301,12 @@ function parseVideoData(videoInfo) {
       ? videoData.video.play_addr.url_list[0].replace("playwm", "play")
       : "";
 
+    // 背景音乐/原声音频直链（music.play_url.url_list[0]），供「下载音频」使用
+    // 原声视频的 music 即视频本身的声音，配乐视频为背景音乐
+    const audioUrl = videoData.music?.play_url?.url_list?.[0]
+      ? videoData.music.play_url.url_list[0]
+      : "";
+
     return {
       code: 200,
       msg: "解析成功",
@@ -319,6 +325,8 @@ function parseVideoData(videoInfo) {
         images: images.length > 0 ? images : undefined,
         // 视频时长（毫秒），前端据此判断长视频不走代理、引导新窗口播放
         duration: videoData.video?.duration || 0,
+        // 音频直链（无则 undefined，前端不显示「下载音频」按钮）
+        audioUrl: audioUrl || undefined,
         music: {
           author: videoData.music?.author || "未知音乐作者",
           avatar: videoData.music?.cover_large?.url_list?.[0] || "",

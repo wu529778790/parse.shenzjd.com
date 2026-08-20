@@ -18,7 +18,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
-      {/* 视频：封面 + 中心播放图标（点击新页签打开）+ 下方下载按钮 */}
+      {/* 视频：封面 + 中心播放图标（点击新页签打开）+ 下方下载按钮 + 音频下载 */}
       {!isImageType && douyinData.url && (
         <VideoPosterCard
           url={douyinData.url}
@@ -28,6 +28,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
           tall
           showPlay={false}
           downloadText="下载视频"
+          audioUrl={douyinData.audioUrl}
         />
       )}
 

@@ -52,6 +52,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
           alt={d.title || "视频封面"}
           accent="neutral"
           tall
+          audioUrl={d.audioUrl}
         />
       )}
 

@@ -67,6 +67,10 @@ interface VideoPosterCardProps {
   playText?: string;
   /** 下载按钮文案，默认「下载视频」 */
   downloadText?: string;
+  /** 音频直链（可选），存在时额外显示「下载音频」按钮 */
+  audioUrl?: string;
+  /** 音频按钮文案，默认「下载音频」 */
+  audioText?: string;
   /** 是否显示下载按钮，默认 true */
   showDownload?: boolean;
   /** 是否显示「播放视频」按钮（默认 true；false 时封面自带点击 + 下方只剩下载） */
@@ -81,6 +85,8 @@ export default function VideoPosterCard({
   tall = false,
   playText = "播放视频",
   downloadText = "下载视频",
+  audioUrl,
+  audioText = "下载音频",
   showDownload = true,
   showPlay = true,
 }: VideoPosterCardProps) {
@@ -164,6 +170,29 @@ export default function VideoPosterCard({
               />
             </svg>
             {downloadText}
+          </a>
+        )}
+
+        {/* 音频下载：与视频下载同款式（中性描边），点击新窗口打开音频直链 */}
+        {audioUrl && (
+          <a
+            href={audioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle hover:-translate-y-0.5 flex-1">
+            <svg
+              className="w-5 h-5 transition-transform group-hover:scale-110"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+              />
+            </svg>
+            {audioText}
           </a>
         )}
       </div>

@@ -22,6 +22,8 @@ export interface GenericParsedData {
   cover?: string;
   url?: string;
   images?: string[];
+  /** 音频直链（视频的背景音乐/原声），前端据此提供「下载音频」 */
+  audioUrl?: string;
 }
 
 export interface ApiResponse {
@@ -58,6 +60,8 @@ export interface DouyinData {
   images?: string[];
   /** 视频时长（毫秒），长视频（>3min）前端引导新窗口播放、不走代理 */
   duration?: number;
+  /** 背景音乐/原声音频直链，用于「下载音频」 */
+  audioUrl?: string;
 }
 
 // 快手数据类型
