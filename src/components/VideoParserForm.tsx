@@ -117,8 +117,9 @@ export default function VideoParserForm({
     async (url: string, platform: string, retryCount = 0) => {
       if (!url) return;
 
-      // 微信关注弹窗：每次发起解析都弹出（可关闭，不阻塞解析流程）
-      showWxAuth().catch(() => {});
+      // 微信强制关注：每次发起解析都弹出（不可关闭），关注验证通过后才继续解析
+      const authed = await showWxAuth();
+      if (!authed) return; // 未完成关注则不发起解析（required=true 下理论上无法跳过）
 
       const cacheKey = `${platform}:${url}`;
 

@@ -14,15 +14,16 @@ function loadWxAuth() {
 }
 
 /**
- * 弹出微信公众号关注弹窗（可关闭，不阻塞解析主流程）
- * required: false → 弹窗显示「×」关闭按钮，用户可跳过
- * @returns true=验证通过, false=用户关闭或失败
+ * 弹出微信公众号关注弹窗（强制关注，不可关闭，阻塞解析主流程）
+ * required: true（SDK 默认值）→ 无「×」关闭按钮、遮罩点击不可关闭，
+ * 用户必须完成「扫码关注 → 输入验证码」验证通过后才返回 true。
+ * @returns true=验证通过, false=失败（此时上层应中断解析）
  */
 export async function showWxAuth(): Promise<boolean> {
   try {
     const { WxAuth } = await loadWxAuth();
-    // apiBase/wechatName 由 SDK 内硬编码，这里只覆盖 required 以启用关闭按钮
-    WxAuth.init({ required: false });
+    // apiBase/wechatName 由 SDK 内硬编码；required 用 SDK 默认 true = 强制关注
+    WxAuth.init({ required: true });
     return await WxAuth.requireAuth();
   } catch {
     return false;
