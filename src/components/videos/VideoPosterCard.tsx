@@ -69,6 +69,8 @@ interface VideoPosterCardProps {
   downloadText?: string;
   /** 是否显示下载按钮，默认 true */
   showDownload?: boolean;
+  /** 是否显示「播放视频」按钮（默认 true；false 时封面自带点击 + 下方只剩下载） */
+  showPlay?: boolean;
 }
 
 export default function VideoPosterCard({
@@ -80,18 +82,19 @@ export default function VideoPosterCard({
   playText = "播放视频",
   downloadText = "下载视频",
   showDownload = true,
+  showPlay = true,
 }: VideoPosterCardProps) {
   const a = ACCENTS[accent];
 
   return (
     <div className="space-y-3">
-      {/* 封面图（点击在新窗口打开直链） */}
+      {/* 封面图（点击在新窗口打开直链，中心叠播放图标作为视觉提示） */}
       {cover && (
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="block rounded-2xl overflow-hidden bg-black">
+          className="group block rounded-2xl overflow-hidden bg-black">
           <div
             className={`relative w-full ${
               tall ? "aspect-[9/16] sm:aspect-video" : "aspect-video"
@@ -103,31 +106,44 @@ export default function VideoPosterCard({
               className="object-contain"
               unoptimized
             />
+            {/* 中心播放图标：提示用户可点击封面播放，hover 时轻微放大 */}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/15 transition-colors duration-300">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white/90 group-hover:bg-white text-black flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110">
+                <svg
+                  className="w-7 h-7 sm:w-9 sm:h-9 ml-1"
+                  fill="currentColor"
+                  viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            </div>
           </div>
         </a>
       )}
 
       {/* 操作链接：播放 / 下载（均为直链新窗口） */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r ${a.gradient} ${a.hover} text-white rounded-xl font-medium transition-all duration-300 ${a.shadow} hover:-translate-y-0.5 flex-1`}>
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={2}>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-            />
-          </svg>
-          {playText}
-        </a>
+        {showPlay && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r ${a.gradient} ${a.hover} text-white rounded-xl font-medium transition-all duration-300 ${a.shadow} hover:-translate-y-0.5 flex-1`}>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+              />
+            </svg>
+            {playText}
+          </a>
+        )}
 
         {showDownload && (
           <a
