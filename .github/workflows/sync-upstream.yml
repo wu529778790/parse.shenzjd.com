@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: write
+  # 注意：不能在这里声明 workflows: write——它不是 workflow 文件 permissions key 的
+  # 合法值（GitHub 报 "Unexpected value 'workflows'"），且 GITHUB_TOKEN 永远拿不到
+  # workflows 权限（平台硬性安全边界，任何 permissions 声明都无法授予）。
+  # 推送 .github/workflows/ 下的文件只能靠带 workflow 权限的 PAT（见 SYNC_TOKEN）。
 
 concurrency:
   group: sync-upstream
@@ -15,16 +19,24 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # 只在 fork 里运行；上游仓库自身无需自同步，避免每天空跑消耗 Actions 配额
+    if: github.repository != 'wu529778790/parse.shenzjd.com'
     env:
       # 固定上游仓库与分支（按需改动）
       UPSTREAM_REPO: wu529778790/parse.shenzjd.com
       UPSTREAM_BRANCH: main
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      # 可选：fork 里配置 SYNC_TOKEN（带 workflow 权限的 PAT：fine-grained 勾选
+      # Contents+Workflows 读写，或 classic 勾选 workflow scope）即可连
+      # .github/workflows/ 一起同步；未配置时 workflow 文件保持 fork 本地版本
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
     steps:
       - name: Checkout fork
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # 配置了 SYNC_TOKEN 就用它（能推送 workflow 文件），否则退回 GITHUB_TOKEN
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Git identity
         run: |
@@ -69,6 +81,19 @@ jobs:
 
       - name: Push merged result
         run: |
+          set -e
+          # 未配置 SYNC_TOKEN 时回退 .github/workflows/：GITHUB_TOKEN 推送 workflow
+          # 文件会被 GitHub 整次拒绝（refusing to allow a GitHub App to create or
+          # update workflow ... without workflows permission），回退后 push 不触碰
+          # workflow 文件，永不报错
+          if [ -z "${SYNC_TOKEN:-}" ]; then
+            # 关键：必须回退到 origin/<branch> 而非 HEAD。merge 之后 HEAD 已是
+            # 合并后的上游版本，git checkout HEAD -- .github/workflows 等于没回退，
+            # push 仍携带 workflow 变更，被 GITHUB_TOKEN 的 workflows 权限限制
+            # 整次拒绝（refusing to allow a GitHub App to create or update workflow）
+            git checkout "origin/${{ steps.b.outputs.local_default }}" -- .github/workflows
+            git commit --no-edit -m "chore(ci): keep local workflow files (no SYNC_TOKEN)" 2>/dev/null || true
+          fi
           git push origin "${{ steps.b.outputs.local_default }}"
 
       - name: Sync tags
