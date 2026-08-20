@@ -77,6 +77,9 @@ async function douyin(url) {
 
     let videoInfo = null;
     let lastHtml = "";
+    // 记录最后一次成功解析出 _ROUTER_DATA 的数据（即使 item_list 为空）：
+    // 抖音对已删除/不存在的视频会返回 filter_list 而非数据，需要据此给准确报错
+    let lastRouterData = null;
 
     // 判断 _ROUTER_DATA 是否包含有效视频数据
     // 抖音二次握手下，首次请求只下发 ttwid cookie、数据为空壳，需带 cookie 重试
@@ -112,6 +115,14 @@ async function douyin(url) {
             continue;
           }
 
+          // 反爬 JS challenge（_$jsvmprt）：页面无 _ROUTER_DATA，跳过换下一个 URL
+          if (html.includes("_$jsvmprt")) {
+            logger.warn(
+              `Douyin anti-bot challenge for URL: ${fetchUrl} (round ${round + 1})`
+            );
+            continue;
+          }
+
           const routerMatch = html.match(
             /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s
           );
@@ -124,6 +135,8 @@ async function douyin(url) {
               );
               break;
             }
+            // 空壳 / 被过滤：保留结构供后续给出准确报错
+            lastRouterData = parsed;
             logger.log(
               `Got empty _ROUTER_DATA shell from: ${fetchUrl}, retrying with cookie...`
             );
@@ -138,6 +151,15 @@ async function douyin(url) {
     }
 
     if (!videoInfo) {
+      // 优先给出抖音服务端的过滤原因（如 SYSTEM_ITEM_NOT_EXIST = 视频不存在/已删除）
+      const filterReason = extractFilterReason(lastRouterData);
+      if (filterReason) {
+        logger.warn(`Douyin share page filtered video ${id}: ${filterReason}`);
+        return {
+          code: 201,
+          msg: `解析失败：抖音服务端过滤了该内容（${filterReason}），视频可能已删除或为隐私内容`,
+        };
+      }
       // 记录部分响应内容用于诊断（截取前 500 字符）
       const snippet = lastHtml.replace(/\s+/g, " ").slice(0, 500);
       logger.warn(
