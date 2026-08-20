@@ -59,8 +59,8 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
   [PLATFORMS.XHS]: {
     name: "小红书",
     nameEn: "Xiaohongshu",
-    domains: ["xiaohongshu.com", "xhslink.com"],
-    shortDomains: ["xhslink.com"],
+    domains: ["xiaohongshu.com", "xhslink.com", "xhslink.cn"],
+    shortDomains: ["xhslink.com", "xhslink.cn"],
     supportsIdParse: false,
   },
   [PLATFORMS.PIPIXIA]: {
@@ -278,6 +278,7 @@ export const ALL_DOMAINS: string[] = [
   "v.douyin.com",
   "v.kuaishou.com",
   "xhslink.com",
+  "xhslink.cn",
   "v.ixigua.com",
   "share.xiaochuankeji.cn",
   "share.huoshan.com",

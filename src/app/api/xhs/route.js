@@ -19,7 +19,8 @@ function normalizeXhsUrl(url) {
   try {
     const u = new URL(url.trim());
     const host = u.hostname.toLowerCase();
-    if (host === "xhslink.com" && u.protocol === "http:") {
+    // xhslink.com / xhslink.cn 短链统一走 https
+    if (["xhslink.com", "xhslink.cn"].includes(host) && u.protocol === "http:") {
       u.protocol = "https:";
       return u.toString();
     }
@@ -156,7 +157,10 @@ async function xhs(url) {
     }
 
     // 检查是否被小红书拦截或跳转到了非笔记页
-    if (finalUrl.includes("xhslink.com") && !html.includes("__INITIAL_STATE__")) {
+    if (
+      (finalUrl.includes("xhslink.com") || finalUrl.includes("xhslink.cn")) &&
+      !html.includes("__INITIAL_STATE__")
+    ) {
       return output(
         400,
         "短链重定向失败，请尝试复制小红书 App 内的分享链接"

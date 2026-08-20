@@ -36,6 +36,7 @@ export function hasValidVideoUrl(text: string): boolean {
     "oasis.weibo.cn",
     "xiaohongshu.com",
     "xhslink.com",
+    "xhslink.cn",
     "bilibili.com",
     "b23.tv",
     "music.douyin.com",
@@ -115,7 +116,11 @@ export function detectPlatform(text: string): VideoPlatformKey | null {
     /* ignore */
   }
 
-  if (lower.includes("xhslink.com") || lower.includes("xiaohongshu.com"))
+  if (
+    lower.includes("xhslink.com") ||
+    lower.includes("xhslink.cn") ||
+    lower.includes("xiaohongshu.com")
+  )
     return "xhs";
   if (lower.includes("video.weibo.com")) return "weibo";
   if (lower.includes("weibo.com")) return "weibo";

@@ -86,13 +86,13 @@ export const PLATFORM_SEO: Record<string, PlatformSeoEntry> = {
   xhs: {
     title: "小红书视频去水印 - 免费解析下载小红书无水印视频",
     description:
-      "小红书视频去水印工具，粘贴小红书链接（xiaohongshu.com / xhslink.com）即可解析无水印视频，支持图文笔记中的视频，免费使用。",
+      "小红书视频去水印工具，粘贴小红书链接（xiaohongshu.com / xhslink.com / xhslink.cn）即可解析无水印视频，支持图文笔记中的视频，免费使用。",
     intro:
-      "小红书笔记中的视频带账号水印，直接保存不干净。神族九帝支持解析 xiaohongshu.com 与 xhslink.com 短链对应的视频，还原无平台标识的画面，方便素材整理。",
+      "小红书笔记中的视频带账号水印，直接保存不干净。神族九帝支持解析 xiaohongshu.com 与 xhslink.com / xhslink.cn 短链对应的视频，还原无平台标识的画面，方便素材整理。",
     scenes: ["下载小红书教程视频学习", "保存探店/测评类视频", "备份自己发布过的笔记视频"],
     faqs: [
-      { q: "小红书视频怎么去水印？", a: "复制笔记分享链接或 xhslink.com 短链，粘贴到神族九帝解析即可。" },
-      { q: "xhslink.com 短链接支持吗？", a: "支持，xhslink.com 短链会自动跟随跳转并解析。" },
+      { q: "小红书视频怎么去水印？", a: "复制笔记分享链接或 xhslink.com / xhslink.cn 短链，粘贴到神族九帝解析即可。" },
+      { q: "xhslink 短链接支持吗？", a: "支持，xhslink.com 与 xhslink.cn 短链都会自动跟随跳转并解析。" },
       { q: "小红书图文笔记能解析吗？", a: "仅支持解析笔记中包含的视频内容，纯图文无法解析。" },
     ],
   },

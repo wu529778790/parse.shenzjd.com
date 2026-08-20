@@ -107,6 +107,13 @@ const cases: ShareParseCase[] = [
     expectUrl: "http://xhslink.com/o/1fRz2qqwhkI",
   },
   {
+    name: "xhs-App复制-xhslink.cn-短链",
+    input:
+      "✨水钻一字带露趾高跟凉鞋｜宴会C位神器 ✨水钻一字带... https://xhslink.cn/o/9hocmhutQ15 \n复制一下，跳转【小红书】即刻浏览笔记。",
+    expectPlatform: "xhs",
+    expectUrl: "https://xhslink.cn/o/9hocmhutQ15",
+  },
+  {
     name: "xhs-速览笔记-o-短链",
     input:
       "围着你转一圈算不算环游世界 http://xhslink.com/o/7GQEA09Wv3n \n存下这段话，去【小红书】速览笔记~",
