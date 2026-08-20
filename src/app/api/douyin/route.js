@@ -115,8 +115,14 @@ async function douyin(url) {
             continue;
           }
 
-          // 反爬 JS challenge（_$jsvmprt）：页面无 _ROUTER_DATA，跳过换下一个 URL
-          if (html.includes("_$jsvmprt")) {
+          // 反爬 JS challenge：页面无 _ROUTER_DATA，跳过换下一个 URL
+          // 两种形态：_$jsvmprt（旧）与 argus 风控脚本（新，含
+          // 'argus-csp-token' / 'precollect' 等特征）
+          if (
+            html.includes("_$jsvmprt") ||
+            html.includes("argus-csp-token") ||
+            html.includes("precollect")
+          ) {
             logger.warn(
               `Douyin anti-bot challenge for URL: ${fetchUrl} (round ${round + 1})`
             );
@@ -158,6 +164,20 @@ async function douyin(url) {
         return {
           code: 201,
           msg: `解析失败：抖音服务端过滤了该内容（${filterReason}），视频可能已删除或为隐私内容`,
+        };
+      }
+      // 所有请求都命中反爬 JS challenge（argus / _$jsvmprt）：IP 被抖音风控，
+      // 需配置 DOUYIN_COOKIE（带有效浏览器 cookie）或更换网络出口
+      const isAntiBot = ["_$jsvmprt", "argus-csp-token", "precollect"].some(
+        (sig) => lastHtml.includes(sig)
+      );
+      if (isAntiBot) {
+        logger.warn(
+          `Douyin anti-bot blocked for video ${id}: all responses are JS challenge`
+        );
+        return {
+          code: 201,
+          msg: "解析失败：抖音风控拦截了本次请求（网络出口被限流），请稍后重试，或联系站长配置有效的抖音 Cookie",
         };
       }
       // 记录部分响应内容用于诊断（截取前 500 字符）
