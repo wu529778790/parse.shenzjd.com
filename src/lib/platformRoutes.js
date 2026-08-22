@@ -27,6 +27,7 @@ export const platformRoutes = {
   doupai: () => import("@/app/api/doupai/route.js"),
   xinpianchang: () => import("@/app/api/xinpianchang/route.js"),
   twitter: () => import("@/app/api/twitter/route.js"),
+  youtube: () => import("@/app/api/youtube/route.js"),
 };
 
 /** 平台 key → 解析函数获取器（兼容注册函数与动态导入的 route） */
