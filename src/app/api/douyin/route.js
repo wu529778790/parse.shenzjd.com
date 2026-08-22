@@ -1,9 +1,13 @@
 import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
+import { douyinPublicFallback } from "@/lib/douyinFallback";
 
 // Docker 自托管下 Node runtime 对外网 fetch 通常比 Edge 沙箱更稳定（抖音等站）
 export const runtime = "nodejs";
 
+// 多组 UA 轮询（参考 video-unwatermark sharepage.py 的 DOUYIN_HEADER_SETS）。
+// 顺序关键：抖音 App UA（aweme/...）实测是唯一会下发 ttwid 的 UA，
+// 必须先用它建立 ttwid，再带 ttwid 用其他 UA 请求数据。
 // 最小化请求头 — 过多的 sec-ch-ua / desktop 头与 mobile UA 混用会触发抖音反爬
 const MOBILE_HEADERS = {
   "User-Agent":
@@ -12,6 +16,22 @@ const MOBILE_HEADERS = {
     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "Accept-Language": "zh-CN,zh;q=0.9",
 };
+
+const UA_SETS = [
+  {
+    "User-Agent":
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 aweme/32.7.0 NetType/WIFI Channel/App Store",
+    Accept: "text/html,application/xhtml+xml",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+  },
+  MOBILE_HEADERS,
+  {
+    "User-Agent":
+      "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+  },
+];
 
 // 北京时间格式化（日志用）：YYYY-MM-DD HH:mm:ss
 function beijingNow() {
@@ -70,8 +90,10 @@ async function douyin(url) {
     // 抖音二次握手机制：匿名首次访问只下发 ttwid cookie（无需登录），
     // 带 ttwid 的第二次请求才会返回视频数据。维护一个极简 cookie jar。
     let ttwidCookie = ttwid || "";
-    const buildFetchHeaders = () => {
-      const headers = { ...MOBILE_HEADERS };
+    // 整体请求预算：2 轮 × 3 组 UA × 4 URL 最坏可能很慢，用 20s 硬上限兜底
+    const startTime = Date.now();
+    const buildFetchHeaders = (ua) => {
+      const headers = { ...ua };
       const cookies = [];
       if (ttwidCookie && !DOUYIN_COOKIE.includes("ttwid=")) {
         cookies.push(ttwidCookie);
@@ -111,52 +133,52 @@ async function douyin(url) {
       );
     };
 
-    // 最多两轮：第一轮拿 ttwid（可能无数据），第二轮带 ttwid 拿数据
+    // 最多两轮 × 多组 UA × 多 URL：
+    // 第一轮拿 ttwid（可能无数据），第二轮带 ttwid 拿数据。
+    // 修复点（2026-08-22，参考 video-unwatermark sharepage.py）：
+    // 带 ttwid 的分享页会同时携带 argus 风控脚本与真实 _ROUTER_DATA，
+    // 因此必须先尝试解析数据、数据有效即胜出；反爬特征仅用于无数据时归类报错，
+    // 绝不能因为页面含 argus-csp-token 就跳过 —— 那是此前解析全部失败的根因。
     for (let round = 0; round < 2 && !videoInfo; round++) {
-      for (const fetchUrl of tryUrls) {
-        if (videoInfo) break;
-        try {
-          const response = await fetch(fetchUrl, { headers: buildFetchHeaders() });
-          const html = await response.text();
-          lastHtml = html;
+      for (const ua of UA_SETS) {
+        for (const fetchUrl of tryUrls) {
+          if (videoInfo) break;
+          if (Date.now() - startTime > 20000) break;
+          try {
+            const response = await fetch(fetchUrl, {
+              headers: buildFetchHeaders(ua),
+              signal: AbortSignal.timeout(8000),
+            });
+            const html = await response.text();
+            lastHtml = html;
 
-          // 从响应头收集 ttwid，供后续请求使用
-          const newTtwid = extractTtwid(response);
-          if (newTtwid && ttwidCookie !== newTtwid) {
-            ttwidCookie = newTtwid;
-          }
-
-          // 检查是否被重定向到国际版
-          if (html.includes("tiktok.com") || html.includes("访问受限")) {
-            continue;
-          }
-
-          // 反爬 JS challenge：页面无 _ROUTER_DATA，跳过换下一个 URL
-          // 两种形态：_$jsvmprt（旧）与 argus 风控脚本（新，含
-          // 'argus-csp-token' / 'precollect' 等特征）
-          if (
-            html.includes("_$jsvmprt") ||
-            html.includes("argus-csp-token") ||
-            html.includes("precollect")
-          ) {
-            challengeCount++;
-            continue;
-          }
-
-          const routerMatch = html.match(
-            /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s
-          );
-          if (routerMatch && routerMatch[1]) {
-            const parsed = JSON.parse(routerMatch[1].trim());
-            if (hasValidData(parsed)) {
-              videoInfo = parsed;
-              break;
+            // 从响应头收集 ttwid，供后续请求使用（App UA 才会下发）
+            const newTtwid = extractTtwid(response);
+            if (newTtwid && ttwidCookie !== newTtwid) {
+              ttwidCookie = newTtwid;
             }
-            // 空壳 / 被过滤：保留结构供后续给出准确报错
-            lastRouterData = parsed;
+
+            // 检查是否被重定向到国际版
+            if (html.includes("tiktok.com") || html.includes("访问受限")) {
+              continue;
+            }
+
+            // 先解析内嵌数据（_ROUTER_DATA / RENDER_DATA / _SSR_DATA）
+            const parsed = tryParseEmbedded(html);
+            if (parsed) {
+              if (hasValidData(parsed)) {
+                videoInfo = parsed;
+                break;
+              }
+              // 空壳 / 被过滤：保留结构供后续给出准确报错
+              lastRouterData = parsed;
+            } else if (isChallengeHtml(html)) {
+              // 页面完全无数据块且带反爬特征：命中 challenge，计数供报错
+              challengeCount++;
+            }
+          } catch {
+            /* 网络异常跳过该 URL，尝试下一个 */
           }
-        } catch {
-          /* 网络异常跳过该 URL，尝试下一个 */
         }
       }
     }
@@ -164,6 +186,40 @@ async function douyin(url) {
     if (!videoInfo) {
       // 优先给出抖音服务端的过滤原因（如 SYSTEM_ITEM_NOT_EXIST = 视频不存在/已删除）
       const filterReason = extractFilterReason(lastRouterData);
+
+      // 视频真实存在（无过滤原因）但分享页拿不到数据 → 公共解析 API 兜底
+      // （参考 video-unwatermark 的 webparser 引擎：17change/douyin.wtf/yujn/tenapi 竞速）
+      if (!filterReason) {
+        try {
+          const fb = await douyinPublicFallback(url);
+          if (fb.ok && fb.url) {
+            logger.log(
+              `[${beijingNow()}] 解析抖音链接 ${id} 成功（公共解析兜底 ${fb.key}）`
+            );
+            return {
+              code: 200,
+              msg: "解析成功",
+              data: {
+                author: "",
+                uid: "",
+                avatar: "",
+                like: 0,
+                time: 0,
+                title: fb.title || "视频",
+                cover: fb.cover || "",
+                type: "video",
+                url: fb.url,
+                duration: 0,
+              },
+            };
+          }
+        } catch (error) {
+          logger.warn(
+            `[${beijingNow()}] 解析抖音链接 ${id} 公共解析兜底异常: ${error.message}`
+          );
+        }
+      }
+
       if (filterReason) {
         logger.warn(
           `[${beijingNow()}] 解析抖音链接 ${id} 失败：抖音服务端过滤（${filterReason}）`
@@ -278,11 +334,14 @@ function parseVideoData(videoInfo) {
 
     // 判断是视频还是图文内容
     // aweme_type: 0=普通视频, 1=图文, 2=图文(实况图/动图), 4=故事
-    // 同时检查 video.duration > 0 排除只有音乐占位的情况
+    // 同时检查 video.duration > 0 排除只有音乐占位的情况；
+    // 若只有 uri（video_id）无 url_list，也视为可播放（走 uri 兜底直链）
+    const playAddr = videoData.video?.play_addr || {};
+    const hasUri = !!playAddr.uri && !String(playAddr.uri).startsWith("http");
     const awemeType = videoData.aweme_type;
     const hasRealVideo =
-      !!videoData.video?.play_addr?.url_list?.[0] &&
-      (videoData.video.duration || 0) > 0;
+      (!!playAddr.url_list?.[0] || hasUri) &&
+      ((videoData.video.duration || 0) > 0 || hasUri);
     const isImageType = awemeType === 1 || awemeType === 2;
     const isVideo = !isImageType && hasRealVideo;
     const images =
@@ -297,9 +356,18 @@ function parseVideoData(videoInfo) {
       };
     }
 
-    const videoResUrl = isVideo
-      ? videoData.video.play_addr.url_list[0].replace("playwm", "play")
+    const play = videoData.video?.play_addr || {};
+    const urlList = Array.isArray(play.url_list) ? play.url_list : [];
+    let videoResUrl = urlList[0]
+      ? urlList[0].replace("playwm", "play").replace("play_wm", "play")
       : "";
+
+    // uri 兜底直链（参考 video-unwatermark sharepage.py）：
+    // 分享页未内嵌 url_list 但只要拿到 video_id（uri），即可构造官方播放接口直链。
+    // 返回 302 跳转到真实 CDN，前端代理可正常跟随。
+    if (!videoResUrl && play.uri && !play.uri.startsWith("http")) {
+      videoResUrl = `https://www.iesdouyin.com/aweme/v1/play/?video_id=${play.uri}&ratio=1080p&line=0`;
+    }
 
     // 背景音乐/原声音频直链（music.play_url.url_list[0]），供「下载音频」使用
     // 原声视频的 music 即视频本身的声音，配乐视频为背景音乐
@@ -356,6 +424,57 @@ function extractFilterReason(videoInfo) {
 }
 
 /**
+ * 尝试从分享页 HTML 中解析内嵌的 JSON 数据块（参考 video-unwatermark sharepage.py）
+ * 依次支持：_ROUTER_DATA（当前主格式）→ RENDER_DATA（URL 编码）→ _SSR_DATA。
+ * 解析成功返回对象，否则返回 null。注意：即使页面带 argus 风控脚本，
+ * 只要含有效数据块也会被解析出来（先数据后反爬）。
+ */
+function tryParseEmbedded(html) {
+  const router = html.match(/window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/s);
+  if (router && router[1]) {
+    try {
+      return JSON.parse(router[1].trim());
+    } catch {
+      /* 尝试下一种格式 */
+    }
+  }
+  const render = html.match(
+    /<script[^>]+id=["']RENDER_DATA["'][^>]*>(.*?)<\/script>/s
+  );
+  if (render && render[1]) {
+    try {
+      return JSON.parse(decodeURIComponent(render[1].trim()));
+    } catch {
+      /* 尝试下一种格式 */
+    }
+  }
+  const ssr = html.match(
+    /window\._SSR_(?:HYDRATED_)?DATA\s*=\s*(.*?)<\/script>/s
+  );
+  if (ssr && ssr[1]) {
+    try {
+      return JSON.parse(ssr[1].trim());
+    } catch {
+      /* 无可用数据 */
+    }
+  }
+  return null;
+}
+
+/**
+ * 页面是否命中反爬 JS challenge（无数据壳页面）：
+ * _$jsvmprt（旧）与 argus 风控脚本（新，含 'argus-csp-token' / 'precollect'）。
+ * 仅用于无有效数据时归类报错原因，不再参与数据解析前的拦截。
+ */
+function isChallengeHtml(html) {
+  return (
+    html.includes("_$jsvmprt") ||
+    html.includes("argus-csp-token") ||
+    html.includes("precollect")
+  );
+}
+
+/**
  * 从 URL 中提取视频 ID 和完整重定向 URL
  * 返回 { id, type, redirectUrl } 或 null
  */
@@ -364,6 +483,7 @@ async function extractIdAndRedirectUrl(url) {
     const response = await fetch(url, {
       headers: MOBILE_HEADERS,
       redirect: "follow",
+      signal: AbortSignal.timeout(10000),
     });
     const finalUrl = response.url || url;
 
