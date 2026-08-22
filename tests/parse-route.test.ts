@@ -57,7 +57,9 @@ describe("parse route", () => {
         new Response(
           `<script>window._ROUTER_DATA = ${JSON.stringify(routerData)}</script>`
         )
-      );
+      )
+      // 直链有效性验证：对解析出的 URL 发 HEAD 校验
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
 
     const res = await GET(
       new Request(
@@ -69,7 +71,7 @@ describe("parse route", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
       shareUrl,
@@ -79,6 +81,11 @@ describe("parse route", () => {
       2,
       "https://www.iesdouyin.com/share/video/1234567890123456789",
       expect.any(Object)
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      "https://example.com/play/video.mp4",
+      expect.objectContaining({ method: "HEAD" })
     );
 
     const json = await res.json();
