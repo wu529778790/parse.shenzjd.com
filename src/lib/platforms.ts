@@ -28,6 +28,7 @@ export const PLATFORMS = {
   ACFUN: "acfun",
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
+  YOUTUBE: "youtube",
 } as const;
 
 type PlatformKey = (typeof PLATFORMS)[keyof typeof PLATFORMS];
@@ -203,6 +204,13 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     shortDomains: ["xspshare.baidu.com"],
     supportsIdParse: true,
   },
+  [PLATFORMS.YOUTUBE]: {
+    name: "YouTube",
+    nameEn: "Youtube",
+    domains: ["youtube.com", "youtu.be"],
+    shortDomains: ["youtu.be"],
+    supportsIdParse: false,
+  },
 };
 
 // 从 URL 识别平台
@@ -274,6 +282,9 @@ export const ALL_DOMAINS: string[] = [
   "t.co",
   "quanmin.baidu.com",
   "xspshare.baidu.com",
+  // 海外平台
+  "youtube.com",
+  "youtu.be",
   // 短链接域名
   "v.douyin.com",
   "v.kuaishou.com",
