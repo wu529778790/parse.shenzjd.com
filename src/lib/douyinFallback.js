@@ -216,4 +216,43 @@ export async function douyinPublicFallback(url) {
   return { ok: false, error: errors.slice(0, 4).join("; ") || "公共解析全部失败" };
 }
 
+/**
+ * 通用 17change 公共解析（平台无关：抖音/快手等公开视频均可）。
+ * 作为快手主解析失败时的备用通道（参考 video-unwatermark webparser.py，
+ * 实测 17change 对快手返回 code 200 且含无水印直链）。
+ * 返回 { ok: true, key, url, title, cover, author } | { ok: false, error }
+ */
+export async function public17Parse(url) {
+  const body = { link: url };
+  let resp;
+  try {
+    resp = await fetch(PARSE_17, {
+      method: "POST",
+      headers: sign17(body),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(BACKEND_TIMEOUT),
+    });
+  } catch (e) {
+    return { ok: false, error: `17change: ${e.message.slice(0, 80)}` };
+  }
+  let payload;
+  try {
+    payload = await resp.json();
+  } catch {
+    return { ok: false, error: `17change: 非 JSON (${resp.status})` };
+  }
+  if (!isOkCode(payload.code)) {
+    return { ok: false, error: `17change: ${payload.message || payload.msg || payload.code}` };
+  }
+  const data = payload.data && typeof payload.data === "object" ? payload.data : payload;
+  const { url: direct, title, cover } = pickGeneric(data);
+  if (!direct) return { ok: false, error: "17change: 响应无视频地址" };
+  const author =
+    data?.author && typeof data.author === "object"
+      ? data.author.name || data.author.nickname || null
+      : null;
+  logger.log(`[public17] 解析命中: ${title ? title.slice(0, 30) : ""}`);
+  return { ok: true, key: "17change", url: direct, title, cover, author };
+}
+
 export const _internal = { sign17, firstHttp, pickGeneric, isOkCode };
