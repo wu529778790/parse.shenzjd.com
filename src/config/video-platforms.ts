@@ -144,6 +144,12 @@ export const VIDEO_PLATFORMS = {
     color: "#14171a",
     gradient: "from-[#14171a] to-[#657786]",
   },
+  youtube: {
+    name: "YouTube",
+    emoji: "▶️",
+    color: "#ff0000",
+    gradient: "from-[#ff0000] to-[#ff4d4d]",
+  },
 } as const;
 
 export type VideoPlatformKey = keyof typeof VIDEO_PLATFORMS;
