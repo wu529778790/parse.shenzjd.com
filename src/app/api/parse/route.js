@@ -14,41 +14,19 @@ import {
   getPlatformName,
   PLATFORM_INFO,
 } from "@/lib/platforms";
+import { isBlockedText } from "@/lib/blockedPlatforms";
+import { public17Parse } from "@/lib/douyinFallback";
+import { getPlatformParser } from "@/lib/platformRoutes";
+import { verifyDirectUrl } from "@/lib/verifyUrl";
 
 // 导入各平台解析器
 import { parseKuaishou } from "@/lib/kuaishouCore";
 
-// 平台解析器映射
+// 平台解析器映射（优先于 route 模块的注册函数）
 const platformParsers = {
   kuaishou: parseKuaishou,
   // 可以继续添加其他平台
 };
-
-function createInternalRouteRequest(url) {
-  return new Request(`http://internal.local/api/parser?url=${encodeURIComponent(url)}`, {
-    headers: {
-      "user-agent": "parse.shenzjd.com/internal-parser",
-    },
-  });
-}
-
-async function invokeRouteHandler(handler, url) {
-  const response = await handler(createInternalRouteRequest(url));
-  if (!(response instanceof Response)) {
-    return response ?? null;
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return await response.json();
-  }
-
-  const text = await response.text();
-  return {
-    code: response.ok ? 200 : response.status,
-    msg: text || (response.ok ? "解析成功" : "解析失败"),
-  };
-}
 
 // 获取平台对应的解析函数
 async function getParser(platform) {
@@ -57,54 +35,8 @@ async function getParser(platform) {
     return platformParsers[platform];
   }
 
-  // 动态导入对应平台的路由解析器（与实际目录名匹配）
-  const platformRoutes = {
-    douyin: () => import("@/app/api/douyin/route.js"),
-    bilibili: () => import("@/app/api/bilibili/route.js"),
-    xhs: () => import("@/app/api/xhs/route.js"),
-    huya: () => import("@/app/api/huya/route.js"),
-    haokan: () => import("@/app/api/haokan/route.js"),
-    weibo: () => import("@/app/api/weibo/route.js"),
-    weishi: () => import("@/app/api/weishi/route.js"),
-    xigua: () => import("@/app/api/xigua/route.js"),
-    huoshan: () => import("@/app/api/huoshan/route.js"),
-    acfun: () => import("@/app/api/acfun/route.js"),
-    lishipin: () => import("@/app/api/lishipin/route.js"),
-    // 皮皮虾目录是 ppxia
-    pipixia: () => import("@/app/api/ppxia/route.js"),
-    pipigx: () => import("@/app/api/pipigx/route.js"),
-    sixroom: () => import("@/app/api/sixroom/route.js"),
-    lvzhou: () => import("@/app/api/lvzhou/route.js"),
-    meipai: () => import("@/app/api/meipai/route.js"),
-    zuiyou: () => import("@/app/api/zuiyou/route.js"),
-    quanmin: () => import("@/app/api/quanmin/route.js"),
-    quanminkge: () => import("@/app/api/quanminkge/route.js"),
-    doupai: () => import("@/app/api/doupai/route.js"),
-    xinpianchang: () => import("@/app/api/xinpianchang/route.js"),
-    twitter: () => import("@/app/api/twitter/route.js"),
-  };
-
-  const loader = platformRoutes[platform];
-  if (loader) {
-    try {
-      const mod = await loader();
-      if (typeof mod.default === "function" && mod.default !== mod.GET) {
-        return mod.default;
-      }
-      if (typeof mod.GET === "function") {
-        const routeParser = async (url) => invokeRouteHandler(mod.GET, url);
-        if (typeof mod.parseVideoId === "function") {
-          routeParser.parseVideoId = mod.parseVideoId;
-        }
-        return routeParser;
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+  // 动态导入对应平台的路由解析器（映射统一维护在 lib/platformRoutes.js）
+  return await getPlatformParser(platform);
 }
 
 // 统一解析入口
@@ -112,6 +44,17 @@ async function unifiedParser(input, options = {}) {
   try {
     // 方式1: 直接传入 URL
     if (typeof input === "string" && (input.includes("://") || input.includes("."))) {
+      // 付费/DRM 平台黑名单（腾讯视频/爱奇艺/优酷/Netflix 等）：
+      // 在平台识别之前拦截，给用户明确提示而不是白费流量解析失败
+      const blockedName = isBlockedText(input);
+      if (blockedName) {
+        logger.log(`黑名单拦截: ${blockedName}（${input.slice(0, 60)}）`);
+        return {
+          code: 400,
+          msg: `暂不支持解析${blockedName}的内容（会员/付费/DRM 保护）`,
+        };
+      }
+
       const platform = identifyPlatform(input);
 
       if (!platform) {
@@ -132,7 +75,55 @@ async function unifiedParser(input, options = {}) {
       }
 
       // 调用对应的解析函数
-      const result = await parser(input);
+      let result = await parser(input);
+      // 快手备用通道：主解析失败（页面结构变化/反爬）时，用 17change 公共 API 兜底
+      // （参考 video-unwatermark webparser 引擎，实测对快手可用）
+      if (
+        platform === "kuaishou" &&
+        (!result || result.code !== 200) &&
+        typeof input === "string" &&
+        input.includes("://")
+      ) {
+        try {
+          const fb = await public17Parse(input);
+          if (fb.ok && fb.url) {
+            logger.log(`快手主解析失败，公共 API 兜底命中（${fb.key}）`);
+            result = {
+              code: 200,
+              msg: "解析成功",
+              data: {
+                photoUrl: fb.url,
+                caption: fb.title || "视频",
+                coverUrl: fb.cover || "",
+                authorName: fb.author || "",
+                source: fb.key,
+              },
+            };
+          }
+        } catch (error) {
+          logger.warn(`快手公共 API 兜底异常: ${error.message}`);
+        }
+      }
+      // 直链有效性验证（保守策略：仅明确 404/410 判坏链，403/超时等不确定一律不阻断）
+      if (result?.code === 200 && result?.data) {
+        const urlKey = typeof result.data.url === "string" ? "url" : typeof result.data.photoUrl === "string" ? "photoUrl" : null;
+        const direct = urlKey ? result.data[urlKey] : "";
+        if (direct && direct.startsWith("http")) {
+          try {
+            const v = await verifyDirectUrl(direct);
+            if (v.ok === false) {
+              logger.warn(
+                `[verify] 平台 ${platform} 直链失效 (HTTP ${v.status})，已置空 URL`
+              );
+              result.data[urlKey] = undefined;
+              result.msg = result.msg || "解析成功";
+            }
+          } catch (e) {
+            logger.warn(`[verify] 平台 ${platform} 直链验证异常: ${e.message}`);
+          }
+        }
+      }
+
       if (result && result.platform === undefined) {
         result.platform = platform;
       }
