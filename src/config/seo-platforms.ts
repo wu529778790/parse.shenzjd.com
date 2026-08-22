@@ -298,6 +298,19 @@ export const PLATFORM_SEO: Record<string, PlatformSeoEntry> = {
       { q: "推文里有多条视频怎么办？", a: "通常解析返回推文中的主要视频，可逐一尝试或反馈具体链接。" },
     ],
   },
+  youtube: {
+    title: "YouTube视频解析下载 - YouTube无水印视频下载工具",
+    description:
+      "YouTube 视频解析下载工具，粘贴 watch / shorts / youtu.be 链接即可解析下载视频，支持最高 720p，服务端自动合并音视频，免费在线使用。",
+    intro:
+      "YouTube 的视频为分离式音视频流，直接保存会只有画面或无法播放。神族九帝在服务器端自动合并音视频并输出完整 MP4，粘贴 youtube.com/watch、shorts 或 youtu.be 链接即可下载，适合离线观看与素材收藏。",
+    scenes: ["下载 YouTube 教学视频离线学习", "保存想收藏的 MV 与影视解说", "备份会失效的创作者内容"],
+    faqs: [
+      { q: "YouTube 怎么解析下载？", a: "复制视频页地址（watch?v=、shorts/ 或 youtu.be 短链），粘贴到神族九帝输入框点击解析，稍等片刻即可播放下载。" },
+      { q: "为什么解析要等一会儿？", a: "YouTube 已取消直接可播的渐进式格式，服务端需要先下载音视频流并用 ffmpeg 合并为完整 MP4，时长取决于视频大小。" },
+      { q: "YouTube 视频清晰度是多少？", a: "当前合并输出上限 720p，兼顾清晰度与下载速度；超长视频（15 分钟以上）暂不支持。" },
+    ],
+  },
 };
 
 /** 获取某平台的 SEO 数据 */
