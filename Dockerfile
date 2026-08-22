@@ -47,6 +47,12 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# yt-dlp + ffmpeg（YouTube 解析）：yt-dlp 下载分离式音视频流，
+# ffmpeg 合并为完整 MP4。仅 Docker 部署支持 YouTube（Serverless 无此环境）。
+RUN apk add --no-cache python3 py3-pip ffmpeg \
+ && pip install --no-cache-dir yt-dlp \
+ && rm -rf /root/.cache/pip
+
 # 非 root 用户运行（node:alpine 自带 node 用户，UID 1000）
 USER node
 
