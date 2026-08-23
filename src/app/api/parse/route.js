@@ -219,7 +219,10 @@ export async function GET(request) {
   }
 
   if (url) {
-    return createApiHandler((url) => unifiedParser(url))(request);
+    // 禁用缓存：统一入口需要为结果补充 platform 字段（各平台路由的缓存
+    // 与统一入口共享同一缓存 Map，命中缓存会绕过 unifiedParser 的
+    // platform 补充逻辑）。防刷由 createApiHandler 的限流兜底。
+    return createApiHandler((url) => unifiedParser(url), { shouldCache: false })(request);
   }
 
   if (source && id) {
