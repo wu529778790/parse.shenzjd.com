@@ -73,4 +73,4 @@ Configure in `.env.local` for full functionality:
 
 ## Deployment
 
-Three targets: Vercel (one-click), Cloudflare Workers (`wrangler.toml`), Docker (GHCR + Docker Hub via GitHub Actions). The Docker CI workflow runs unit tests before building.
+Deployment targets: Vercel (one-click) and Docker (GHCR + Docker Hub via GitHub Actions). Docker is the recommended production target; the Docker CI workflow runs unit tests before building.
