@@ -311,6 +311,19 @@ export const PLATFORM_SEO: Record<string, PlatformSeoEntry> = {
       { q: "YouTube 视频清晰度是多少？", a: "当前合并输出上限 720p，兼顾清晰度与下载速度；超长视频（15 分钟以上）暂不支持。" },
     ],
   },
+  tiktok: {
+    title: "TikTok视频解析下载 - TikTok无水印视频下载工具",
+    description:
+      "TikTok 视频解析下载工具，粘贴 tiktok.com/@用户/video 链接或 vm/vt 短链即可解析无水印原视频，免费在线使用。",
+    intro:
+      "TikTok 分享链接直接保存会带平台水印且易失效。神族九帝支持解析 tiktok.com 标准视频页、m.tiktok.com 移动页以及 vm/vt.tiktok.com 短链，返回无水印的原始视频地址，方便收藏、剪辑与二次创作。",
+    scenes: ["保存海外创作者的优质内容", "下载无水印素材用于个人剪辑", "备份收藏夹中易失效的视频"],
+    faqs: [
+      { q: "TikTok 短链 vm.tiktok.com 怎么解析？", a: "直接把 vm.tiktok.com 或 vt.tiktok.com 短链粘贴到输入框点击解析即可，短链会自动展开并定位到对应视频。" },
+      { q: "TikTok 解析出来是无水印的吗？", a: "是，解析结果为原始视频地址，无水印，可直接预览与下载。" },
+      { q: "TikTok 视频解析失败怎么办？", a: "TikTok 对数据中心 IP 风控较严，失败时可稍后重试或更换网络环境，也可以关注公众号反馈具体链接。" },
+    ],
+  },
 };
 
 /** 获取某平台的 SEO 数据 */
