@@ -29,6 +29,7 @@ export const PLATFORMS = {
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
   YOUTUBE: "youtube",
+  TIKTOK: "tiktok",
 } as const;
 
 type PlatformKey = (typeof PLATFORMS)[keyof typeof PLATFORMS];
@@ -211,6 +212,13 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     shortDomains: ["youtu.be"],
     supportsIdParse: false,
   },
+  [PLATFORMS.TIKTOK]: {
+    name: "TikTok",
+    nameEn: "Tiktok",
+    domains: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"],
+    shortDomains: ["vm.tiktok.com", "vt.tiktok.com"],
+    supportsIdParse: false,
+  },
 };
 
 // 从 URL 识别平台
@@ -285,6 +293,9 @@ export const ALL_DOMAINS: string[] = [
   // 海外平台
   "youtube.com",
   "youtu.be",
+  "tiktok.com",
+  "vm.tiktok.com",
+  "vt.tiktok.com",
   // 短链接域名
   "v.douyin.com",
   "v.kuaishou.com",
