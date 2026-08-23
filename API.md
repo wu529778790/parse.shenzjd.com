@@ -353,7 +353,7 @@ GET /api/health
 
 **鉴权**: 需携带 `Authorization: Bearer <STATS_API_KEY>`；未配置 `STATS_API_KEY` 时返回 `403`。
 
-**说明**: 返回所有成功解析记录的分析结果——平台分布、近 14 天每日解析量、总量/独立访客（IP 匿名哈希）/独立链接数。数据由 `createApiHandler` 在每次成功解析时异步写入 Turso（`parse_events` 表）。
+**说明**: 返回所有解析记录（**成功与失败**）的分析结果——平台分布（含失败数）、近 14 天每日解析量、总量/成功/失败/独立访客（IP 匿名哈希）/独立链接数。数据由 `createApiHandler` 在每次解析结束（成功或失败）时异步写入 Turso（`parse_events` 表，`status` 区分 `success`/`failed`，`reason` 记录失败原因）。
 
 **响应示例**:
 ```json
@@ -361,12 +361,18 @@ GET /api/health
   "code": 200,
   "msg": "ok",
   "data": {
-    "totals": { "total": 120, "users": 34, "unique_links": 88 },
-    "byPlatform": [ { "platform": "douyin", "cnt": 50 } ],
-    "byDay": [ { "day": "2024-01-01", "cnt": 10 } ]
+    "totals": { "total": 120, "success": 100, "failed": 20, "users": 34, "unique_links": 88 },
+    "byPlatform": [
+      { "platform": "douyin", "total": 50, "success": 45, "failed": 5 }
+    ],
+    "byDay": [
+      { "day": "2024-01-01", "total": 10, "success": 8, "failed": 2 }
+    ]
   }
 }
 ```
+
+> 提示：`failed` 数高的平台说明当前解析成功率偏低或存在未支持的内容类型，可针对性优化（查看失败 `reason` 需直接查询数据库 `parse_events` 表）。
 
 ---
 

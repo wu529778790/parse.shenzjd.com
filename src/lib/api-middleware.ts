@@ -138,6 +138,14 @@ export const createApiHandler = (
       if (!rawResult) {
         const duration = Date.now() - startTime;
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
+        // 失败也记录：便于发现未支持/失效的平台与链接
+        recordParse({
+          platform: String(routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "failed",
+          reason: "解析失败（无返回结果）",
+        }).catch(() => {});
         return Response.json(
           parseErrorResponse("解析失败"),
           {
@@ -150,10 +158,22 @@ export const createApiHandler = (
       // 统一响应模型：成功结果在出口统一归一化（code=200 + data 统一字段契约）
       const result = normalizeResult(rawResult);
 
-      // 成功解析后异步记录行为分析（不阻塞响应；数据库未配置时静默跳过）
+      // 解析结果（成功/失败）异步记录行为分析（不阻塞响应；数据库未配置时静默跳过）
       if (result?.code === 200) {
-        const platform = String(result.platform || routeMatch?.[1] || "");
-        recordParse({ platform, url: sanitizedUrl, ip: clientIP }).catch(() => {});
+        recordParse({
+          platform: String(result.platform || routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "success",
+        }).catch(() => {});
+      } else {
+        recordParse({
+          platform: String(routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "failed",
+          reason: String(result?.msg || "解析失败"),
+        }).catch(() => {});
       }
 
       if (shouldCache) {
@@ -170,6 +190,13 @@ export const createApiHandler = (
       const duration = Date.now() - startTime;
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       logger.error(`API error after ${duration}ms:`, errMsg);
+      recordParse({
+        platform: String(routeMatch?.[1] || ""),
+        url: sanitizedUrl,
+        ip: clientIP,
+        status: "failed",
+        reason: errMsg,
+      }).catch(() => {});
       return Response.json(
         serverErrorResponse(error),
         {

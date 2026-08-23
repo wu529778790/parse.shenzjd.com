@@ -28,7 +28,7 @@ function getClient() {
   return db;
 }
 
-/** 幂等建表（并发安全：只执行一次） */
+/** 幂等建表（并发安全：只执行一次），含旧表迁移（补 status/reason 列） */
 async function ensureTable() {
   if (tableReady) return tableReady;
   const client = getClient();
@@ -43,14 +43,25 @@ async function ensureTable() {
         platform TEXT NOT NULL,
         video_url TEXT NOT NULL,
         ip_hash TEXT,
+        status TEXT NOT NULL DEFAULT 'success',
+        reason TEXT,
         created_at TEXT NOT NULL
       )
     `);
+    // 迁移：旧表无 status/reason 列时补列（重复列错误忽略）
+    await ensureColumn(
+      client,
+      "status TEXT NOT NULL DEFAULT 'success'"
+    );
+    await ensureColumn(client, "reason TEXT");
     await client.execute(
       "CREATE INDEX IF NOT EXISTS idx_pe_platform_date ON parse_events(platform, created_at)"
     );
     await client.execute(
       "CREATE INDEX IF NOT EXISTS idx_pe_date ON parse_events(created_at)"
+    );
+    await client.execute(
+      "CREATE INDEX IF NOT EXISTS idx_pe_status ON parse_events(status)"
     );
     logger.log("[analytics] 数据表就绪");
     return true;
@@ -59,6 +70,15 @@ async function ensureTable() {
     tableReady = null; // 建表失败允许下次重试
   });
   return tableReady;
+}
+
+/** 为 parse_events 补列（SQLite 的 ADD COLUMN；重复列错误忽略） */
+async function ensureColumn(client, ddl) {
+  try {
+    await client.execute(`ALTER TABLE parse_events ADD COLUMN ${ddl}`);
+  } catch (e) {
+    if (!/duplicate column|already exists/i.test(e.message || "")) throw e;
+  }
 }
 
 /** IP 匿名化：SHA-256(固定盐 + ip)，不可逆，仅用于估算独立访客 */
@@ -76,10 +96,16 @@ async function hashIp(ip) {
 }
 
 /**
- * 记录一次成功解析。所有异常静默（记录失败不影响解析主流程）。
- * @param {{ platform?: string, url: string, ip?: string }} event
+ * 记录一次解析事件（成功或失败）。所有异常静默（记录失败不影响解析主流程）。
+ * @param {{ platform?: string, url: string, ip?: string, status?: 'success'|'failed', reason?: string }} event
  */
-export async function recordParse({ platform = "", url = "", ip = "" } = {}) {
+export async function recordParse({
+  platform = "",
+  url = "",
+  ip = "",
+  status = "success",
+  reason = "",
+} = {}) {
   try {
     const client = getClient();
     if (!client) return;
@@ -87,8 +113,8 @@ export async function recordParse({ platform = "", url = "", ip = "" } = {}) {
     if (!ok) return;
     const ipHash = await hashIp(ip);
     await client.execute({
-      sql: "INSERT INTO parse_events (platform, video_url, ip_hash, created_at) VALUES (?, ?, ?, ?)",
-      args: [platform, url, ipHash, new Date().toISOString()],
+      sql: "INSERT INTO parse_events (platform, video_url, ip_hash, status, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      args: [platform, url, ipHash, status, reason.slice(0, 200), new Date().toISOString()],
     });
   } catch (e) {
     logger.warn(`[analytics] 记录失败: ${e.message}`);
@@ -107,13 +133,26 @@ export async function queryStats() {
   try {
     const [byPlatform, byDay, totals] = await Promise.all([
       client.execute(
-        "SELECT platform, COUNT(*) AS cnt FROM parse_events GROUP BY platform ORDER BY cnt DESC"
+        `SELECT platform,
+                COUNT(*) AS total,
+                SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS success,
+                SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
+         FROM parse_events GROUP BY platform ORDER BY total DESC`
       ),
       client.execute(
-        "SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS cnt FROM parse_events GROUP BY day ORDER BY day DESC LIMIT 14"
+        `SELECT substr(created_at, 1, 10) AS day,
+                COUNT(*) AS total,
+                SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS success,
+                SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
+         FROM parse_events GROUP BY day ORDER BY day DESC LIMIT 14`
       ),
       client.execute(
-        "SELECT COUNT(*) AS total, COUNT(DISTINCT ip_hash) AS users, COUNT(DISTINCT video_url) AS unique_links FROM parse_events"
+        `SELECT COUNT(*) AS total,
+                SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS success,
+                SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed,
+                COUNT(DISTINCT ip_hash) AS users,
+                COUNT(DISTINCT video_url) AS unique_links
+         FROM parse_events`
       ),
     ]);
     return {

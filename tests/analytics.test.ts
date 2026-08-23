@@ -49,7 +49,7 @@ describe("analytics", () => {
     expect(await analytics.queryStats()).toBeNull();
   });
 
-  it("配置后 recordParse 建表并插入记录", async () => {
+  it("配置后 recordParse 建表并插入成功记录", async () => {
     process.env.TURSO_DB_URL = "libsql://test.turso.io";
     process.env.TURSO_AUTH_TOKEN = "test-token";
     await analytics.recordParse({
@@ -68,15 +68,37 @@ describe("analytics", () => {
     expect(insert).toBeTruthy();
     expect(insert[0].args[0]).toBe("kuaishou");
     expect(insert[0].args[1]).toBe("https://v.kuaishou.com/abc");
+    expect(insert[0].args[3]).toBe("success");
   });
 
-  it("配置后 queryStats 返回聚合结果", async () => {
+  it("配置后 recordParse 可记录失败事件（status=failed + reason）", async () => {
     process.env.TURSO_DB_URL = "libsql://test.turso.io";
     process.env.TURSO_AUTH_TOKEN = "test-token";
-    mockExecute.mockResolvedValue({ rows: [{ platform: "douyin", cnt: 5 }] });
+    await analytics.recordParse({
+      platform: "huya",
+      url: "https://v.huya.com/xyz",
+      ip: "203.0.113.6",
+      status: "failed",
+      reason: "虎牙视频解析失败",
+    });
+    const insert = mockExecute.mock.calls.find(
+      ([arg]) => typeof arg === "object" && String(arg.sql).startsWith("INSERT")
+    );
+    expect(insert).toBeTruthy();
+    expect(insert[0].args[3]).toBe("failed");
+    expect(insert[0].args[4]).toBe("虎牙视频解析失败");
+  });
+
+  it("配置后 queryStats 返回聚合结果（含 success/failed 维度）", async () => {
+    process.env.TURSO_DB_URL = "libsql://test.turso.io";
+    process.env.TURSO_AUTH_TOKEN = "test-token";
+    mockExecute.mockResolvedValue({
+      rows: [{ platform: "douyin", total: 6, success: 5, failed: 1 }],
+    });
     const stats = await analytics.queryStats();
     expect(stats).not.toBeNull();
     expect(stats.totals).toBeTruthy();
     expect(stats.byPlatform[0].platform).toBe("douyin");
+    expect(stats.byPlatform[0].failed).toBe(1);
   });
 });
