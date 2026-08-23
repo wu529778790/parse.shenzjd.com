@@ -27,7 +27,8 @@ describe("api-middleware", () => {
     const res = await handler(req);
     const json = await res.json();
 
-    expect(json.code).toBe(1);
+    // 成功 code 在出口统一归一化为 200（bilibili 原返回 1）
+    expect(json.code).toBe(200);
     expect(parseSpy).toHaveBeenCalledTimes(1);
     expect(getCacheSpy).not.toHaveBeenCalled();
     expect(setCacheSpy).not.toHaveBeenCalled();

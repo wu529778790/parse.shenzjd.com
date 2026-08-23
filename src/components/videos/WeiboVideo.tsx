@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Image from "next/image";
-import { ApiResponse, WeiboData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface WeiboVideoProps {
@@ -13,7 +13,7 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
     return null;
   }
 
-  const weiboData = data.data as WeiboData;
+  const weiboData = data.data as ParseData;
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
@@ -25,7 +25,7 @@ export default function WeiboVideo({ data }: WeiboVideoProps) {
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#e6162d] to-[#ff4d6a] blur-sm opacity-50" />
               <Image
                 src={weiboData.avatar}
-                alt={weiboData.author}
+                alt={weiboData.author || ""}
                 width={56}
                 height={56}
                 className="relative rounded-full border-2 border-glass-3"

@@ -9,6 +9,7 @@
 
 import { createApiHandler, safeStatus } from "@/lib/api-middleware";
 import { logger, rateLimit, getClientIP, getCorsHeaders } from "@/lib/api-utils";
+import { normalizeResult } from "@/lib/normalize-result";
 import {
   identifyPlatform,
   getPlatformName,
@@ -231,7 +232,7 @@ export async function GET(request) {
       );
     }
 
-    const result = await unifiedParser("", { source, id });
+    const result = normalizeResult(await unifiedParser("", { source, id }));
     return Response.json(result, {
       status: safeStatus(result?.code || 200),
       headers: corsHeaders,

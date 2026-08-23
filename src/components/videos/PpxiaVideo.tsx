@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Image from "next/image";
-import { ApiResponse, PpxiaData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface PpxiaVideoProps {
@@ -13,7 +13,7 @@ export default function PpxiaVideo({ data }: PpxiaVideoProps) {
     return null;
   }
 
-  const ppxiaData = data.data as PpxiaData;
+  const ppxiaData = data.data as ParseData;
 
   return (
     <>
@@ -21,7 +21,7 @@ export default function PpxiaVideo({ data }: PpxiaVideoProps) {
         {ppxiaData.avatar && (
           <Image
             src={ppxiaData.avatar}
-            alt={ppxiaData.author}
+            alt={ppxiaData.author || ""}
             width={48}
             height={48}
             className="rounded-full"

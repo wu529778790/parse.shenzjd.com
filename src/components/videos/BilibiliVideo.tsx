@@ -9,24 +9,25 @@ interface BilibiliVideoProps {
 }
 
 export default function BilibiliVideo({ data }: BilibiliVideoProps) {
-  const videoItems = data.data && Array.isArray(data.data) ? data.data : [];
+  const parsed = data.data;
+  const videoItems = parsed?.videos || [];
   const hasVideo = videoItems.length > 0;
   // 统一窗口展示：不直接 <video> 播放（服务器出口 IP 拿到的直链为海外 CDN 节点）
-  const primaryVideoUrl = hasVideo ? videoItems[0].video_url : "";
-  const posterUrl = data.imgurl || undefined;
+  const primaryVideoUrl = hasVideo ? videoItems[0].url : "";
+  const posterUrl = parsed?.cover || undefined;
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info Card */}
-      {(data.user?.user_img || data.title) && (
+      {(parsed?.avatar || parsed?.title) && (
         <div className="glass-card p-5">
           <div className="flex items-center gap-4">
-            {data.user?.user_img && (
+            {parsed?.avatar && (
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#00aeec] to-[#4dc9ff] blur-sm opacity-50" />
                 <Image
-                  src={data.user.user_img}
-                  alt={data.user.name}
+                  src={parsed.avatar}
+                  alt={parsed.author || ""}
                   width={56}
                   height={56}
                   className="relative rounded-full border-2 border-glass-3"
@@ -34,15 +35,15 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              {data.title && (
+              {parsed?.title && (
                 <h2 className="text-lg font-semibold text-primary line-clamp-2 mb-1">
-                  {data.title}
+                  {parsed.title}
                 </h2>
               )}
-              {data.user?.name && (
+              {parsed?.author && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-secondary">UP主</span>
-                  <span className="text-sm font-medium text-accent">{data.user.name}</span>
+                  <span className="text-sm font-medium text-accent">{parsed.author}</span>
                 </div>
               )}
             </div>
@@ -62,7 +63,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
         <VideoPosterCard
           url={primaryVideoUrl}
           cover={posterUrl}
-          alt={data.title || "视频封面"}
+          alt={parsed?.title || "视频封面"}
           accent="blue"
           tall
           showDownload={false}
@@ -110,7 +111,7 @@ export default function BilibiliVideo({ data }: BilibiliVideoProps) {
                 </div>
 
                 <a
-                  href={item.video_url}
+                  href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00aeec] to-[#4dc9ff] hover:from-[#0099d4] hover:to-[#3db8e8] text-white rounded-lg text-sm font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#00aeec]/25 hover:-translate-y-0.5">

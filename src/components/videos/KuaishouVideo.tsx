@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { ApiResponse, KuaishouData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface KuaishouVideoProps {
@@ -12,12 +12,12 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
     return null;
   }
 
-  const kuaishouData = data.data as KuaishouData;
+  const kuaishouData = data.data as ParseData;
 
   return (
     <div className="space-y-5" style={{ touchAction: 'pan-y' }}>
       {/* Author Info */}
-      {kuaishouData.authorName && (
+      {kuaishouData.author && (
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff6600] to-[#ff9933] flex items-center justify-center">
@@ -25,25 +25,25 @@ export default function KuaishouVideo({ data }: KuaishouVideoProps) {
             </div>
             <div>
               <p className="text-xs text-muted">作者</p>
-              <p className="text-sm font-medium text-primary">{kuaishouData.authorName}</p>
+              <p className="text-sm font-medium text-primary">{kuaishouData.author}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Video Title */}
-      {kuaishouData.caption && (
+      {kuaishouData.title && (
         <div className="glass-card p-4">
-          <p className="text-sm text-primary line-clamp-2">{kuaishouData.caption}</p>
+          <p className="text-sm text-primary line-clamp-2">{kuaishouData.title}</p>
         </div>
       )}
 
       {/* Video：封面 + 播放/下载（直链新窗口） */}
-      {kuaishouData.photoUrl && (
+      {kuaishouData.url && (
         <VideoPosterCard
-          url={kuaishouData.photoUrl}
-          cover={kuaishouData.coverUrl || undefined}
-          alt={kuaishouData.caption || "视频封面"}
+          url={kuaishouData.url}
+          cover={kuaishouData.cover || undefined}
+          alt={kuaishouData.title || "视频封面"}
           accent="orange"
           tall
         />

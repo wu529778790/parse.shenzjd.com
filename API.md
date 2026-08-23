@@ -20,6 +20,30 @@
 }
 ```
 
+### 统一响应模型
+
+所有平台的**成功响应**（`code` 恒为 `200`）在出口统一归一化，`data` 遵循同一套字段契约，前端与调用方只需消费以下字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `title` | string | 标题 |
+| `desc` | string | 描述 |
+| `author` | string | 作者昵称 |
+| `authorId` | string | 作者 ID |
+| `avatar` | string | 作者头像 |
+| `cover` | string | 封面图 |
+| `url` | string | 主媒体直链（视频/音乐/单图） |
+| `audioUrl` | string | 音频直链（背景音乐/原声） |
+| `images` | string[] | 图集（图文内容） |
+| `type` | string | 内容类型：`video` / `image` |
+| `duration` | number | 视频时长（毫秒） |
+| `videos` | array | 多分P/多清晰度列表（bilibili） |
+| `name` / `lyrics` / `core` / `copyright` | string | 音乐类扩展字段（汽水音乐） |
+
+> 兼容说明：归一化**保留**各平台原始字段（如快手的 `photoUrl`、`caption` 等），同时新增上述统一字段，外部旧调用方不受影响。
+>
+> 历史变更：此前 bilibili 成功返回 `code: 1`、字段散落在顶层（`title`/`imgurl`/`user`）且 `data` 为分P数组——现已统一为 `code: 200` + 顶层字段移入 `data` + 分P 列表放入 `data.videos`。
+
 ### 错误响应
 ```json
 {
@@ -107,26 +131,29 @@ GET /api/bilibili?url=https://b23.tv/abcDEFg
 **响应示例**:
 ```json
 {
-  "code": 1,
+  "code": 200,
   "msg": "解析成功！",
-  "title": "视频标题",
-  "imgurl": "封面URL",
-  "desc": "视频描述",
-  "data": [
-    {
-      "title": "P1",
-      "duration": 180,
-      "durationFormat": "00:02:59",
-      "accept": ["高清 1080P+", "高清 720P"],
-      "video_url": "视频播放地址"
-    }
-  ],
-  "user": {
-    "name": "UP主名称",
-    "user_img": "UP主头像"
+  "platform": "bilibili",
+  "data": {
+    "title": "视频标题",
+    "desc": "视频描述",
+    "cover": "封面URL",
+    "author": "UP主名称",
+    "avatar": "UP主头像",
+    "videos": [
+      {
+        "title": "P1",
+        "url": "视频播放地址",
+        "duration": 180,
+        "durationFormat": "00:02:59",
+        "accept": ["高清 1080P+", "高清 720P"]
+      }
+    ]
   }
 }
 ```
+
+> 注：已统一为 `code: 200`；分P 列表在 `data.videos`，作者信息在 `data.author` / `data.avatar`。
 
 ---
 
@@ -156,13 +183,15 @@ GET /api/kuaishou?url=https://v.kuaishou.com/abcdEF
   "msg": "解析成功",
   "platform": "kuaishou",
   "data": {
-    "photoUrl": "视频播放地址",
-    "caption": "视频标题",
-    "coverUrl": "封面URL",
-    "authorName": "作者名称"
+    "url": "视频播放地址",
+    "title": "视频标题",
+    "cover": "封面URL",
+    "author": "作者名称"
   }
 }
 ```
+
+> 注：已统一为 `url` / `title` / `cover` / `author` 字段契约（原始 `photoUrl` / `caption` / `coverUrl` / `authorName` 字段仍保留）。
 
 ---
 

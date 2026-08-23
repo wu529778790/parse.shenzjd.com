@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Image from "next/image";
-import { ApiResponse, DouyinData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface DouyinVideoProps {
@@ -13,7 +13,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
     return null;
   }
 
-  const douyinData = data.data as DouyinData;
+  const douyinData = data.data as ParseData;
   const isImageType = douyinData.type === "image";
 
   return (

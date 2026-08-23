@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { ApiResponse, PipigxData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface PipigxVideoProps {
@@ -12,7 +12,7 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
     return null;
   }
 
-  const pipigxData = data.data as PipigxData;
+  const pipigxData = data.data as ParseData;
 
   return (
     <>
@@ -23,9 +23,9 @@ export default function PipigxVideo({ data }: PipigxVideoProps) {
           </h2>
         </div>
       )}
-      {pipigxData.video && (
+      {pipigxData.url && (
         <VideoPosterCard
-          url={pipigxData.video}
+          url={pipigxData.url}
           cover={pipigxData.cover}
           alt={pipigxData.title || "视频封面"}
           accent="blue"

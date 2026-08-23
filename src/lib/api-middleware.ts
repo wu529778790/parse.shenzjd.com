@@ -12,6 +12,7 @@ import {
   serverErrorResponse,
   parseErrorResponse
 } from "@/lib/api-utils";
+import { normalizeResult } from "@/lib/normalize-result";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -129,9 +130,9 @@ export const createApiHandler = (
 
     try {
       logger.log(`Parsing URL: ${sanitizedUrl.substring(0, 80)}...`);
-      const result = await parseFunction(sanitizedUrl);
+      const rawResult = await parseFunction(sanitizedUrl);
 
-      if (!result) {
+      if (!rawResult) {
         const duration = Date.now() - startTime;
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
         return Response.json(
@@ -142,6 +143,9 @@ export const createApiHandler = (
           }
         );
       }
+
+      // 统一响应模型：成功结果在出口统一归一化（code=200 + data 统一字段契约）
+      const result = normalizeResult(rawResult);
 
       if (shouldCache) {
         setCacheResponse(sanitizedUrl, result);

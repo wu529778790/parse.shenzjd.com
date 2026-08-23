@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Image from "next/image";
-import { ApiResponse, XhsData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface XhsVideoProps {
@@ -15,7 +15,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
     return null;
   }
 
-  const xhsData = data.data as XhsData;
+  const xhsData = data.data as ParseData;
 
   const isImageType = xhsData.type === "image";
 
@@ -29,7 +29,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#ff2442] to-[#ff5c7c] blur-sm opacity-50" />
               <Image
                 src={xhsData.avatar}
-                alt={xhsData.author}
+                alt={xhsData.author || ""}
                 width={56}
                 height={56}
                 className="relative rounded-full border-2 border-glass-3"

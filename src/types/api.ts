@@ -1,123 +1,65 @@
 import type { VideoPlatformKey } from "@/config/video-platforms";
 
-export interface VideoItem {
-  title: string;
-  duration: number;
-  durationFormat: string;
-  accept: string[];
-  video_url: string;
-}
-
-export interface User {
-  name: string;
-  user_img: string;
-}
-
-/** 多平台解析接口共用的扁平 data 结构 */
-export interface GenericParsedData {
+/** 多分P / 多清晰度视频项（bilibili 等） */
+export interface ParsedVideoItem {
   title?: string;
+  url: string;
+  /** 时长（秒） */
+  duration?: number;
+  /** 格式化时长，如 "00:02:59" */
+  durationFormat?: string;
+  /** 清晰度标签，如 "高清 1080P+" */
+  accept?: string[];
+}
+
+/**
+ * 统一媒体解析数据结构 —— 所有平台解析成功后 data 的契约。
+ *
+ * 由服务端 `normalize-result` 归一化产出；前端只消费本结构，
+ * 平台特有字段（音乐/统计）作为可选扩展保留在同一对象内。
+ */
+export interface ParseData {
+  // —— 内容信息 ——
+  title?: string;
+  desc?: string;
+  /** 内容类型：video / image / music */
+  type?: "video" | "image" | "music";
+  /** 视频时长（毫秒，抖音等平台） */
+  duration?: number;
+
+  // —— 作者信息 ——
   author?: string;
+  authorId?: string;
   avatar?: string;
-  uid?: string;
+
+  // —— 媒体 ——
+  /** 封面图 */
   cover?: string;
+  /** 主媒体直链（视频 / 音乐 / 单图） */
   url?: string;
-  images?: string[];
-  /** 音频直链（视频的背景音乐/原声），前端据此提供「下载音频」 */
+  /** 音频直链（背景音乐 / 原声），前端据此提供「下载音频」 */
   audioUrl?: string;
+  /** 图集 */
+  images?: string[];
+  /** 多分P / 多清晰度列表（bilibili） */
+  videos?: ParsedVideoItem[];
+
+  // —— 音乐扩展（汽水音乐等） ——
+  name?: string;
+  lyrics?: string;
+  core?: string;
+  copyright?: string;
+
+  // —— 平台特有统计（保留，抖音等） ——
+  like?: number;
+  time?: number | string;
+  uid?: string;
+  music?: { author: string; avatar: string };
 }
 
 export interface ApiResponse {
   code: number;
   msg: string;
-  title?: string;
-  imgurl?: string;
-  desc?: string;
-  data?:
-    | VideoItem[]
-    | DouyinData
-    | KuaishouData
-    | WeiboData
-    | XhsData
-    | QsMusicData
-    | PipigxData
-    | PpxiaData
-    | GenericParsedData;
-  user?: User;
   platform?: VideoPlatformKey;
-}
-
-export interface DouyinData {
-  author: string;
-  avatar: string;
-  cover: string;
-  like: number;
-  music: { author: string; avatar: string };
-  time: number;
-  title: string;
-  uid: string;
-  url?: string;
-  type?: "video" | "image";
-  images?: string[];
-  /** 视频时长（毫秒），长视频（>3min）前端引导新窗口播放、不走代理 */
-  duration?: number;
-  /** 背景音乐/原声音频直链，用于「下载音频」 */
-  audioUrl?: string;
-}
-
-// 快手数据类型
-export interface KuaishouData {
-  photoUrl: string;
-  caption: string;
-  coverUrl: string;
-  source?: string;
-  authorName?: string;
-}
-
-// 微博数据类型
-export interface WeiboData {
-  author: string;
-  avatar: string;
-  time: string;
-  title: string;
-  cover: string;
-  url: string;
-}
-
-// 小红书数据类型
-export interface XhsData {
-  author: string;
-  authorID: string;
-  title: string;
-  desc: string;
-  avatar: string;
-  cover: string;
-  url?: string; // 视频URL，对于图片内容可能为空
-  images?: string[]; // 图片URL数组
-  type?: "video" | "image"; // 内容类型
-}
-
-// QQ音乐数据类型
-export interface QsMusicData {
-  name: string;
-  url: string;
-  cover: string;
-  lyrics: string;
-  core: string;
-  copyright: string;
-}
-
-// 皮皮虾数据类型（pipigx）
-export interface PipigxData {
-  title: string;
-  cover: string;
-  video: string;
-}
-
-// 皮皮虾数据类型（ppxia）
-export interface PpxiaData {
-  author: string;
-  avatar: string;
-  title: string;
-  cover: string;
-  url: string;
+  data?: ParseData;
 }

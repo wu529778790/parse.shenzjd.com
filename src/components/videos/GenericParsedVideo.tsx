@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Image from "next/image";
-import { ApiResponse, GenericParsedData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 
 interface GenericParsedVideoProps {
@@ -13,7 +13,7 @@ export default function GenericParsedVideo({ data }: GenericParsedVideoProps) {
     return null;
   }
 
-  const d = data.data as GenericParsedData;
+  const d = data.data as ParseData;
   // 视频/图片一律直链 + 窗口展示（不再直接 <video> 播放、不再走 /api/proxy）
   const videoUrl = d.url || "";
   const images = d.images?.filter(Boolean) || [];

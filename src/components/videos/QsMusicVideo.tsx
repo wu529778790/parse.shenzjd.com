@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Image from "next/image";
-import { ApiResponse, QsMusicData } from "@/types/api";
+import { ApiResponse, ParseData } from "@/types/api";
 
 interface QsMusicVideoProps {
   data: ApiResponse;
@@ -14,7 +14,7 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
     return null;
   }
 
-  const musicData = data.data as QsMusicData;
+  const musicData = data.data as ParseData;
 
   return (
     <>
@@ -23,7 +23,7 @@ export default function QsMusicVideo({ data }: QsMusicVideoProps) {
           {musicData.cover && (
             <Image
               src={musicData.cover}
-              alt={musicData.name}
+              alt={musicData.name || "音乐封面"}
               width={80}
               height={80}
               className="rounded-lg shadow-lg"
