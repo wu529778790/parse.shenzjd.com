@@ -61,6 +61,8 @@ Configure in `.env.local` for full functionality:
 - `BILIBILI_COOKIE` — Bilibili parsing
 - `WEIBO_COOKIE` — Weibo parsing
 - `API_AUTH_USERNAME`, `API_AUTH_PASSWORD` — Optional Basic Auth for API
+- `TURSO_DB_URL`, `TURSO_AUTH_TOKEN` — Turso (libsql) database for parse analytics; when unset, analytics is silently disabled
+- `STATS_API_KEY` — Bearer key protecting `GET /api/stats`; when unset, the stats endpoint returns 403
 - `LIVE_URL_*` (23 variables) — Real share URLs for live tests (see `tests/live/urls.example.env`)
 
 ## Conventions

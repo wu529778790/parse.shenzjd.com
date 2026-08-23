@@ -347,6 +347,29 @@ GET /api/health
 
 ---
 
+## 10. 解析行为统计
+
+**接口**: `GET /api/stats`
+
+**鉴权**: 需携带 `Authorization: Bearer <STATS_API_KEY>`；未配置 `STATS_API_KEY` 时返回 `403`。
+
+**说明**: 返回所有成功解析记录的分析结果——平台分布、近 14 天每日解析量、总量/独立访客（IP 匿名哈希）/独立链接数。数据由 `createApiHandler` 在每次成功解析时异步写入 Turso（`parse_events` 表）。
+
+**响应示例**:
+```json
+{
+  "code": 200,
+  "msg": "ok",
+  "data": {
+    "totals": { "total": 120, "users": 34, "unique_links": 88 },
+    "byPlatform": [ { "platform": "douyin", "cnt": 50 } ],
+    "byDay": [ { "day": "2024-01-01", "cnt": 10 } ]
+  }
+}
+```
+
+---
+
 ## 限制说明
 
 ### 速率限制
@@ -372,6 +395,11 @@ BILIBILI_USER_AGENT=your_user_agent
 
 # 微博
 WEIBO_COOKIE=your_cookie
+
+# 解析行为统计（Turso/libsql；未配置时记录功能自动禁用）
+TURSO_DB_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your_token
+STATS_API_KEY=your_stats_key
 ```
 
 > Cloudflare Workers 部署时：`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`；Cookie 类敏感值在 CI 中由 GitHub Secrets 自动 `wrangler secret put` 注入，无需手动配置。

@@ -7,7 +7,7 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     environment: "node",
-    setupFiles: ["./tests/live/setup-dotenv.ts"],
+    setupFiles: ["./tests/live/setup-dotenv.ts", "./tests/setup-unit.ts"],
   },
   resolve: {
     alias: {

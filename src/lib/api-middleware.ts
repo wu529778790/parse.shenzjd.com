@@ -13,6 +13,7 @@ import {
   parseErrorResponse
 } from "@/lib/api-utils";
 import { normalizeResult } from "@/lib/normalize-result";
+import { recordParse } from "@/lib/analytics";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -57,9 +58,11 @@ export const createApiHandler = (
 
     // 平台使用统计：生产环境 logger.log 不输出，这里用 console.log 确保线上可观测。
     // 从 URL 路径推断平台（如 /api/bilibili -> bilibili），用于排查各平台是否有人使用。
+    // routeMatch 提升到函数级，供成功分支的行为分析记录复用。
+    let routeMatch: RegExpMatchArray | null = null;
     try {
       const pathname = new URL(request.url).pathname;
-      const routeMatch = pathname.match(/\/api\/([a-z0-9]+)/i);
+      routeMatch = pathname.match(/\/api\/([a-z0-9]+)/i);
       if (routeMatch) {
         console.log(
           `[usage] route=${routeMatch[1]} time=${new Date().toISOString()}`
@@ -146,6 +149,12 @@ export const createApiHandler = (
 
       // 统一响应模型：成功结果在出口统一归一化（code=200 + data 统一字段契约）
       const result = normalizeResult(rawResult);
+
+      // 成功解析后异步记录行为分析（不阻塞响应；数据库未配置时静默跳过）
+      if (result?.code === 200) {
+        const platform = String(result.platform || routeMatch?.[1] || "");
+        recordParse({ platform, url: sanitizedUrl, ip: clientIP }).catch(() => {});
+      }
 
       if (shouldCache) {
         setCacheResponse(sanitizedUrl, result);
