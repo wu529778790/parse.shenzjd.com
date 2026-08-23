@@ -2,10 +2,9 @@ import { config } from "dotenv";
 import { resolve } from "node:path";
 
 const quiet = { quiet: true } as const;
-config({ path: resolve(process.cwd(), ".env.local"), ...quiet });
 config({ path: resolve(process.cwd(), ".env"), ...quiet });
 
-// 防御性隔离：.env.local 里若误写了 RUN_LIVE_PARSE=1，
+// 防御性隔离：.env 里若误写了 RUN_LIVE_PARSE=1，
 // 会被 dotenv 带入默认的 `npm test`，导致真机解析误跑、误连上游。
 //
 // 真机解析只能通过 `npm run test:live`（命令行前缀 RUN_LIVE_PARSE=1）触发，

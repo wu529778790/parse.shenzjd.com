@@ -15,7 +15,7 @@ npm start         # Start production server
 npm run lint      # ESLint (next lint)
 npm test          # Unit tests via Vitest (no network)
 npm run test:watch # Vitest in watch mode
-npm run test:live  # Live integration tests (requires RUN_LIVE_PARSE=1 + URLs in .env.local)
+npm run test:live  # Live integration tests (requires RUN_LIVE_PARSE=1 + URLs in .env)
 ```
 
 Run a single test file: `npx vitest run tests/share.test.ts`
@@ -55,7 +55,7 @@ The proxy route (`/api/proxy/route.ts`) forwards media requests with appropriate
 
 ## Environment Variables
 
-Configure in `.env.local` for full functionality:
+Configure in `.env` for full functionality:
 
 - `DOUYIN_COOKIE`, `DOUYIN_USER_AGENT` — Douyin parsing
 - `BILIBILI_COOKIE` — Bilibili parsing

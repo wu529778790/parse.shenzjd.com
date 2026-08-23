@@ -32,7 +32,7 @@ ARG BUILD_ID=local
 ENV NEXT_BUILD_ID=${BUILD_ID}
 
 # 构建应用（next.config.mjs 已启用 output: "standalone"）
-# .env.local 已被 .dockerignore 排除，构建不会带入敏感配置
+# .env 已被 .dockerignore 排除，构建不会带入敏感配置
 RUN npm run build
 
 # =============================================================================

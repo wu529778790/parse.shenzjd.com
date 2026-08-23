@@ -1,7 +1,7 @@
 /**
  * 真机解析：直连各平台上游，不使用 mock。
  * 运行: npm run test:live
- * 需先在 .env.local（或环境变量）中配置 tests/live/urls.example.env 所列全部 LIVE_URL_*。
+ * 需先在 .env（或环境变量）中配置 tests/live/urls.example.env 所列全部 LIVE_URL_*。
  */
 // @ts-nocheck
 import { describe, it, expect, beforeAll } from "vitest";

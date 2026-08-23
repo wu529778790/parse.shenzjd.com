@@ -92,7 +92,7 @@ npm test
 1. 复制模板并按平台填入你从 App 分享得到的链接（短链或详情页均可，失效后需更换）：
 
    - 模板文件：[`tests/live/urls.example.env`](tests/live/urls.example.env)
-   - 将其中变量写入项目根目录的 `.env.local`（已加入 `.gitignore` 时不要提交真实链接）。
+   - 将其中变量写入项目根目录的 `.env`（已加入 `.gitignore` 时不要提交真实链接）。
 
 2. 执行：
 
@@ -104,7 +104,7 @@ npm test
 
 3. 可选：`LIVE_PARSE_TIMEOUT_MS`（默认 `120000`）用于单条用例超时（毫秒）。
 
-4. 抖音 / 微博 / 哔哩哔哩等若解析失败，请检查 `.env.local` 中是否按需配置了 `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`（与 `API.md` 一致）。
+4. 抖音 / 微博 / 哔哩哔哩等若解析失败，请检查 `.env` 中是否按需配置了 `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`（与 `API.md` 一致）。
 
 说明：真机测试受地区、风控、Cookie 与链接失效影响，失败时请更换有效分享链或网络环境后重试。
 
