@@ -374,7 +374,7 @@ BILIBILI_USER_AGENT=your_user_agent
 WEIBO_COOKIE=your_cookie
 ```
 
-> Docker 部署时：将上述 Cookie 环境变量写入容器的 `-e` 参数或运行平台的环境变量配置即可（抖音/微博/B站缺失 Cookie 时解析成功率会下降）。
+> Cloudflare Workers 部署时：`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`；Cookie 类敏感值在 CI 中由 GitHub Secrets 自动 `wrangler secret put` 注入，无需手动配置。
 
 ---
 

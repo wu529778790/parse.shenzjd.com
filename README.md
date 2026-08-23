@@ -26,6 +26,43 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwu529778790%2Fparse.shenzjd.com&project-name=parse&repository-name=parse.shenzjd.com)
 
+### Cloudflare（Workers / OpenNext）
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wu529778790/parse.shenzjd.com)
+
+点击上方按钮，按向导授权 GitHub 并确认后即可一键部署（Cloudflare 会自动克隆仓库到你的账户并配置 Workers Builds 自动 CI/CD；若向导未自动识别构建命令，请填 `npm run build:cf`）。
+
+本项目通过 [OpenNext](https://opennext.js.org/cloudflare) 适配器部署到 **Cloudflare Workers 免费层**（无需付费计划）。部署内容为静态页面 + 解析 API；视频不再走代理，解析结果直链播放/下载。
+
+**推送即自动部署（Cloudflare Git 集成，无需 GitHub Actions）**：将本仓库关联到 Cloudflare Worker 后，每次 push 到 `main`（或合并 PR），Cloudflare 会自动拉取代码、构建并部署，全程由 Cloudflare 托管，仓库内不写任何 workflow 文件。
+
+**首次配置（一次性，约 5 分钟）**：
+
+1. 打开 Cloudflare Dashboard → **Workers & Pages** → **Create** → **Worker** → 选择 **Import a repository**（首次使用按引导授权 GitHub）。
+2. 选择仓库 `wu529778790/parse.shenzjd.com`，进入构建设置，配置两个命令：
+   - **Build command（构建命令）**：`npm run build:cf`
+   - **Deploy command（部署命令）**：`npx wrangler deploy`
+3. 部署成功后，在 Worker 的 **Settings → Variables and Secrets → Secrets** 中添加（可选，用于提升解析成功率）：
+   - `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`
+   - （`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`，无需配置）
+4. 之后每次 push 到 `main`，Cloudflare 自动重新构建并部署。
+
+> 前置要求：仓库根目录的 `wrangler.toml`（`main` 指向 `.open-next/worker.js`、`nodejs_compat`、`assets` 绑定）与 `open-next.config.ts` 已就绪——Cloudflare 的 Git 集成依赖这两份文件，二者均已提交。
+
+**本地开发与构建（默认，与 Cloudflare 无关）**：
+
+```bash
+npm run dev      # 本地开发（next dev --turbopack）
+npm run build    # 本地构建（Next.js 默认产物，供 Docker 等使用）
+npm test         # 单元测试
+```
+
+> `npm run build:cf` 是 **Cloudflare 部署专用**的构建命令（产出 OpenNext 的 `.open-next/` 产物），仅需填在 Cloudflare Dashboard 的 Build command 里，本地开发/构建不使用它。
+
+> 说明：Cloudflare 免费层不支持流式响应，`/api/proxy` 视频代理已移除，视频/图片一律直链；B站/小红书等防盗链平台直链 403 时页面会提示在新窗口打开。免费层另有 CPU 10ms/请求与内存限流隔离限制，解析成功率建议上线后实测。
+
+---
+
 ### Docker
 
 ```bash
@@ -37,16 +74,6 @@ docker run --name parse -p 3000:3000 -d ghcr.io/wu529778790/parse.shenzjd.com:la
 docker pull docker.io/wu529778790/parse.shenzjd.com:latest
 docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:latest
 ```
-
-**本地开发与构建**：
-
-```bash
-npm run dev      # 本地开发（next dev --turbopack）
-npm run build    # 本地构建（Next.js 默认产物，供 Docker 等使用）
-npm test         # 单元测试
-```
-
----
 
 ## 测试
 
