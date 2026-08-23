@@ -8,7 +8,9 @@
  * - IP 匿名化存储（SHA-256 哈希），不落明文 IP。
  */
 
-import { createClient } from "@libsql/client";
+// 自实现 Turso HTTP 客户端（见 turso-client.js 说明）：零第三方依赖，
+// 避免 Next.js standalone tracing 与 CF workerd 打包的解析不一致。
+import { createTursoClient } from "@/lib/turso-client";
 import { logger } from "@/lib/api-utils";
 
 let db = null;
@@ -20,7 +22,7 @@ function getClient() {
   const token = process.env.TURSO_AUTH_TOKEN;
   if (!url || !token) return null;
   try {
-    db = createClient({ url, authToken: token });
+    db = createTursoClient({ url, authToken: token });
   } catch (e) {
     logger.warn(`[analytics] 数据库连接创建失败: ${e.message}`);
     return null;

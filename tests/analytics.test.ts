@@ -1,10 +1,10 @@
 // @ts-nocheck
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// 在导入 analytics 前 mock @libsql/client，避免单元测试连接真实数据库
+// 在导入 analytics 前 mock turso-client，避免单元测试连接真实数据库
 const mockExecute = vi.fn();
-vi.mock("@libsql/client", () => ({
-  createClient: vi.fn(() => ({ execute: mockExecute })),
+vi.mock("@/lib/turso-client", () => ({
+  createTursoClient: vi.fn(() => ({ execute: mockExecute })),
 }));
 
 // 动态导入以支持 vi.resetModules 重置模块级缓存（db / tableReady）
@@ -39,8 +39,8 @@ describe("analytics", () => {
     await expect(
       analytics.recordParse({ platform: "douyin", url: "https://x", ip: "1.2.3.4" })
     ).resolves.toBeUndefined();
-    const { createClient } = await import("@libsql/client");
-    expect(createClient).not.toHaveBeenCalled();
+    const { createTursoClient } = await import("@/lib/turso-client");
+    expect(createTursoClient).not.toHaveBeenCalled();
   });
 
   it("未配置数据库时 queryStats 返回 null", async () => {
@@ -57,8 +57,8 @@ describe("analytics", () => {
       url: "https://v.kuaishou.com/abc",
       ip: "203.0.113.5",
     });
-    const { createClient } = await import("@libsql/client");
-    expect(createClient).toHaveBeenCalledWith(
+    const { createTursoClient } = await import("@/lib/turso-client");
+    expect(createTursoClient).toHaveBeenCalledWith(
       expect.objectContaining({ url: "libsql://test.turso.io", authToken: "test-token" })
     );
     expect(mockExecute).toHaveBeenCalled();

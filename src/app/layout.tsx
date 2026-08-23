@@ -1,20 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WxAuthInit from "@/components/WxAuthInit";
 import { siteConfig } from "@/config/site";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -124,8 +113,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className="antialiased">
         <WxAuthInit />
         <div className="min-h-screen flex flex-col noise-overlay">
           <Header />
