@@ -72,6 +72,25 @@ export const createApiHandler = (
       // 日志失败不影响主流程
     }
 
+    // 每次解析打印一条流水日志（console.log 保证生产环境也输出，对齐 [usage] 风格；
+    // logger.log 仅开发环境输出，成功解析在生产上会没日志）
+    const logParse = (
+      status: string,
+      code: number | string,
+      durationMs: number,
+      reason?: string
+    ) => {
+      const route = String(routeMatch?.[1] || "");
+      const safeUrl = sanitizedUrl || "";
+      const shortUrl =
+        safeUrl.length > 60 ? safeUrl.slice(0, 60) + "..." : safeUrl;
+      console.log(
+        `[parse] route=${route} url=${shortUrl} status=${status} code=${code} time=${durationMs}ms${
+          reason ? ` reason=${reason.slice(0, 80)}` : ""
+        }`
+      );
+    };
+
     // 检查速率限制
     if (!rateLimit(clientIP)) {
       return Response.json(
@@ -124,7 +143,7 @@ export const createApiHandler = (
       const cached = getCachedResponse(sanitizedUrl);
       if (cached) {
         const duration = Date.now() - startTime;
-        logger.log(`Cache hit, response time: ${duration}ms`);
+        logParse("cached", 200, duration);
         return Response.json(cached, {
           headers,
         });
@@ -137,6 +156,7 @@ export const createApiHandler = (
 
       if (!rawResult) {
         const duration = Date.now() - startTime;
+        logParse("failed", 400, duration, "解析失败（无返回结果）");
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
         // 失败也记录：便于发现未支持/失效的平台与链接
         recordParse({
@@ -166,6 +186,7 @@ export const createApiHandler = (
           ip: clientIP,
           status: "success",
         }).catch(() => {});
+        logParse("success", 200, Date.now() - startTime);
       } else {
         recordParse({
           platform: String(routeMatch?.[1] || ""),
@@ -174,14 +195,17 @@ export const createApiHandler = (
           status: "failed",
           reason: String(result?.msg || "解析失败"),
         }).catch(() => {});
+        logParse(
+          "failed",
+          Number(result?.code || 0),
+          Date.now() - startTime,
+          String(result?.msg || "")
+        );
       }
 
       if (shouldCache) {
         setCacheResponse(sanitizedUrl, result);
       }
-
-      const duration = Date.now() - startTime;
-      logger.log(`Parse successful, response time: ${duration}ms`);
 
       return Response.json(result, {
         headers,
@@ -189,6 +213,7 @@ export const createApiHandler = (
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
       const errMsg = error instanceof Error ? error.message : "Unknown error";
+      logParse("error", 500, duration, errMsg);
       logger.error(`API error after ${duration}ms:`, errMsg);
       recordParse({
         platform: String(routeMatch?.[1] || ""),
