@@ -4,7 +4,6 @@ import {
   isValidUrl,
   sanitizeUrl,
   createResponse,
-  successResponse,
   errorResponse,
   serverErrorResponse,
   parseErrorResponse,
@@ -82,24 +81,6 @@ describe("api-utils", () => {
         code: 200,
         msg: "success",
         data: { key: "value" },
-      });
-    });
-
-    it("successResponse should create success response", () => {
-      const response = successResponse({ video: "url" });
-      expect(response).toEqual({
-        code: 200,
-        msg: "解析成功",
-        data: { video: "url" },
-      });
-    });
-
-    it("successResponse should accept custom message", () => {
-      const response = successResponse({ video: "url" }, "自定义成功消息");
-      expect(response).toEqual({
-        code: 200,
-        msg: "自定义成功消息",
-        data: { video: "url" },
       });
     });
 

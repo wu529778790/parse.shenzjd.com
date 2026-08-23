@@ -226,11 +226,6 @@ export const createResponse = (code, msg, data = null) => {
   return response;
 };
 
-// 成功响应
-export const successResponse = (data, msg = "解析成功") => {
-  return createResponse(200, msg, data);
-};
-
 // 错误响应
 export const errorResponse = (msg, code = 400) => {
   return createResponse(code, msg);

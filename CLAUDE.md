@@ -48,7 +48,6 @@ The proxy route (`/api/proxy/route.ts`) forwards media requests with appropriate
 
 ### Key Lib Files
 
-- `src/lib/parser-core.js` — BaseParser class + ParserRegistry (not universally used by all parsers)
 - `src/lib/api-utils.js` — Cache, rate-limit, SSRF protection, response helpers
 - `src/lib/redirect-location.js` — Follow 3xx redirects for short URLs
 - `src/lib/meipai-decode.js` — Meipai video base64 decode algorithm
@@ -60,7 +59,6 @@ Configure in `.env` for full functionality:
 - `DOUYIN_COOKIE`, `DOUYIN_USER_AGENT` — Douyin parsing
 - `BILIBILI_COOKIE` — Bilibili parsing
 - `WEIBO_COOKIE` — Weibo parsing
-- `API_AUTH_USERNAME`, `API_AUTH_PASSWORD` — Optional Basic Auth for API
 - `TURSO_DB_URL`, `TURSO_AUTH_TOKEN` — Turso (libsql) database for parse analytics; when unset, analytics is silently disabled
 - `STATS_API_KEY` — Bearer key protecting `GET /api/stats`; when unset, the stats endpoint returns 403
 - `LIVE_URL_*` (23 variables) — Real share URLs for live tests (see `tests/live/urls.example.env`)
