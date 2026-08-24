@@ -59,3 +59,4 @@ next-env.d.ts
 
 # 本地 AI 助手个人配置（每台机器不同，不进版本库）
 .claude/settings.local.json
+.wrangler/
