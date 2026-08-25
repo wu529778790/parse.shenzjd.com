@@ -10,7 +10,8 @@ import {
   logger,
   errorResponse,
   serverErrorResponse,
-  parseErrorResponse
+  parseErrorResponse,
+  isBlockedIP,
 } from "@/lib/api-utils";
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
@@ -116,6 +117,19 @@ export const createApiHandler = (
       }
     } catch {
       // 日志失败不影响主流程
+    }
+
+    // IP 黑名单拦截：绕过前端、直连解析接口的爬虫/脚本（名单见 api-utils.js）。
+    // 放在 rateLimit 之前（静态 Set/前缀查询零成本），命中直接 403。
+    if (isBlockedIP(clientIP)) {
+      logger.warn(`黑名单 IP 被拦截: ip=${clientIP} route=${String(routeMatch?.[1] || "")}`);
+      return Response.json(
+        errorResponse("该 IP 已被限制访问，如有疑问请联系站长", 403),
+        {
+          status: safeStatus(403),
+          headers
+        }
+      );
     }
 
     // 每次解析打印一条流水日志（console.log 保证生产环境也输出，对齐 [usage] 风格；
