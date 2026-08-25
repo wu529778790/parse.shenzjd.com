@@ -8,7 +8,7 @@
  */
 
 import { createApiHandler, safeStatus } from "@/lib/api-middleware";
-import { logger, rateLimit, getClientIP, getCorsHeaders } from "@/lib/api-utils";
+import { logger, rateLimit, getClientIP, getCorsHeaders, isBlockedIP } from "@/lib/api-utils";
 import { normalizeResult } from "@/lib/normalize-result";
 import {
   identifyPlatform,
@@ -228,6 +228,14 @@ export async function GET(request) {
   if (source && id) {
     // source+id 路径也受速率限制保护
     const clientIP = getClientIP(request);
+    // IP 黑名单（与中间件一致）：绕过前端直连的爬虫/脚本
+    if (isBlockedIP(clientIP)) {
+      logger.warn(`黑名单 IP 被拦截(source+id): ip=${clientIP}`);
+      return Response.json(
+        { code: 403, msg: "该 IP 已被限制访问，如有疑问请联系站长" },
+        { status: safeStatus(403), headers: corsHeaders }
+      );
+    }
     if (!rateLimit(clientIP)) {
       return Response.json(
         { code: 429, msg: "请求过于频繁，请稍后再试" },
