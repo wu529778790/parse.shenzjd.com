@@ -37,7 +37,7 @@ export function createTursoClient({ url, authToken }) {
         body: JSON.stringify({
           requests: [{ type: "execute", stmt }],
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {
         const detail = (await res.text()).slice(0, 200);
