@@ -14,6 +14,7 @@ import {
 } from "@/lib/api-utils";
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
+import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -65,6 +66,13 @@ const ROUTE_DOMAIN_MAP: Record<string, { name: string; hosts: string[] }> = {
   youtube: { name: "YouTube", hosts: ["youtube.com", "youtu.be"] },
   tiktok: { name: "TikTok", hosts: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"] },
 };
+
+// 需强制微信认证的解析类路由 = 24 个平台专用接口 + 统一入口 /api/parse。
+// health/stats/image/engines 等非解析接口是原生路由（不经本中间件），天然不受影响。
+const AUTH_REQUIRED_ROUTES = new Set<string>([
+  ...Object.keys(ROUTE_DOMAIN_MAP),
+  "parse",
+]);
 
 // 通用 API 处理函数
 export const createApiHandler = (
@@ -213,6 +221,28 @@ export const createApiHandler = (
           errorResponse("无效的URL格式", 400),
           {
             status: safeStatus(400),
+            headers
+          }
+        );
+      }
+    }
+
+    // 解析类接口强制微信认证（登录才能解析）：
+    // 读取 SDK 写入的 wxauth-token Cookie → 远程校验（5 分钟缓存）→ 未认证 401。
+    // 豁免：内部转发（/api/parse 最外层已认证，内层是服务端构造的请求无浏览器 Cookie）、
+    // 非解析类接口（health/stats/image/engines 等原生路由不经本中间件）、VITEST 测试环境。
+    if (!isInternalRequest && process.env.VITEST !== "true" && AUTH_REQUIRED_ROUTES.has(routeName)) {
+      const wxToken = getWxAuthToken(request);
+      const authenticated = wxToken ? await checkWxAuthToken(wxToken) : false;
+      if (!authenticated) {
+        logParse("failed", 401, Date.now() - startTime, "未完成微信认证");
+        logger.warn(
+          `未认证解析被拒绝: route=${routeName} ip=${clientIP} url=${sanitizedUrl.substring(0, 100)}`
+        );
+        return Response.json(
+          errorResponse("请先关注公众号「神族九帝」并完成认证后使用解析功能", 401),
+          {
+            status: safeStatus(401),
             headers
           }
         );
