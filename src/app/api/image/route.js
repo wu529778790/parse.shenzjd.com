@@ -12,6 +12,8 @@
  */
 export const runtime = "nodejs";
 
+import { isBlockedIP, getClientIP, logger } from "@/lib/api-utils";
+
 const cache = new Map();
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -21,6 +23,13 @@ function isXhsHost(hostname) {
 }
 
 export async function GET(request) {
+  // IP 黑名单：图片代理是大流量拖拽点，爬虫常绕过前端直连；与解析接口一致拦截
+  const clientIP = getClientIP(request);
+  if (isBlockedIP(clientIP)) {
+    logger.warn(`黑名单 IP 被拦截(image): ip=${clientIP}`);
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const encoded = searchParams.get("url");
   if (!encoded) return new Response("Missing url", { status: 400 });
