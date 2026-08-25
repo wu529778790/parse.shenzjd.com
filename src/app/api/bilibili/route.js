@@ -80,7 +80,11 @@ async function getBilibiliVideoInfo(url) {
       return { code: -1, msg: "好像不是视频链接" };
     }
     
-    bvid = bvid.replace("/video/", "");
+    // 提取 BV 号：b23.tv 重定向后 pathname 形如 /video/BV1sK826SENY/（带尾斜杠），
+    // 简单地 replace("/video/","") 会残留 "/" 导致 B站 API 返回 code=-400 请求错误
+    // （2026-08-25 实测：BV1sK826SENY/ → -400，BV1sK826SENY → 0 OK）。
+    const bvidMatch = bvid.match(/\/(video|bilibili)\/([A-Za-z0-9_]+)\/?/);
+    bvid = (bvidMatch ? bvidMatch[2] : bvid).replace(/\/+$/, "");
     logger.log("Processing bilibili video, bvid:", bvid);
     
     const headers = { "Content-Type": "application/json;charset=UTF-8" };
