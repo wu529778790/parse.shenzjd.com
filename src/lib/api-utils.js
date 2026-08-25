@@ -201,6 +201,43 @@ export const getClientIP = (request) => {
          'unknown';
 };
 
+// ---------------------------------------------------------------------------
+// IP 黑名单：拦截绕过前端、直连解析接口的高频爬虫/脚本
+// （依据 data/*.log 的「未认证解析被拒绝」记录，2026-08-26 自动生成）。
+// - 前缀列表：高频段（>=30 次）按 IPv4 /24 或 IPv6 /64 段拉黑，避免误伤；
+// - 精确列表：低频单 IP 精确匹配。
+// 新增：前缀 → BLOCKED_IP_PREFIXES，单 IP → BLOCKED_IPS。
+// ---------------------------------------------------------------------------
+const BLOCKED_IP_PREFIXES = [
+  "240e:465:5d60:e459:",
+  "2409:8d34:26:674c:",
+];
+const BLOCKED_IPS = new Set([
+  "120.42.187.174",
+  "110.248.71.229",
+  "2409:8a34:4e86:73d0:80b2:7e98:30b9:743",
+  "62.234.27.235",
+  "27.149.93.103",
+]);
+
+
+/**
+ * 判断客户端 IP 是否命中黑名单（解析类接口入口拦截用）。
+ * - x-forwarded-for 可能是 "ip1, ip2" 链，取第一段（真实客户端 IP）
+ * - 清洗：去引号/空白/括号、转小写
+ * - 匹配：前缀（IPv4 段 / IPv6 段）→ 精确（Set）
+ */
+export const isBlockedIP = (ip) => {
+  if (!ip) return false;
+  const first = String(ip).split(",")[0].trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!first) return false;
+
+  for (const prefix of BLOCKED_IP_PREFIXES) {
+    if (first.startsWith(prefix)) return true;
+  }
+  return BLOCKED_IPS.has(first);
+};
+
 // CORS 头生成 — 仅允许 *.shenzjd.com
 const ALLOWED_ORIGIN_SUFFIX = '.shenzjd.com';
 
