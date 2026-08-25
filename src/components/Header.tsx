@@ -49,14 +49,6 @@ export default function Header() {
     <header className="sticky top-0 z-40 w-full border-b border-border-subtle backdrop-blur-xl bg-background/70">
       <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center">
-          {/* Left: Logo */}
-          <a
-            href="https://parse.shenzjd.com"
-            className="flex items-center gap-2 text-primary hover:text-accent transition-colors duration-300 shrink-0"
-          >
-            <span className="text-lg font-bold gradient-text">神族九帝</span>
-          </a>
-
           {/* Center: Desktop Nav */}
           <div className="hidden md:flex items-center justify-center gap-1 flex-1">
             {navLinks.map((link) => (
