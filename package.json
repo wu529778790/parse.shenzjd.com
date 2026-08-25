@@ -23,7 +23,7 @@
     "next": "^15.3.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "wx-auth-sdk": "^1.2.10"
+    "wx-auth-sdk": "^1.2.13"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
