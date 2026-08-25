@@ -119,4 +119,30 @@ describe("api-middleware", () => {
     expect(res.status).toBe(200);
     expect(parseSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("blocks blacklisted IP with 403 before rate limit", async () => {
+    // 黑名单 IP 直连解析接口 → 403，且不进入限流/解析
+    vi.spyOn(apiUtils, "getClientIP").mockReturnValue("120.42.187.174");
+    const parseSpy = vi.fn();
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const req = new Request("http://127.0.0.1/api/douyin?url=https://v.douyin.com/xxxxx/");
+    const res = await handler(req);
+
+    expect(res.status).toBe(403);
+    expect(parseSpy).not.toHaveBeenCalled();
+    const json = await res.json();
+    expect(json.code).toBe(403);
+  });
+
+  it("allows non-blacklisted IP through (regression)", async () => {
+    const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const req = new Request("http://127.0.0.1/api/bilibili?url=https://www.bilibili.com/video/BV1xx411c7mD");
+    const res = await handler(req);
+
+    expect(res.status).toBe(200);
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+  });
 });
