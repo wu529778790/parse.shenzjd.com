@@ -158,8 +158,10 @@ export const createApiHandler = (
         const duration = Date.now() - startTime;
         logParse("failed", 400, duration, "解析失败（无返回结果）");
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
-        // 失败也记录：便于发现未支持/失效的平台与链接
-        recordParse({
+        // 失败也记录：便于发现未支持/失效的平台与链接。
+        // 注意：必须 await —— CF Workers 响应返回后 isolate 冻结，
+        // fire-and-forget 的 Turso 写入请求会被丢弃（线上曾因此零入库）。
+        await recordParse({
           platform: String(routeMatch?.[1] || ""),
           url: sanitizedUrl,
           ip: clientIP,
@@ -178,9 +180,10 @@ export const createApiHandler = (
       // 统一响应模型：成功结果在出口统一归一化（code=200 + data 统一字段契约）
       const result = normalizeResult(rawResult);
 
-      // 解析结果（成功/失败）异步记录行为分析（不阻塞响应；数据库未配置时静默跳过）
+      // 解析结果（成功/失败）异步记录行为分析。
+      // 必须 await（同 CF Workers isolate 冻结问题），写入失败静默不影响主流程
       if (result?.code === 200) {
-        recordParse({
+        await recordParse({
           platform: String(result.platform || routeMatch?.[1] || ""),
           url: sanitizedUrl,
           ip: clientIP,
@@ -188,7 +191,7 @@ export const createApiHandler = (
         }).catch(() => {});
         logParse("success", 200, Date.now() - startTime);
       } else {
-        recordParse({
+        await recordParse({
           platform: String(routeMatch?.[1] || ""),
           url: sanitizedUrl,
           ip: clientIP,
@@ -215,7 +218,7 @@ export const createApiHandler = (
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       logParse("error", 500, duration, errMsg);
       logger.error(`API error after ${duration}ms:`, errMsg);
-      recordParse({
+      await recordParse({
         platform: String(routeMatch?.[1] || ""),
         url: sanitizedUrl,
         ip: clientIP,
