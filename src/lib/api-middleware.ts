@@ -33,6 +33,39 @@ export interface ApiHandlerOptions {
 
 type ParseFunction = (url: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
 
+// 平台专用路由（/api/douyin 等）的域名白名单（route 名 → 域名后缀 + 中文名）。
+// 与 lib/platforms.ts 的 PLATFORM_INFO.domains/shortDomains 对齐（route 名与平台 key 命名
+// 不完全一致，如 /api/xhs→小红书、/api/ppxia→皮皮虾，故在此集中维护一份按 route 名的映射）。
+// 匹配规则：hostname === d || hostname.endsWith("." + d)，短链域名（v.douyin.com 等）
+// 由主域名 douyin.com 的 endsWith 覆盖，无需重复列出。
+const ROUTE_DOMAIN_MAP: Record<string, { name: string; hosts: string[] }> = {
+  douyin: { name: "抖音", hosts: ["douyin.com", "iesdouyin.com", "snssdk.com"] },
+  bilibili: { name: "哔哩哔哩", hosts: ["bilibili.com", "b23.tv"] },
+  xhs: { name: "小红书", hosts: ["xiaohongshu.com", "xhslink.com", "xhslink.cn"] },
+  kuaishou: { name: "快手", hosts: ["kuaishou.com", "kuaishoup.com"] },
+  weibo: { name: "微博", hosts: ["weibo.com"] },
+  lvzhou: { name: "绿洲", hosts: ["weibo.cn"] },
+  ppxia: { name: "皮皮虾", hosts: ["pipix.com"] },
+  pipigx: { name: "皮皮搞笑", hosts: ["pipigx.com"] },
+  huoshan: { name: "火山", hosts: ["huoshan.com"] },
+  weishi: { name: "微视", hosts: ["weishi.qq.com"] },
+  xigua: { name: "西瓜视频", hosts: ["ixigua.com"] },
+  zuiyou: { name: "最右", hosts: ["izuiyou.com", "xiaochuankeji.com", "xiaochuankeji.cn"] },
+  quanmin: { name: "度小视", hosts: ["quanmin.baidu.com", "xspshare.baidu.com"] },
+  lishipin: { name: "梨视频", hosts: ["pearvideo.com"] },
+  huya: { name: "虎牙", hosts: ["huya.com"] },
+  acfun: { name: "AcFun", hosts: ["acfun.cn"] },
+  meipai: { name: "美拍", hosts: ["meipai.com"] },
+  doupai: { name: "逗拍", hosts: ["doupai.cc"] },
+  quanminkge: { name: "全民K歌", hosts: ["kg.qq.com", "quanmin.kg.qq.com"] },
+  sixroom: { name: "六间房", hosts: ["6.cn"] },
+  xinpianchang: { name: "新片场", hosts: ["xinpianchang.com"] },
+  haokan: { name: "好看视频", hosts: ["haokan.baidu.com", "haokan.hao123.com"] },
+  twitter: { name: "X (Twitter)", hosts: ["twitter.com", "x.com", "t.co"] },
+  youtube: { name: "YouTube", hosts: ["youtube.com", "youtu.be"] },
+  tiktok: { name: "TikTok", hosts: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"] },
+};
+
 // 通用 API 处理函数
 export const createApiHandler = (
   parseFunction: ParseFunction,
@@ -142,6 +175,48 @@ export const createApiHandler = (
           headers
         }
       );
+    }
+
+    // 平台域名白名单校验：/api/douyin 等专用接口只接受本平台域名链接。
+    // 否则任意 URL（如 threads.com）都会被当成抖音尝试解析——先 fetch 外部站、
+    // 再报「无法提取视频 ID」，白费流量且报错误导。统一入口（/api/parse）与
+    // 内部转发（/api/parser）不在映射表内，跳过（/api/parse 已有 identifyPlatform 校验）。
+    const routeName = String(routeMatch?.[1] || "");
+    const routeDomain = ROUTE_DOMAIN_MAP[routeName];
+    if (routeDomain) {
+      try {
+        const hostname = new URL(sanitizedUrl).hostname.toLowerCase();
+        const isAllowed = routeDomain.hosts.some(
+          (d) => hostname === d || hostname.endsWith(`.${d}`)
+        );
+        if (!isAllowed) {
+          logParse(
+            "failed",
+            400,
+            Date.now() - startTime,
+            `域名(${hostname})不属于${routeDomain.name}平台`
+          );
+          logger.warn(
+            `平台域名不匹配: route=${routeName} host=${hostname} url=${sanitizedUrl.substring(0, 100)}`
+          );
+          return Response.json(
+            errorResponse(`该链接（${hostname}）不属于${routeDomain.name}平台，已拒绝解析，请粘贴正确的${routeDomain.name}分享链接`, 400),
+            {
+              status: safeStatus(400),
+              headers
+            }
+          );
+        }
+      } catch {
+        // URL 已通过 isValidUrl/sanitizeUrl，这里解析失败属异常，按拒绝处理
+        return Response.json(
+          errorResponse("无效的URL格式", 400),
+          {
+            status: safeStatus(400),
+            headers
+          }
+        );
+      }
     }
 
     if (shouldCache) {
