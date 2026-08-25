@@ -134,7 +134,7 @@ jobs:
           script: |
             IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest"
             CONTAINER="${{ github.event.repository.name }}"
-            ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/shenzjd.com/index/.env"
+            ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/parse.shenzjd.com/index/.env"
             sudo docker pull "$IMAGE"
             sudo docker stop "$CONTAINER" || true
             sudo docker rm "$CONTAINER" || true
