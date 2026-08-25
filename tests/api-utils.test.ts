@@ -8,6 +8,7 @@ import {
   serverErrorResponse,
   parseErrorResponse,
   logger,
+  isBlockedIP,
 } from "@/lib/api-utils";
 
 describe("api-utils", () => {
@@ -146,6 +147,45 @@ describe("api-utils", () => {
     it("error should always log", () => {
       logger.error("test error");
       expect(console.error).toHaveBeenCalledWith("test error");
+    });
+  });
+
+  describe("isBlockedIP", () => {
+    it("should block exact IPv4 (120.42.187.174)", () => {
+      expect(isBlockedIP("120.42.187.174")).toBe(true);
+    });
+
+    it("should block exact IPv6 (2409:8a34:...)", () => {
+      expect(isBlockedIP("2409:8a34:4e86:73d0:80b2:7e98:30b9:743")).toBe(true);
+    });
+
+    it("should block IPv6 /64 prefix (2409:8d34:26:674c: any suffix)", () => {
+      expect(isBlockedIP("2409:8d34:26:674c:d4dc:1916:b32c:ef6")).toBe(true);
+      expect(isBlockedIP("2409:8d34:26:674c:1234:5678:9abc:def0")).toBe(true);
+    });
+
+    it("should block IPv6 /64 prefix (240e:465:5d60:e459:)", () => {
+      expect(isBlockedIP("240e:465:5d60:e459:b437:b795:5bcb:fad")).toBe(true);
+    });
+
+    it("should block when IP appears as first element of x-forwarded-for chain", () => {
+      expect(isBlockedIP("120.42.187.174, 104.22.72.33")).toBe(true);
+    });
+
+    it("should allow regular IPs", () => {
+      expect(isBlockedIP("203.0.113.42")).toBe(false);
+      expect(isBlockedIP("8.8.8.8")).toBe(false);
+      expect(isBlockedIP("240e:465:5d60:abcd:1234:5678:9abc:def0")).toBe(false);
+    });
+
+    it("should be case-insensitive for IPv6", () => {
+      expect(isBlockedIP("240E:465:5D60:E459:B437:B795:159C:FAD")).toBe(true);
+    });
+
+    it("should return false for empty/undefined", () => {
+      expect(isBlockedIP("")).toBe(false);
+      expect(isBlockedIP(undefined)).toBe(false);
+      expect(isBlockedIP(null)).toBe(false);
     });
   });
 });
