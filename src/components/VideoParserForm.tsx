@@ -202,15 +202,17 @@ export default function VideoParserForm({
     (text: string) => {
       const extractedUrl = extractUrl(text);
       if (extractedUrl) {
-        setUrl(extractedUrl);
         const detected = detectPlatform(text);
         setDetectedPlatform(detected);
         // 识别不到平台：提示用户链接不对，不发起解析
         // （去掉兜底 douyin 后，任意 URL 不再被默认当抖音解析）
         if (!detected) {
+          // 清掉可能残留的 url，避免用户点「开始解析」时用旧链接误发请求
+          setUrl("");
           onResult(null, "无法识别的视频平台，请粘贴支持的平台链接（如抖音/快手/B站等）");
           return;
         }
+        setUrl(extractedUrl);
         setPlatform(detected);
         debouncedParse(extractedUrl, detected);
       } else {
@@ -289,9 +291,19 @@ export default function VideoParserForm({
       onResult(null, "请粘贴包含视频链接的文本");
       return;
     }
-    // 链接不在任何受支持平台：提示用户，不发起解析
-    if (!hasValidVideoUrl(url)) {
+    // 链接不属于任何受支持平台：提示用户，不发起解析
+    const detected = detectPlatform(url);
+    if (!detected) {
       onResult(null, "无法识别的视频平台，请粘贴支持的平台链接（如抖音/快手/B站等）");
+      return;
+    }
+    // 链接平台与当前所选平台不一致（用户手动切换了下拉框）：拒绝解析，
+    // 避免把抖音链接发给 B 站接口等错配请求
+    if (detected !== platform) {
+      onResult(
+        null,
+        `链接属于${VIDEO_PLATFORMS[detected].name}，与当前所选平台不一致，已拒绝解析`
+      );
       return;
     }
     // 复用 parseVideo，避免重复实现 fetch + 缓存逻辑
