@@ -98,6 +98,17 @@ describe("douyin-extract：页面快照回归", () => {
     expect(extractIdFromUrl("https://v.douyin.com/abc/")).toBeNull();
   });
 
+  it("从跳转域名 target 参数提取 ID（wtturl.cn 等）", () => {
+    // 跳转服务失效时，target 参数里的完整抖音链接兜底可提取
+    expect(
+      extractIdFromUrl(
+        "https://link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F6891626572860706051"
+      )
+    ).toEqual({ id: "6891626572860706051", type: "video" });
+    // 无 target 参数的普通链接不受影响
+    expect(extractIdFromUrl("https://link.wtturl.cn/")).toBeNull();
+  });
+
   it("从响应头提取 ttwid", () => {
     const res = new Response(null, {
       headers: {

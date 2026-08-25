@@ -102,4 +102,21 @@ describe("api-middleware", () => {
 
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
+
+  it("allows 抖音跳转域名 link.wtturl.cn（不再 400 拒绝）", async () => {
+    // 回归：wtturl.cn 加入 douyin 白名单后，链接应进入解析流程（跳过 400）
+    const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const req = new Request(
+      "http://127.0.0.1/api/douyin?url=" +
+        encodeURIComponent(
+          "https://link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F6891626572860706051"
+        )
+    );
+    const res = await handler(req);
+
+    expect(res.status).toBe(200);
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+  });
 });
