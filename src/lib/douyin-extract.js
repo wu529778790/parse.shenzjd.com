@@ -192,8 +192,24 @@ export function isChallengeHtml(html) {
 
 /**
  * 从 URL 中提取视频 ID 和类型
+ * 支持：/video|note|story/ID 路径、/share/(video|note|note)/ID、纯长数字、
+ * 以及跳转域名的 target 参数（如 link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F<id>）。
+ * target 参数里的完整抖音链接即使跳转服务失效（40x）也能直接提取 ID。
  */
 export function extractIdFromUrl(urlStr) {
+  // 先处理 target 参数：解码后递归提取（wtturl.cn 等跳转域名在域名白名单内，
+  // 但跳转服务本身可能不可用，URL 里的 target 就是完整抖音链接）
+  try {
+    const target = new URL(urlStr).searchParams.get("target");
+    if (target) {
+      const decoded = decodeURIComponent(target);
+      const inner = extractIdFromUrl(decoded);
+      if (inner) return inner;
+    }
+  } catch {
+    /* URL 解析失败，继续走常规路径 */
+  }
+
   let match = urlStr.match(/video\/(\d+)/);
   if (match) return { id: match[1], type: "video" };
   match = urlStr.match(/note\/(\d+)/);
@@ -203,6 +219,10 @@ export function extractIdFromUrl(urlStr) {
   // 兜底：找长数字串
   match = urlStr.match(/(\d{15,})/);
   if (match) return { id: match[1], type: "video" };
+
+  // 分享样式 /share/video/xxx /share/note/xxx 的纯 id
+  match = urlStr.match(/share\/(video|note)\/(\d+)/);
+  if (match) return { id: match[2], type: match[1] };
   return null;
 }
 
