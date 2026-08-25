@@ -40,7 +40,7 @@ type ParseFunction = (url: string) => Promise<Record<string, unknown> | null> | 
 // 匹配规则：hostname === d || hostname.endsWith("." + d)，短链域名（v.douyin.com 等）
 // 由主域名 douyin.com 的 endsWith 覆盖，无需重复列出。
 const ROUTE_DOMAIN_MAP: Record<string, { name: string; hosts: string[] }> = {
-  douyin: { name: "抖音", hosts: ["douyin.com", "iesdouyin.com", "snssdk.com"] },
+  douyin: { name: "抖音", hosts: ["douyin.com", "iesdouyin.com", "snssdk.com", "wtturl.cn"] },
   bilibili: { name: "哔哩哔哩", hosts: ["bilibili.com", "b23.tv"] },
   xhs: { name: "小红书", hosts: ["xiaohongshu.com", "xhslink.com", "xhslink.cn"] },
   kuaishou: { name: "快手", hosts: ["kuaishou.com", "kuaishoup.com"] },
