@@ -1,7 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import FloatingQR from "@wu529778790/floating-qr";
-import "@wu529778790/floating-qr/style.css";
 import VideoParserForm from "@/components/VideoParserForm";
 import {
   BilibiliVideo,
@@ -55,15 +53,6 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  // 右侧悬浮公众号+赞赏码浮窗：由 @wu529778790/floating-qr 提供
-  // 全部走包默认值（标题/文案/二维码图都是为本站预设的），不传自定义文案
-  useEffect(() => {
-    const fq = new FloatingQR({
-      position: "right-center",
-    });
-    return () => fq?.destroy();
   }, []);
 
   const handleParseResult = (
