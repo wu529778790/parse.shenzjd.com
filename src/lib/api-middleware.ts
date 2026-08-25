@@ -52,6 +52,11 @@ export const createApiHandler = (
     const corsHeaders = getCorsHeaders(request.headers.get('origin') || '') as Record<string, string>;
     const headers = { ...corsHeaders, ...extraHeaders };
 
+    // 统一入口（/api/parse）内部转发到平台路由时带 x-parse-internal 标记：
+    // 此时不重复记录行为分析（避免一次解析写两条 parse/parser 记录），
+    // 统计只由最外层请求记录一次。
+    const isInternalRequest = request.headers.get("x-parse-internal") === "1";
+
     // 获取客户端IP
     const clientIP = getClientIP(request);
     logger.log(`API request from IP: ${clientIP}`);
@@ -161,13 +166,15 @@ export const createApiHandler = (
         // 失败也记录：便于发现未支持/失效的平台与链接。
         // 注意：必须 await —— CF Workers 响应返回后 isolate 冻结，
         // fire-and-forget 的 Turso 写入请求会被丢弃（线上曾因此零入库）。
-        await recordParse({
-          platform: String(routeMatch?.[1] || ""),
-          url: sanitizedUrl,
-          ip: clientIP,
-          status: "failed",
-          reason: "解析失败（无返回结果）",
-        }).catch(() => {});
+        if (!isInternalRequest) {
+          await recordParse({
+            platform: String(routeMatch?.[1] || ""),
+            url: sanitizedUrl,
+            ip: clientIP,
+            status: "failed",
+            reason: "解析失败（无返回结果）",
+          }).catch(() => {});
+        }
         return Response.json(
           parseErrorResponse("解析失败"),
           {
@@ -183,21 +190,25 @@ export const createApiHandler = (
       // 解析结果（成功/失败）异步记录行为分析。
       // 必须 await（同 CF Workers isolate 冻结问题），写入失败静默不影响主流程
       if (result?.code === 200) {
-        await recordParse({
-          platform: String(result.platform || routeMatch?.[1] || ""),
-          url: sanitizedUrl,
-          ip: clientIP,
-          status: "success",
-        }).catch(() => {});
+        if (!isInternalRequest) {
+          await recordParse({
+            platform: String(result.platform || routeMatch?.[1] || ""),
+            url: sanitizedUrl,
+            ip: clientIP,
+            status: "success",
+          }).catch(() => {});
+        }
         logParse("success", 200, Date.now() - startTime);
       } else {
-        await recordParse({
-          platform: String(routeMatch?.[1] || ""),
-          url: sanitizedUrl,
-          ip: clientIP,
-          status: "failed",
-          reason: String(result?.msg || "解析失败"),
-        }).catch(() => {});
+        if (!isInternalRequest) {
+          await recordParse({
+            platform: String(result?.platform || routeMatch?.[1] || ""),
+            url: sanitizedUrl,
+            ip: clientIP,
+            status: "failed",
+            reason: String(result?.msg || "解析失败"),
+          }).catch(() => {});
+        }
         logParse(
           "failed",
           Number(result?.code || 0),
@@ -218,13 +229,15 @@ export const createApiHandler = (
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       logParse("error", 500, duration, errMsg);
       logger.error(`API error after ${duration}ms:`, errMsg);
-      await recordParse({
-        platform: String(routeMatch?.[1] || ""),
-        url: sanitizedUrl,
-        ip: clientIP,
-        status: "failed",
-        reason: errMsg,
-      }).catch(() => {});
+      if (!isInternalRequest) {
+        await recordParse({
+          platform: String(routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "failed",
+          reason: errMsg,
+        }).catch(() => {});
+      }
       return Response.json(
         serverErrorResponse(error),
         {
