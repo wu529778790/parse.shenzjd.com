@@ -95,6 +95,13 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" href="/logo.jpg" />
         <link rel="apple-touch-icon" href="/icon-512.png" />
+        {/* 右侧悬浮公众号+赞赏码浮窗：@wu529778790/floating-qr Web Component 版
+            一行 <script> 引入，自动注册 <floating-qr> 并注入默认浮窗（right-center，
+            默认隐藏移动端、关闭后刷新重现），无需额外标签/JS */}
+        <script
+          src="https://unpkg.com/@wu529778790/floating-qr@latest/dist/floating-qr.wc.js"
+          defer
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
