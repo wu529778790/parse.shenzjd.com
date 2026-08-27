@@ -442,13 +442,13 @@ export default function VideoParserForm({
         {/* Platform & Submit Row */}
         <div className="glass-card iridescent-border p-1">
           <div className="bg-glass-1 rounded-xl p-4 sm:p-5">
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch">
               {/* Current Platform Indicator */}
-              <div className="flex-1">
-                <label className="block text-xs text-muted mb-1.5">
+              <div className="flex-1 flex flex-col">
+                <label className="block text-xs text-muted mb-1.5 h-[18px]">
                   当前平台
                 </label>
-                <div className="input-glow flex items-center gap-2.5 w-full px-4 py-3 rounded-xl border border-border-subtle bg-glass-2">
+                <div className="input-glow flex items-center gap-2.5 w-full px-4 py-3 rounded-xl border border-border-subtle bg-glass-2 flex-1">
                   {platform === "auto" ? (
                     <>
                       <span className="relative flex h-2 w-2">
@@ -481,6 +481,9 @@ export default function VideoParserForm({
 
               {/* Submit Button */}
               <div className="flex-1 sm:flex-[1.2]">
+                <div className="block text-xs text-transparent mb-1.5 h-[18px] select-none">
+                  开始解析
+                </div>
                 <button
                   ref={buttonRef}
                   type="submit"
