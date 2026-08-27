@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import VideoParserForm from "@/components/VideoParserForm";
+import PlatformIcon from "@/components/PlatformIcon";
 import {
   BilibiliVideo,
   DouyinVideo,
@@ -13,11 +14,49 @@ import {
   GenericParsedVideo,
 } from "@/components/videos";
 import { ApiResponse } from "@/types/api";
-import { VIDEO_PLATFORMS } from "@/config/video-platforms";
+import { VIDEO_PLATFORMS, type VideoPlatformKey } from "@/config/video-platforms";
 import { siteConfig } from "@/config/site";
 
 // 平台名称单一数据源：从配置读取，避免与代码脱节（之前 README/SEO 只列了 7 个，实际 24 个）
 const PLATFORM_NAMES = Object.values(VIDEO_PLATFORMS).map((p) => p.name);
+
+const STEPS = [
+  {
+    title: "复制分享链接",
+    desc: "在抖音、快手、B站等 App 内点「分享」，复制链接（支持 .short 等短链）。",
+  },
+  {
+    title: "粘贴到解析框",
+    desc: "回到本页把链接粘贴进输入框，可一次粘贴多个，每行一个。",
+  },
+  {
+    title: "一键解析下载",
+    desc: "点击「开始解析」，自动识别平台并去水印，结果可直接在线预览与下载。",
+  },
+];
+
+const FAQS = [
+  {
+    q: "支持哪些平台？",
+    a: `目前已支持 ${PLATFORM_NAMES.join("、")} 等 ${PLATFORM_NAMES.length}+ 个国内外平台，并持续增加中。`,
+  },
+  {
+    q: "解析出来的视频 / 图片带水印吗？",
+    a: "本工具会自动提取去水印后的原画地址，多数平台可得到无水印资源；个别平台受接口限制可能仍为原画，请以解析结果为准。",
+  },
+  {
+    q: "需要登录或安装软件吗？",
+    a: "完全不需要。本工具为在线网页，免登录、免安装、免注册，打开即用，也不会收集你的账号信息。",
+  },
+  {
+    q: "粘贴链接后提示解析失败怎么办？",
+    a: "请确认链接是从 App「分享」复制的完整链接；部分内容因作者设置权限或已删除会无法解析，可切换具体平台后重试。",
+  },
+  {
+    q: "可以同时解析多个链接吗？",
+    a: "可以。在输入框中每行粘贴一个链接，系统会依次解析并逐条展示结果。",
+  },
+];
 
 function renderPlatformResult(result: ApiResponse) {
   switch (result.platform) {
@@ -50,6 +89,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [pickedPlatform, setPickedPlatform] = useState<VideoPlatformKey | null>(null);
+  const [pickNonce, setPickNonce] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -86,28 +127,35 @@ export default function Home() {
             <p className="text-sm text-muted max-w-md mx-auto">
               支持 {PLATFORM_NAMES.length}+ 平台视频解析下载 · 免费在线 · 粘贴链接即用
             </p>
+            {/* 卖点清单 */}
+            <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+              <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 免费</span>
+              <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 免登录</span>
+              <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 免安装</span>
+              <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 无水印</span>
+            </div>
           </header>
 
-          {/* Platform Chips（首页「SEO 收录入口」，对用户不可点击 —— 解析仍走上方输入框）
-              HTML 保留 <a href> 让爬虫跟随、传递首页→落地页的内链权重；
-              前端拦截点击/回车 + 视觉降透明度，让用户一眼看出是展示项。 */}
+          {/* 支持平台：点击直接聚焦解析框并预选平台（href 保留供 SEO 收录） */}
           <nav
             className="flex flex-wrap justify-center gap-2 mb-8 items-center"
-            aria-label="支持平台列表（SEO 收录入口，解析请使用上方输入框）">
+            aria-label="支持平台列表">
             <span className="text-xs text-muted/70 mr-1" aria-hidden="true">
-              SEO 收录 ·
+              支持平台 ·
             </span>
             {Object.entries(VIDEO_PLATFORMS).map(([key, p]) => (
               <a
                 key={key}
                 href={`/platform/${key}`}
-                onClick={(e) => e.preventDefault()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") e.preventDefault();
+                onClick={(e) => {
+                  e.preventDefault();
+                  setPickedPlatform(key as VideoPlatformKey);
+                  setPickNonce((n) => n + 1);
                 }}
-                title={`${p.name} - 仅供搜索引擎收录，解析请粘贴链接到上方输入框`}
-                className="px-3 py-1.5 rounded-full text-xs bg-glass-2 text-secondary opacity-60 hover:opacity-90 cursor-default transition-opacity select-none">
-                {p.emoji} {p.name}解析
+                title={`解析${p.name}`}
+                className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-glass-2 text-secondary hover:-translate-y-0.5 hover:bg-glass-3 hover:text-foreground cursor-pointer transition">
+                <PlatformIcon platform={key as VideoPlatformKey} size={16} />
+                {p.name}解析
               </a>
             ))}
           </nav>
@@ -119,6 +167,8 @@ export default function Home() {
                 onResult={handleParseResult}
                 setLoading={setLoading}
                 loading={loading}
+                pickedPlatform={pickedPlatform}
+                pickNonce={pickNonce}
               />
             </div>
 
@@ -209,6 +259,55 @@ export default function Home() {
                   </div>
                 </div>
               )}
+
+          {/* 三步使用教程 */}
+          <section className="glass-card iridescent-border p-4 sm:p-6 mt-8">
+            <h2 className="text-lg font-bold text-foreground">三步解析下载</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              {STEPS.map((s, i) => (
+                <div
+                  key={s.title}
+                  className="flex items-start gap-3 rounded-xl border border-border-subtle bg-glass-2 p-4">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/10 text-sm font-bold text-accent">
+                    {i + 1}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-primary">{s.title}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-secondary">
+                      {s.desc}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* 常见问题（可见，与 JSON-LD 呼应） */}
+          <section className="glass-card iridescent-border p-4 sm:p-6 mt-6">
+            <h2 className="text-lg font-bold text-foreground">常见问题</h2>
+            <div className="mt-4 space-y-2">
+              {FAQS.map((f) => (
+                <details
+                  key={f.q}
+                  className="group rounded-xl border border-border-subtle bg-glass-2 px-4 py-3"
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-primary">
+                    {f.q}
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4 shrink-0 text-secondary transition group-open:rotate-45"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                    </svg>
+                  </summary>
+                  <p className="mt-2 text-xs leading-relaxed text-secondary">{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </section>
           </div>
         </div>
       </div>

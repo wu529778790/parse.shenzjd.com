@@ -11,11 +11,14 @@ import {
   hasValidVideoUrl,
 } from "@/utils/share";
 import { showWxAuth } from "@/components/WxAuthInit";
+import PlatformIcon from "@/components/PlatformIcon";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
   setLoading: (loading: boolean) => void;
   loading: boolean;
+  pickedPlatform?: VideoPlatformKey | null;
+  pickNonce?: number;
 }
 
 // 缓存：5 分钟有效，最多保留 20 条（LRU 粗略实现——写入时清最旧条目）
@@ -76,6 +79,8 @@ export default function VideoParserForm({
   onResult,
   setLoading,
   loading,
+  pickedPlatform,
+  pickNonce = 0,
 }: VideoParserFormProps) {
   const [input, setInput] = useState("");
   const [url, setUrl] = useState("");
@@ -320,6 +325,18 @@ export default function VideoParserForm({
     }
   }, [detectedPlatform]);
 
+  // 首页平台 chip 点击：预选平台并聚焦输入框
+  useEffect(() => {
+    if (!pickedPlatform) return;
+    setPlatform(pickedPlatform);
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickNonce]);
+
   return (
     <div className="max-w-3xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -343,6 +360,13 @@ export default function VideoParserForm({
                 </svg>
                 视频链接或分享文本
               </label>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                聚合解析 · 自动识别
+              </span>
 
               <div className="flex items-center gap-2">
                 <button
@@ -485,7 +509,7 @@ export default function VideoParserForm({
 
             {/* Helper Text */}
             <p className="mt-3 text-xs text-muted text-center">
-              支持自动检测平台 · 粘贴后自动解析
+              聚合解析：粘贴任一平台分享链接，自动识别来源并去水印
             </p>
           </div>
         </div>
