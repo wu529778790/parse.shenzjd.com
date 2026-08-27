@@ -399,8 +399,8 @@ DOUYIN_USER_AGENT=your_user_agent
 BILIBILI_COOKIE=your_cookie
 BILIBILI_USER_AGENT=your_user_agent
 
-# 微博
-WEIBO_COOKIE=your_cookie
+# 微博（已改为自动游客模式，无需配置 Cookie；见下方说明）
+# WEIBO_COOKIE=your_cookie
 
 # 解析行为统计（Turso/libsql；未配置时记录功能自动禁用）
 TURSO_DB_URL=libsql://your-db.turso.io

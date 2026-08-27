@@ -8,12 +8,14 @@ export const runtime = "nodejs";
  * 背景：2026-08 起微博对无 Cookie 的服务端请求全部 302 到登录墙（passport.weibo.com），
  * 旧实现依赖环境变量 WEIBO_COOKIE，未配置时 component 接口拿不到数据 → 全量解析失败。
  *
- * 本实现不依赖任何用户配置：
- *  1. 自动通过 passport.weibo.com 获取「游客通行证」Cookie（无登录态即可发放）；
- *  2. 用游客 Cookie 请求 m.weibo.cn 公开 JSON 接口（page_info.media_url 即视频直链）；
- *  3. 失败降级 → 游客 Cookie + 旧 tv/api/component。
+ * 2026-08-27 修复：旧版「a=enter 一次性下发 Cookie」已失效（现在返回需要执行 JS 指纹的 HTML 页面）。
+ * 新版访客流程（与新浪访客系统 JS 一致，weiboSpider 等开源爬虫同款）：
+ *  1. POST /visitor/genvisitor 上报伪指纹 → 拿 tid；
+ *  2. GET  /visitor/visitor?a=incarnate&t={tid}&w=2&c=100 → 拿 SUB/SUBP 访客 Cookie；
+ *  3. 用访客 Cookie + X-Requested-With 请求 m.weibo.cn 公开 JSON（page_info.media_url 即视频直链）；
+ *  4. 失败降级 → 访客 Cookie + 旧 tv/api/component。
  *
- * 游客 Cookie 运行时获取、用完即弃，不读环境变量、无持久化。
+ * 游客 Cookie 运行时获取并模块级缓存（约 25 分钟），不读环境变量、无持久化。
  */
 
 const UA_MOBILE =
@@ -21,6 +23,11 @@ const UA_MOBILE =
 const UA_DESKTOP =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const TIMEOUT_MS = 8000;
+
+/** 访客 Cookie 模块级缓存（SUB 有效期较长，避免每次解析都跑两趟访客流程） */
+let visitorCookieCache = "";
+let visitorCookieExpireAt = 0;
+const VISITOR_COOKIE_TTL_MS = 25 * 60 * 1000;
 
 /**
  * 从各种微博分享链接形态中提取视频 oid（形如 "1034:5336206955708503"）。
@@ -46,24 +53,54 @@ function extractId(rawUrl) {
   return id ? decodeURIComponent(id) : null;
 }
 
-/** 获取微博游客通行凭据（SUB 等）。访问 passport 入口即可，无需登录。 */
+/**
+ * 获取微博游客通行凭据（SUB/SUBP）。两段式：
+ *  1) POST /visitor/genvisitor 上报伪指纹拿 tid；
+ *  2) GET  /visitor/visitor?a=incarnate&t={tid}&w=2&c=100 拿 SUB。
+ * 结果模块级缓存约 25 分钟。
+ */
 async function getVisitorCookie() {
+  if (visitorCookieCache && Date.now() < visitorCookieExpireAt) {
+    return visitorCookieCache;
+  }
   try {
-    const res = await fetch(
-      "https://passport.weibo.com/visitor/visitor?entry=miniblog&a=enter&url=https%3A%2F%2Fm.weibo.cn%2F&domain=.weibo.cn&sudaref=",
+    // 1) genvisitor：上报伪设备指纹，换取 tid
+    const fpBody =
+      'cb=gen_callback&fp={"os":"1","browser":"Safari16","fonts":"undefined","screen":"*","plugins":""}';
+    const res1 = await fetch("https://visitor.passport.weibo.cn/visitor/genvisitor", {
+      method: "POST",
+      headers: {
+        "User-Agent": UA_MOBILE,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Referer: "https://m.weibo.cn/",
+      },
+      body: fpBody,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    const text1 = await res1.text();
+    const tid = text1.match(/"tid":"([^"]+)"/)?.[1];
+    if (!tid) return "";
+
+    // 2) incarnate：tid 换取 SUB/SUBP 访客 Cookie
+    const res2 = await fetch(
+      `https://visitor.passport.weibo.cn/visitor/visitor?a=incarnate&t=${encodeURIComponent(
+        tid
+      )}&w=2&c=100&gc=&cb=cross_domain&from=weibo&_rand=${Math.random()}`,
       {
-        headers: { "User-Agent": UA_MOBILE },
+        headers: { "User-Agent": UA_MOBILE, Referer: "https://m.weibo.cn/" },
         redirect: "follow",
         signal: AbortSignal.timeout(TIMEOUT_MS),
       }
     );
-    const setCookies =
-      typeof res.headers.getSetCookie === "function"
-        ? res.headers.getSetCookie()
-        : res.headers.get("set-cookie")
-          ? [res.headers.get("set-cookie")]
-          : [];
-    return setCookies.map((c) => c.split(";")[0]).join("; ");
+    const text2 = await res2.text();
+    const sub = text2.match(/"sub":"([^"]+)"/)?.[1];
+    const subp = text2.match(/"subp":"([^"]+)"/)?.[1];
+    if (!sub) return "";
+
+    const cookie = `SUB=${sub}${subp ? `; SUBP=${subp}` : ""}`;
+    visitorCookieCache = cookie;
+    visitorCookieExpireAt = Date.now() + VISITOR_COOKIE_TTL_MS;
+    return cookie;
   } catch {
     return "";
   }
@@ -88,6 +125,12 @@ async function fetchJson(url, options = {}) {
   }
 }
 
+/** 规范化微博 CDN 链接（"//xxx" → "https://xxx"） */
+function normalizeUrl(u) {
+  if (!u) return "";
+  return u.startsWith("//") ? `https:${u}` : u;
+}
+
 /** 从 m.weibo.cn 详情 JSON 提取视频信息（statuses/show 的 data 即 mblog 对象） */
 function extractFromMWeibo(json) {
   const mblog = json?.data?.mblog || json?.data || null;
@@ -96,8 +139,13 @@ function extractFromMWeibo(json) {
   const media = pageInfo.media_info || {};
   const mediaUrl =
     pageInfo.media_url ||
-    media.mp4_url ||
+    media.stream_url_hd ||
+    media.stream_url ||
     media.mp4_hd_url ||
+    media.mp4_720p_mp4 ||
+    media.mp4_hd_mp4 ||
+    media.mp4_ld_mp4 ||
+    media.mp4_url ||
     media.mp4_sd_url ||
     media.hd_url ||
     media.ld_url ||
@@ -105,31 +153,56 @@ function extractFromMWeibo(json) {
   if (!mediaUrl) return null;
   return {
     title: (mblog.text || "").replace(/<[^>]+>/g, "").trim().slice(0, 120),
-    cover: media.poster || pageInfo.page_pic?.url || "",
+    cover: normalizeUrl(media.poster || pageInfo.page_pic?.url || ""),
     author: mblog.user?.screen_name || "",
     avatar:
-      mblog.user?.avatar_large ||
-      mblog.user?.avatar_hd ||
-      mblog.user?.profile_image_url ||
-      "",
+      normalizeUrl(
+        mblog.user?.avatar_large ||
+          mblog.user?.avatar_hd ||
+          mblog.user?.profile_image_url ||
+          ""
+      ),
     time: mblog.created_at || "",
-    url: mediaUrl,
+    url: normalizeUrl(mediaUrl),
   };
 }
 
-/** 从官方 tv/api/component 响应提取视频信息（带游客凭据） */
+/** 按清晰度优先级从 component urls 里选直链 */
+const QUALITY_ORDER = [
+  "超清 2K",
+  "超清 1080P",
+  "高清 1080P",
+  "蓝光",
+  "高清 720P",
+  "标清 480P",
+  "标清",
+  "流畅",
+];
+
+/** 从官方 tv/api/component 响应提取视频信息（带游客凭据）；同时返回 mid 供二次补全元数据 */
 function extractFromComponent(json) {
   const data = json?.data?.Component_Play_Playinfo;
   if (!data || !data.urls) return null;
-  const urls = Object.values(data.urls);
-  if (!urls.length) return null;
+  const entries = Object.entries(data.urls);
+  if (!entries.length) return null;
+  let picked = entries[0];
+  for (const q of QUALITY_ORDER) {
+    const hit = entries.find(([label]) => label.includes(q));
+    if (hit) {
+      picked = hit;
+      break;
+    }
+  }
+  const url = normalizeUrl(picked[1]);
+  if (!url) return null;
   return {
-    title: data.title || "",
-    cover: data.cover_image || "",
-    author: data.author || "",
-    avatar: data.avatar || "",
-    time: data.real_date || "",
-    url: urls[0],
+    title: (data.title || "").trim(),
+    cover: normalizeUrl(data.cover_image || ""),
+    author: data.author || data.nickname || "",
+    avatar: normalizeUrl(data.avatar || ""),
+    time: data.real_date ? new Date(Number(data.real_date) * 1000).toISOString() : "",
+    url,
+    mid: data.mid ? String(data.mid) : "",
   };
 }
 
@@ -139,18 +212,9 @@ async function weibo(url) {
 
   // 游客凭据（自动获取，无需配置）
   const cookie = await getVisitorCookie();
-  const uid = id.includes(":") ? id.split(":")[1] : id;
 
-  // 1) m.weibo.cn 单条详情公开 JSON（游客可访问，直接给 page_info.media_url）
-  const mJson = await fetchJson(`https://m.weibo.cn/statuses/show?id=${uid}`, {
-    "User-Agent": UA_MOBILE,
-    Cookie: cookie,
-    Referer: "https://m.weibo.cn/",
-  });
-  const fromM = extractFromMWeibo(mJson);
-  if (fromM && fromM.url) return fromM;
-
-  // 2) 降级：官方 tv/api/component（同样带游客凭据）
+  // 1) 官方 tv/api/component（oid=fid）：唯一能把 fid（1034:xxx）映射到微博的公开接口，
+  //    返回多清晰度直链 + mid（真实 status id）。
   const cJson = await fetchJson(
     `https://weibo.com/tv/api/component?page=/tv/show/${encodeURIComponent(id)}`,
     {
@@ -160,6 +224,7 @@ async function weibo(url) {
         Referer: `https://weibo.com/tv/show/${id}`,
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": UA_DESKTOP,
+        "X-Requested-With": "XMLHttpRequest",
       },
       body: `data=${encodeURIComponent(
         `{"Component_Play_Playinfo":{"oid":"${id}"}}`
@@ -167,7 +232,49 @@ async function weibo(url) {
     }
   );
   const fromC = extractFromComponent(cJson);
-  if (fromC && fromC.url) return fromC;
+  if (fromC && fromC.url) {
+    // 2) 用 mid 再查 m.weibo.cn 详情，补全标题（正文）、头像、时间等元数据
+    let meta = fromC;
+    if (fromC.mid) {
+      const mJson = await fetchJson(
+        `https://m.weibo.cn/statuses/show?id=${encodeURIComponent(fromC.mid)}`,
+        {
+          headers: {
+            "User-Agent": UA_MOBILE,
+            Cookie: cookie,
+            Referer: "https://m.weibo.cn/",
+            "X-Requested-With": "XMLHttpRequest",
+            "MWeibo-Pwa": "1",
+            Accept: "application/json, text/plain, */*",
+          },
+        }
+      );
+      const fromM = extractFromMWeibo(mJson);
+      if (fromM) {
+        meta = { ...fromC, ...fromM, url: fromC.url };
+      }
+    }
+    const { mid, ...data } = meta;
+    return { code: 200, msg: "解析成功", data };
+  }
+
+  // 3) 降级：m.weibo.cn 单条详情（id 可能本身是 status mid，如 layerid / weibo.com/{uid}/{mid} 链接）
+  //    注意：必须带 X-Requested-With 等 H5 头，否则返回 HTML 错误页而非 JSON
+  const uid = id.includes(":") ? id.split(":")[1] : id;
+  const mJson = await fetchJson(`https://m.weibo.cn/statuses/show?id=${encodeURIComponent(uid)}`, {
+    headers: {
+      "User-Agent": UA_MOBILE,
+      Cookie: cookie,
+      Referer: "https://m.weibo.cn/",
+      "X-Requested-With": "XMLHttpRequest",
+      "MWeibo-Pwa": "1",
+      Accept: "application/json, text/plain, */*",
+    },
+  });
+  const fromM = extractFromMWeibo(mJson);
+  if (fromM && fromM.url) {
+    return { code: 200, msg: "解析成功", data: fromM };
+  }
 
   return null;
 }
