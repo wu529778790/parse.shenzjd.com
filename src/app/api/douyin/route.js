@@ -9,6 +9,7 @@ import {
   isChallengeHtml,
   extractIdFromUrl,
   extractTtwid,
+  isUserProfileUrl,
 } from "@/lib/douyin-extract";
 
 // Docker 自托管下 Node runtime 对外网 fetch 通常比 Edge 沙箱更稳定（抖音等站）
@@ -63,6 +64,17 @@ async function douyin(url) {
 
     // ---- Step 1: 从短链 / 分享链接中提取视频 ID 和完整重定向 URL ----
     const extractResult = await extractIdAndRedirectUrl(url);
+    // 短链实际跳转到用户主页（/share/user/ 或带 sec_uid）：
+    // 不是视频链接，给出明确提示而非笼统的「无法解析视频 ID」
+    if (extractResult?.type === "user") {
+      logger.warn(
+        `[${beijingNow()}] 解析抖音链接失败：用户主页链接（${url.slice(0, 60)}）`
+      );
+      return {
+        code: 400,
+        msg: "该链接是抖音用户主页，不是视频链接：请打开具体视频或图文，点「分享」复制链接后再解析",
+      };
+    }
     if (!extractResult) {
       logger.warn(
         `[${beijingNow()}] 解析抖音链接失败：无法提取视频 ID（${url.slice(0, 60)}）`
@@ -316,6 +328,12 @@ async function extractIdAndRedirectUrl(url) {
       signal: AbortSignal.timeout(10000),
     });
     const finalUrl = response.url || url;
+
+    // 用户主页分享链接（短链跳转到 /share/user/MS4wLjAB...）：
+    // 无视频 ID 可提取，返回标记供调用方给出明确报错
+    if (isUserProfileUrl(finalUrl)) {
+      return { type: "user" };
+    }
 
     // 从响应头收集匿名 ttwid（首次访问抖音会自动下发，无需登录）
     const ttwid = extractTtwid(response);

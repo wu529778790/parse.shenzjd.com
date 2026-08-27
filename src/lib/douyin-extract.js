@@ -191,6 +191,15 @@ export function isChallengeHtml(html) {
 }
 
 /**
+ * 判断 URL 是否为抖音「用户主页」分享链接（/share/user/ 路径或带 sec_uid 参数）。
+ * 此类链接是博主主页而非具体视频/图文，不含视频 ID，无法解析 ——
+ * 用于在短链重定向后给出明确提示，而非笼统的「无法解析视频 ID」。
+ */
+export function isUserProfileUrl(urlStr) {
+  return /\/share\/user\//.test(urlStr) || /[?&]sec_uid=/.test(urlStr);
+}
+
+/**
  * 从 URL 中提取视频 ID 和类型
  * 支持：/video|note|story/ID 路径、/share/(video|note|note)/ID、纯长数字、
  * 以及跳转域名的 target 参数（如 link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F<id>）。

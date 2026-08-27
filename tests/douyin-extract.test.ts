@@ -10,6 +10,7 @@ import {
   isChallengeHtml,
   extractIdFromUrl,
   extractTtwid,
+  isUserProfileUrl,
 } from "@/lib/douyin-extract";
 
 // 页面快照：tests/snapshots/*.html
@@ -107,6 +108,27 @@ describe("douyin-extract：页面快照回归", () => {
     ).toEqual({ id: "6891626572860706051", type: "video" });
     // 无 target 参数的普通链接不受影响
     expect(extractIdFromUrl("https://link.wtturl.cn/")).toBeNull();
+  });
+
+  it("识别用户主页分享链接（/share/user/ 与 sec_uid）", () => {
+    // 线上案例：v.douyin.com/pcLEV_tYdLs 短链实际跳转到 /share/user/
+    expect(
+      isUserProfileUrl(
+        "https://www.iesdouyin.com/share/user/MS4wLjABAAAAGsprZr-1bBuiEe_5eHTFoZbPsxiCKGY0Ewd_klNeaWg?with_sec_did=1&from_ssr=1"
+      )
+    ).toBe(true);
+    expect(
+      isUserProfileUrl(
+        "https://www.douyin.com/user/MS4wLjABAAAAGsprZr-1bBuiEe_5eHTFoZbPsxiCKGY0Ewd_klNeaWg?sec_uid=MS4wLjABAAAA"
+      )
+    ).toBe(true);
+    // 视频 / 图文分享链接不能被误判
+    expect(
+      isUserProfileUrl("https://www.iesdouyin.com/share/video/7389625411234567890")
+    ).toBe(false);
+    expect(
+      isUserProfileUrl("https://www.iesdouyin.com/share/note/7389625411234567890")
+    ).toBe(false);
   });
 
   it("从响应头提取 ttwid", () => {
