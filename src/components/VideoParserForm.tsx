@@ -90,6 +90,8 @@ export default function VideoParserForm({
   const [isFocused, setIsFocused] = useState(false);
   const [detectedPlatform, setDetectedPlatform] =
     useState<VideoPlatformKey | null>(null);
+  // 是否已解析成功：成功后按钮禁用显示「已解析」，避免重复点击；输入变化时重置
+  const [hasResult, setHasResult] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -134,6 +136,7 @@ export default function VideoParserForm({
       const cached = readCache(cacheKey);
       if (cached) {
         onResult(cached, "");
+        setHasResult(true);
         return;
       }
 
@@ -158,6 +161,7 @@ export default function VideoParserForm({
         if (data.code === 1 || data.code === 200) {
           data.platform = platform as VideoPlatformKey;
           onResult(data, "");
+          setHasResult(true);
           writeCache(cacheKey, data);
         } else {
           onResult(null, data.msg || "解析失败");
@@ -275,6 +279,8 @@ export default function VideoParserForm({
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setInput(text);
+    // 内容变化：重置已解析状态，允许重新解析
+    setHasResult(false);
     processInputText(text);
   };
 
@@ -285,6 +291,8 @@ export default function VideoParserForm({
       const text = textareaRef.current?.value ?? "";
       if (!text) return;
       setInput(text);
+      // 内容变化：重置已解析状态，允许重新解析
+      setHasResult(false);
       processInputText(text, true);
     }, 0);
   };
@@ -313,6 +321,7 @@ export default function VideoParserForm({
     setUrl("");
     setDetectedPlatform(null);
     setPlatform("auto");
+    setHasResult(false);
     onPlatformChange?.("auto");
     onResult(null, "");
     textareaRef.current?.focus();
@@ -509,7 +518,7 @@ export default function VideoParserForm({
                 <button
                   ref={buttonRef}
                   type="submit"
-                  disabled={loading || !url}
+                  disabled={loading || !url || hasResult}
                   className="magnetic-btn group relative w-full px-6 py-3.5 rounded-xl font-semibold text-white overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5 disabled:translate-y-0">
                   {/* Dynamic Gradient Background */}
                   <div className={`absolute inset-0 bg-gradient-to-r ${detectedPlatform && VIDEO_PLATFORMS[detectedPlatform] ? VIDEO_PLATFORMS[detectedPlatform].gradient : 'from-indigo-500 to-purple-600'} transition-all duration-500`} />
@@ -523,6 +532,22 @@ export default function VideoParserForm({
                       <>
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <span>解析中...</span>
+                      </>
+                    ) : hasResult ? (
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2}>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <span>已解析</span>
                       </>
                     ) : (
                       <>
