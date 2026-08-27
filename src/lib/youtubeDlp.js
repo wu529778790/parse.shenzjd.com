@@ -24,6 +24,14 @@ const MERGE_TIMEOUT_MS = Number(process.env.YTDLP_MERGE_TIMEOUT_MS || 90000);
 // 合并上限：超过该时长的视频拒绝（下载合并耗时过长）
 const MAX_MERGE_DURATION_S = Number(process.env.YOUTUBE_MAX_DURATION_S || 900);
 
+// YouTube 播放器客户端策略：默认用 android（实测可绕过人机验证 "Sign in to confirm you're not a bot"），
+// tv / web_safari 作为备用。服务器无浏览器/无 cookies，切换客户端是无需账号的最可靠方案；可用环境变量覆盖。
+const YOUTUBE_PLAYER_CLIENT = process.env.YOUTUBE_PLAYER_CLIENT || "android,tv,web_safari";
+// 附加到 yt-dlp 的 extractor-args（仅当配置了客户端时注入）
+const YOUTUBE_EXTRACTOR_ARGS = YOUTUBE_PLAYER_CLIENT
+  ? ["--extractor-args", `youtube:player_client=${YOUTUBE_PLAYER_CLIENT}`]
+  : [];
+
 /** 运行 yt-dlp 并返回 stdout 字符串；错误时抛 Error（含分类前缀） */
 function runYtDlp(args, timeoutMs = YTDLP_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
@@ -105,6 +113,7 @@ async function mergeAndServe(info, url) {
     "--no-playlist",
     "--no-warnings",
     "--socket-timeout", "15",
+    ...YOUTUBE_EXTRACTOR_ARGS,
     "-o", outPath,
     url,
   ];
@@ -156,6 +165,7 @@ export async function parseYoutube(url) {
       "--no-warnings",
       "--skip-download",
       "--socket-timeout", "15",
+      ...YOUTUBE_EXTRACTOR_ARGS,
       url,
     ];
     const stdout = await runYtDlp(args);
@@ -232,4 +242,11 @@ export async function cleanExpiredFiles(maxAgeMs = 3600000) {
 // 供 /api/youtube/play 路由读取合并产物
 export { YOUTUBE_TMP_DIR };
 
-export const _internal = { runYtDlp, YTDLP_BIN, YOUTUBE_TMP_DIR, pickProgressiveMp4 };
+export const _internal = {
+  runYtDlp,
+  YTDLP_BIN,
+  YOUTUBE_TMP_DIR,
+  pickProgressiveMp4,
+  YOUTUBE_PLAYER_CLIENT,
+  YOUTUBE_EXTRACTOR_ARGS,
+};
