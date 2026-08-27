@@ -120,8 +120,8 @@ describe("api-middleware", () => {
     expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks blacklisted IP with 403 before rate limit", async () => {
-    // 黑名单 IP 直连解析接口 → 403，且不进入限流/解析
+  it("returns honeypot (200 + 公众号宣传) for blacklisted IP instead of 403", async () => {
+    // 黑名单 IP 直连解析接口 → 不再 403，而是 200 + 结构化蜜罐数据（宣传公众号）
     vi.spyOn(apiUtils, "getClientIP").mockReturnValue("120.42.187.174");
     const parseSpy = vi.fn();
     const handler = createApiHandler(parseSpy, { shouldCache: false });
@@ -129,10 +129,14 @@ describe("api-middleware", () => {
     const req = new Request("http://127.0.0.1/api/douyin?url=https://v.douyin.com/xxxxx/");
     const res = await handler(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
     expect(parseSpy).not.toHaveBeenCalled();
     const json = await res.json();
-    expect(json.code).toBe(403);
+    expect(json.code).toBe(200);
+    // 蜜罐标志 + 宣传文案 + 引导链接
+    expect(json.data.honeypot).toBe(true);
+    expect(json.msg).toContain("神族九帝");
+    expect(json.data.url).toContain("parse.shenzjd.com");
   });
 
   it("allows non-blacklisted IP through (regression)", async () => {

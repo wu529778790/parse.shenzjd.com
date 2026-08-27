@@ -16,6 +16,7 @@ import {
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
 import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
+import { honeypotResponse } from "@/lib/honeypot";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -119,17 +120,17 @@ export const createApiHandler = (
       // 日志失败不影响主流程
     }
 
-    // IP 黑名单拦截：绕过前端、直连解析接口的爬虫/脚本（名单见 api-utils.js）。
-    // 放在 rateLimit 之前（静态 Set/前缀查询零成本），命中直接 403。
+    // IP 黑名单拦截（蜜罐模式）：绕过前端、直连解析接口的爬虫/脚本（名单见 api-utils.js）。
+    // 命中不再 403 拒绝，而是返回 200 + 结构化蜜罐数据（宣传公众号），
+    // 让脚本误以为抓取成功、继续消费，实际拿到的是引导文案（见 lib/honeypot.ts）。
+    // 放在 rateLimit 之前（静态 Set/前缀查询零成本）。
     if (isBlockedIP(clientIP)) {
-      logger.warn(`黑名单 IP 被拦截: ip=${clientIP} route=${String(routeMatch?.[1] || "")}`);
-      return Response.json(
-        errorResponse("该 IP 已被限制访问，如有疑问请联系站长", 403),
-        {
-          status: safeStatus(403),
-          headers
-        }
-      );
+      logger.warn(`黑名单 IP 命中蜜罐: ip=${clientIP} route=${String(routeMatch?.[1] || "")}`);
+      const honeypot = normalizeResult(honeypotResponse(String(routeMatch?.[1] || "")));
+      return Response.json(honeypot, {
+        status: 200,
+        headers,
+      });
     }
 
     // 每次解析打印一条流水日志（console.log 保证生产环境也输出，对齐 [usage] 风格；

@@ -23,7 +23,8 @@ function isXhsHost(hostname) {
 }
 
 export async function GET(request) {
-  // IP 黑名单：图片代理是大流量拖拽点，爬虫常绕过前端直连；与解析接口一致拦截
+  // IP 黑名单：图片代理返回二进制图片，无法套用解析接口的 JSON 蜜罐，
+  // 此处对黑名单 IP 保持 403（图片代理只是前端加载资源的通道，不承载解析宣传）。
   const clientIP = getClientIP(request);
   if (isBlockedIP(clientIP)) {
     logger.warn(`黑名单 IP 被拦截(image): ip=${clientIP}`);

@@ -18,6 +18,7 @@ import {
 import { isBlockedText } from "@/lib/blockedPlatforms";
 import { public17Parse } from "@/lib/douyinFallback";
 import { getPlatformParser } from "@/lib/platformRoutes";
+import { honeypotResponse } from "@/lib/honeypot";
 import { verifyDirectUrl } from "@/lib/verifyUrl";
 
 // 导入各平台解析器
@@ -228,12 +229,12 @@ export async function GET(request) {
   if (source && id) {
     // source+id 路径也受速率限制保护
     const clientIP = getClientIP(request);
-    // IP 黑名单（与中间件一致）：绕过前端直连的爬虫/脚本
+    // IP 黑名单（与中间件一致）：命中返回 200 + 蜜罐结构化数据（宣传公众号）
     if (isBlockedIP(clientIP)) {
-      logger.warn(`黑名单 IP 被拦截(source+id): ip=${clientIP}`);
+      logger.warn(`黑名单 IP 命中蜜罐(source+id): ip=${clientIP}`);
       return Response.json(
-        { code: 403, msg: "该 IP 已被限制访问，如有疑问请联系站长" },
-        { status: safeStatus(403), headers: corsHeaders }
+        normalizeResult(honeypotResponse(source)),
+        { status: 200, headers: corsHeaders }
       );
     }
     if (!rateLimit(clientIP)) {
