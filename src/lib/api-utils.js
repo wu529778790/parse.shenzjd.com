@@ -3,6 +3,22 @@
 // 环境检测
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// 北京时间格式化（日志用）：YYYY-MM-DD HH:mm:ss
+// 各路由的流水日志统一用北京时间，避免看日志时手动 +8 换算
+export function beijingNow() {
+  const fmt = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return fmt.format(new Date()).replace(/\//g, "-");
+}
+
 // 条件日志工具
 export const logger = {
   log: (...args) => {

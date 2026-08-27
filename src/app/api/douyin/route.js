@@ -1,5 +1,5 @@
 import { createApiHandler } from "@/lib/api-middleware";
-import { logger } from "@/lib/api-utils";
+import { logger, beijingNow } from "@/lib/api-utils";
 import { douyinPublicFallback } from "@/lib/douyinFallback";
 import {
   hasValidData,
@@ -43,20 +43,7 @@ const UA_SETS = [
   },
 ];
 
-// 北京时间格式化（日志用）：YYYY-MM-DD HH:mm:ss
-function beijingNow() {
-  const fmt = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  return fmt.format(new Date()).replace(/\//g, "-");
-}
+// 北京时间格式化已抽到 lib/api-utils.js 的 beijingNow()，各路由共用
 
 async function douyin(url) {
   try {

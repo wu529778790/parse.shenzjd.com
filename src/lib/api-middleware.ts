@@ -12,6 +12,7 @@ import {
   serverErrorResponse,
   parseErrorResponse,
   isBlockedIP,
+  beijingNow,
 } from "@/lib/api-utils";
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
@@ -113,7 +114,7 @@ export const createApiHandler = (
       routeMatch = pathname.match(/\/api\/([a-z0-9]+)/i);
       if (routeMatch) {
         console.log(
-          `[usage] route=${routeMatch[1]} time=${new Date().toISOString()}`
+          `[usage] route=${routeMatch[1]} time=${beijingNow()}`
         );
       }
     } catch {
@@ -146,7 +147,7 @@ export const createApiHandler = (
       const shortUrl =
         safeUrl.length > 60 ? safeUrl.slice(0, 60) + "..." : safeUrl;
       console.log(
-        `[parse] route=${route} url=${shortUrl} status=${status} code=${code} time=${durationMs}ms${
+        `[parse] route=${route} time=${beijingNow()} url=${shortUrl} status=${status} code=${code} duration=${durationMs}ms${
           reason ? ` reason=${reason.slice(0, 80)}` : ""
         }`
       );
