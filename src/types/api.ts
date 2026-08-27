@@ -22,8 +22,8 @@ export interface ParseData {
   // —— 内容信息 ——
   title?: string;
   desc?: string;
-  /** 内容类型：video / image / music */
-  type?: "video" | "image" | "music";
+  /** 内容类型：video / image / music / text（text 表示仅文字、无媒体可下载） */
+  type?: "video" | "image" | "music" | "text";
   /** 视频时长（毫秒，抖音等平台） */
   duration?: number;
 

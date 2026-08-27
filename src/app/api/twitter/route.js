@@ -96,11 +96,11 @@ async function parseVideoId(tweetId) {
     }
   }
 
-  if (!videoUrl && images.length === 0) {
-    return { code: 404, msg: "该推文中没有找到视频或图片" };
-  }
-
   const displayName = authorName || authorScreenName;
+
+  // 媒体类型语义：有视频 → video；无视频但有图 → image（url 指向第一张原图）；
+  // 纯文字 → text（无可下载媒体，前端展示提示而非解析失败）
+  const type = videoUrl ? "video" : images.length > 0 ? "image" : "text";
 
   return {
     code: 200,
@@ -110,9 +110,10 @@ async function parseVideoId(tweetId) {
       author: displayName,
       avatar: authorAvatar,
       uid: authorId,
-      cover: coverUrl,
-      url: videoUrl,
+      cover: coverUrl || images[0] || "",
+      url: videoUrl || images[0] || "",
       images: images.length > 0 ? images : undefined,
+      type,
     },
   };
 }

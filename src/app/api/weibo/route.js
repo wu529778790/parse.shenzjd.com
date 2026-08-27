@@ -131,10 +131,55 @@ function normalizeUrl(u) {
   return u.startsWith("//") ? `https:${u}` : u;
 }
 
-/** 从 m.weibo.cn 详情 JSON 提取视频信息（statuses/show 的 data 即 mblog 对象） */
+/** 微博图 URL 统一放大尺寸（缩略图 → 原图） */
+function normalizeImageUrl(u) {
+  const url = normalizeUrl(u);
+  if (!url) return "";
+  // sinaimg 的尺寸标识：thumb150/bmiddle/orj360 替换为 large（原图）
+  return url
+    .replace(/\/thumb150\//, "/large/")
+    .replace(/\/bmiddle\//, "/large/")
+    .replace(/\/orj360\//, "/large/");
+}
+
+/** 从 mblog 对象提取图片列表（pics[].large.url，兼容字符串项） */
+function extractImagesFromMblog(mblog) {
+  if (!Array.isArray(mblog?.pics)) return [];
+  const images = [];
+  for (const p of mblog.pics) {
+    const raw =
+      (typeof p === "string" ? p : "") ||
+      p?.large?.url ||
+      p?.url ||
+      "";
+    const url = normalizeImageUrl(raw);
+    if (url) images.push(url);
+  }
+  return images;
+}
+
+/**
+ * 从 m.weibo.cn 详情 JSON 提取微博信息（statuses/show 的 data 即 mblog 对象）。
+ * 按媒体类型返回：
+ *  - 有视频直链 → type: video（url/cover）
+ *  - 无视频但有图片 → type: image（images 图集 + url/cover 指向第一张）
+ *  - 仅有文字 → type: text（无媒体字段，前端展示提示）
+ */
 function extractFromMWeibo(json) {
   const mblog = json?.data?.mblog || json?.data || null;
   if (!mblog) return null;
+  const title = (mblog.text || "").replace(/<[^>]+>/g, "").trim().slice(0, 120);
+  const author = mblog.user?.screen_name || "";
+  const avatar = normalizeUrl(
+    mblog.user?.avatar_large ||
+      mblog.user?.avatar_hd ||
+      mblog.user?.profile_image_url ||
+      ""
+  );
+  const time = mblog.created_at || "";
+  const base = { title, author, avatar, time };
+
+  // 1) 视频：page_info.media_info 多级降级取直链
   const pageInfo = mblog.page_info || {};
   const media = pageInfo.media_info || {};
   const mediaUrl =
@@ -150,21 +195,29 @@ function extractFromMWeibo(json) {
     media.hd_url ||
     media.ld_url ||
     media.origin_url;
-  if (!mediaUrl) return null;
-  return {
-    title: (mblog.text || "").replace(/<[^>]+>/g, "").trim().slice(0, 120),
-    cover: normalizeUrl(media.poster || pageInfo.page_pic?.url || ""),
-    author: mblog.user?.screen_name || "",
-    avatar:
-      normalizeUrl(
-        mblog.user?.avatar_large ||
-          mblog.user?.avatar_hd ||
-          mblog.user?.profile_image_url ||
-          ""
-      ),
-    time: mblog.created_at || "",
-    url: normalizeUrl(mediaUrl),
-  };
+  if (mediaUrl) {
+    return {
+      ...base,
+      cover: normalizeUrl(media.poster || pageInfo.page_pic?.url || ""),
+      url: normalizeUrl(mediaUrl),
+      type: "video",
+    };
+  }
+
+  // 2) 图片：mblog.pics 图集
+  const images = extractImagesFromMblog(mblog);
+  if (images.length > 0) {
+    return {
+      ...base,
+      cover: images[0],
+      url: images[0],
+      images,
+      type: "image",
+    };
+  }
+
+  // 3) 纯文字：无媒体，仅返回元数据
+  return { ...base, type: "text" };
 }
 
 /** 按清晰度优先级从 component urls 里选直链 */
@@ -203,6 +256,7 @@ function extractFromComponent(json) {
     time: data.real_date ? new Date(Number(data.real_date) * 1000).toISOString() : "",
     url,
     mid: data.mid ? String(data.mid) : "",
+    type: "video",
   };
 }
 
@@ -251,7 +305,8 @@ async function weibo(url) {
       );
       const fromM = extractFromMWeibo(mJson);
       if (fromM) {
-        meta = { ...fromC, ...fromM, url: fromC.url };
+        // 视频场景：url/type 以 component 结果为准（fromM 可能因无视频被归类为 image/text）
+        meta = { ...fromC, ...fromM, url: fromC.url, type: "video" };
       }
     }
     // 剔除 mid 字段（避免冗余，且不在响应中暴露微博内部 id）
@@ -274,7 +329,9 @@ async function weibo(url) {
     },
   });
   const fromM = extractFromMWeibo(mJson);
-  if (fromM && fromM.url) {
+  // 视频 / 图片 / 纯文字微博都算解析成功（data.type 区分媒体类型），
+  // 只有完全拿不到内容时才走 null → 外层统一报「解析失败」
+  if (fromM) {
     return { code: 200, msg: "解析成功", data: fromM };
   }
 
