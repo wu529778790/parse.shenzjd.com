@@ -51,8 +51,13 @@ ENV HOSTNAME="0.0.0.0"
 # ffmpeg 合并为完整 MP4。仅 Docker 部署支持 YouTube（Serverless 无此环境）。
 # --break-system-packages：新版 Alpine 的 python 为 externally-managed（PEP 668），
 # 直接全局 pip install 会被拒绝；容器内安装 yt-dlp 无系统副作用，可安全绕过。
+# curl-cffi：提供浏览器 TLS 指纹（--impersonate），绕过 YouTube 第二关 TLS 识别；
+# bgutil-ytdlp-pot-provider：生成 Proof-of-Origin Token，绕过数据中心 IP 的
+# "Sign in to confirm you're not a bot" 人机验证（第四关）。
 RUN apk add --no-cache python3 py3-pip ffmpeg \
- && pip install --no-cache-dir --break-system-packages yt-dlp \
+ && pip install --no-cache-dir --break-system-packages \
+      "yt-dlp[default,curl-cffi]" \
+      bgutil-ytdlp-pot-provider \
  && rm -rf /root/.cache/pip
 
 # 非 root 用户运行（node:alpine 自带 node 用户，UID 1000）

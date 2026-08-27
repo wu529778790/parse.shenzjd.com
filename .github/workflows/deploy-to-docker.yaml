@@ -134,7 +134,19 @@ jobs:
           script: |
             IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest"
             CONTAINER="${{ github.event.repository.name }}"
+            POT_CONTAINER="bgutil-pot-provider"
             ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/parse.shenzjd.com/index/.env"
+            # PO Token 提供方（bgutil-ytdlp-pot-provider HTTP server）：
+            # 数据中心 IP 下绕过 YouTube "Sign in to confirm you're not a bot" 人机验证。
+            # 监听 127.0.0.1:4416，仅本机 yt-dlp 访问，不对外暴露。
+            sudo docker pull brainicism/bgutil-ytdlp-pot-provider:latest
+            sudo docker stop "$POT_CONTAINER" || true
+            sudo docker rm "$POT_CONTAINER" || true
+            sudo docker run -d \
+              --name "$POT_CONTAINER" \
+              --restart unless-stopped \
+              -p 127.0.0.1:4416:4416 \
+              brainicism/bgutil-ytdlp-pot-provider:latest
             sudo docker pull "$IMAGE"
             sudo docker stop "$CONTAINER" || true
             sudo docker rm "$CONTAINER" || true
