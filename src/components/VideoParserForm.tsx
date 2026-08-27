@@ -17,8 +17,9 @@ interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
   setLoading: (loading: boolean) => void;
   loading: boolean;
-  pickedPlatform?: VideoPlatformKey | null;
+  pickedPlatform?: VideoPlatformKey | "auto" | null;
   pickNonce?: number;
+  onPlatformChange?: (platform: VideoPlatformKey | "auto") => void;
 }
 
 // 缓存：5 分钟有效，最多保留 20 条（LRU 粗略实现——写入时清最旧条目）
@@ -81,10 +82,11 @@ export default function VideoParserForm({
   loading,
   pickedPlatform,
   pickNonce = 0,
+  onPlatformChange,
 }: VideoParserFormProps) {
   const [input, setInput] = useState("");
   const [url, setUrl] = useState("");
-  const [platform, setPlatform] = useState<VideoPlatformKey>("douyin");
+  const [platform, setPlatform] = useState<VideoPlatformKey | "auto">("auto");
   const [isFocused, setIsFocused] = useState(false);
   const [detectedPlatform, setDetectedPlatform] =
     useState<VideoPlatformKey | null>(null);
@@ -214,17 +216,20 @@ export default function VideoParserForm({
         if (!detected) {
           // 清掉可能残留的 url，避免用户点「开始解析」时用旧链接误发请求
           setUrl("");
+          setPlatform("auto");
+          onPlatformChange?.("auto");
           onResult(null, "无法识别的视频平台，请粘贴支持的平台链接（如抖音/快手/B站等）");
           return;
         }
         setUrl(extractedUrl);
         setPlatform(detected);
+        onPlatformChange?.(detected);
         debouncedParse(extractedUrl, detected);
       } else {
         setDetectedPlatform(null);
       }
     },
-    [debouncedParse, onResult]
+    [debouncedParse, onResult, onPlatformChange]
   );
 
   // Auto-read clipboard on mount
@@ -286,6 +291,8 @@ export default function VideoParserForm({
     setInput("");
     setUrl("");
     setDetectedPlatform(null);
+    setPlatform("auto");
+    onPlatformChange?.("auto");
     onResult(null, "");
     textareaRef.current?.focus();
   };
@@ -302,9 +309,10 @@ export default function VideoParserForm({
       onResult(null, "无法识别的视频平台，请粘贴支持的平台链接（如抖音/快手/B站等）");
       return;
     }
-    // 链接平台与当前所选平台不一致（用户手动切换了下拉框）：拒绝解析，
-    // 避免把抖音链接发给 B 站接口等错配请求
-    if (detected !== platform) {
+    // 手动指定平台时做一致性校验，避免把抖音链接发给 B 站接口等错配请求；
+    // 「自动识别」模式下直接用检测结果
+    const target = platform === "auto" ? detected : platform;
+    if (detected !== target) {
       onResult(
         null,
         `链接属于${VIDEO_PLATFORMS[detected].name}，与当前所选平台不一致，已拒绝解析`
@@ -312,7 +320,7 @@ export default function VideoParserForm({
       return;
     }
     // 复用 parseVideo，避免重复实现 fetch + 缓存逻辑
-    parseVideo(url, platform);
+    parseVideo(url, target);
   };
 
   // Update CSS variable for platform accent
@@ -325,14 +333,26 @@ export default function VideoParserForm({
     }
   }, [detectedPlatform]);
 
-  // 首页平台 chip 点击：预选平台并聚焦输入框
+  // 平台 chip 点击：选中平台（含「自动识别」）、聚焦输入框；若输入框已有链接且匹配则直接解析
   useEffect(() => {
-    if (!pickedPlatform) return;
+    if (pickedPlatform === undefined || pickedPlatform === null) return;
     setPlatform(pickedPlatform);
+    onPlatformChange?.(pickedPlatform);
     const el = textareaRef.current;
     if (el) {
       el.focus();
       el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    if (url) {
+      const detected = detectPlatform(url);
+      if (detected && detected === pickedPlatform) {
+        parseVideo(url, detected);
+      } else if (detected) {
+        onResult(
+          null,
+          `链接属于${VIDEO_PLATFORMS[detected].name}，与所选平台不一致，请选择「自动识别」或${VIDEO_PLATFORMS[detected].name}`
+        );
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickNonce]);
@@ -360,13 +380,6 @@ export default function VideoParserForm({
                 </svg>
                 视频链接或分享文本
               </label>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                聚合解析 · 自动识别
-              </span>
 
               <div className="flex items-center gap-2">
                 <button
@@ -430,35 +443,39 @@ export default function VideoParserForm({
         <div className="glass-card iridescent-border p-1">
           <div className="bg-glass-1 rounded-xl p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row gap-3">
-              {/* Platform Selector */}
+              {/* Current Platform Indicator */}
               <div className="flex-1">
-                <select
-                  value={platform}
-                  onChange={(e) =>
-                    setPlatform(e.target.value as VideoPlatformKey)
-                  }
-                  className="input-glow w-full px-4 py-3.5 rounded-xl border border-border-subtle bg-glass-2 text-primary focus:border-accent/50 focus:bg-glass-3 transition-all duration-300 appearance-none cursor-pointer">
-                  {Object.entries(VIDEO_PLATFORMS).map(([key, config]) => (
-                    <option key={key} value={key}>
-                      {config.emoji} {config.name}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Custom Arrow */}
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden">
-                  <svg
-                    className="w-5 h-5 text-muted"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
+                <label className="block text-xs text-muted mb-1.5">
+                  当前平台
+                </label>
+                <div className="input-glow flex items-center gap-2.5 w-full px-4 py-3 rounded-xl border border-border-subtle bg-glass-2">
+                  {platform === "auto" ? (
+                    <>
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      <span className="text-sm text-primary">
+                        自动识别（粘贴即解析）
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <PlatformIcon platform={platform} size={22} />
+                      <span className="text-sm text-primary">
+                        {VIDEO_PLATFORMS[platform].name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlatform("auto");
+                          onPlatformChange?.("auto");
+                        }}
+                        className="ml-auto text-xs text-accent hover:underline">
+                        恢复自动识别
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import UserAvatar from "@/components/UserAvatar";
 
 const navLinks = [
   { name: "首页", href: "https://shenzjd.com", icon: "🏠" },
@@ -69,10 +70,10 @@ export default function Header() {
             ))}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button（左侧，避免与右上角悬浮的用户头像重叠） */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden ml-auto p-2 rounded-lg text-secondary hover:text-primary hover:bg-glass-2 transition-all duration-300"
+            className="md:hidden mr-auto p-2 rounded-lg text-secondary hover:text-primary hover:bg-glass-2 transition-all duration-300"
             aria-label="菜单"
           >
             {menuOpen ? (
@@ -127,6 +128,9 @@ export default function Header() {
           </div>
         )}
       </nav>
+
+      {/* 用户头像：组件返回 null 不占布局，useEffect 把头像 fixed 渲染到 body 右上角 */}
+      <UserAvatar />
     </header>
   );
 }

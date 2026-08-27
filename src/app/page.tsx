@@ -46,7 +46,7 @@ const FAQS = [
   },
   {
     q: "需要登录或安装软件吗？",
-    a: "完全不需要。本工具为在线网页，免登录、免安装、免注册，打开即用，也不会收集你的账号信息。",
+    a: `无需安装任何软件。首次使用需关注公众号「${siteConfig.name}」并发送验证码完成验证（免费），验证通过后即可正常解析下载。`,
   },
   {
     q: "粘贴链接后提示解析失败怎么办？",
@@ -89,8 +89,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [pickedPlatform, setPickedPlatform] = useState<VideoPlatformKey | null>(null);
+  const [pickedPlatform, setPickedPlatform] = useState<VideoPlatformKey | "auto" | null>(null);
   const [pickNonce, setPickNonce] = useState(0);
+  const [activePlatform, setActivePlatform] = useState<VideoPlatformKey | "auto">("auto");
 
   useEffect(() => {
     setMounted(true);
@@ -130,34 +131,63 @@ export default function Home() {
             {/* 卖点清单 */}
             <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
               <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 免费</span>
-              <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 免登录</span>
               <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 免安装</span>
               <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 无水印</span>
+              <span className="rounded-full bg-glass-2 px-3 py-1 text-secondary">✓ 多平台</span>
             </div>
           </header>
 
-          {/* 支持平台：点击直接聚焦解析框并预选平台（href 保留供 SEO 收录） */}
+          {/* 平台选择器：等宽网格，点击即选中并解析；「自动识别」为默认（平台项 href 保留供 SEO 收录） */}
           <nav
-            className="flex flex-wrap justify-center gap-2 mb-8 items-center"
-            aria-label="支持平台列表">
-            <span className="text-xs text-muted/70 mr-1" aria-hidden="true">
-              支持平台 ·
-            </span>
-            {Object.entries(VIDEO_PLATFORMS).map(([key, p]) => (
-              <a
-                key={key}
-                href={`/platform/${key}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setPickedPlatform(key as VideoPlatformKey);
-                  setPickNonce((n) => n + 1);
-                }}
-                title={`解析${p.name}`}
-                className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-glass-2 text-secondary hover:-translate-y-0.5 hover:bg-glass-3 hover:text-foreground cursor-pointer transition">
-                <PlatformIcon platform={key as VideoPlatformKey} size={16} />
-                {p.name}解析
-              </a>
-            ))}
+            className="grid grid-cols-3 gap-2 mb-8 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7"
+            aria-label="选择平台进行解析">
+            {/* 自动识别 */}
+            <button
+              type="button"
+              onClick={() => {
+                setPickedPlatform("auto");
+                setPickNonce((n) => n + 1);
+              }}
+              aria-pressed={activePlatform === "auto"}
+              title="自动识别平台并解析"
+              className={`flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs transition ${
+                activePlatform === "auto"
+                  ? "border-accent/60 bg-accent/10 font-medium text-foreground"
+                  : "border-glass-2 bg-glass-2 text-secondary hover:-translate-y-0.5 hover:bg-glass-3 hover:text-foreground"
+              }`}>
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="truncate">自动识别</span>
+            </button>
+
+            {Object.entries(VIDEO_PLATFORMS).map(([key, p]) => {
+              const k = key as VideoPlatformKey;
+              const active = activePlatform === k;
+              // 网格内用短名，避免超长名换行/截断（X (Twitter) → X）
+              const label = p.name.replace(" (Twitter)", "");
+              return (
+                <a
+                  key={key}
+                  href={`/platform/${key}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPickedPlatform(k);
+                    setPickNonce((n) => n + 1);
+                  }}
+                  title={`解析${p.name}`}
+                  aria-pressed={active}
+                  className={`flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs transition ${
+                    active
+                      ? "border-accent/60 bg-accent/10 font-medium text-foreground"
+                      : "border-glass-2 bg-glass-2 text-secondary hover:-translate-y-0.5 hover:bg-glass-3 hover:text-foreground"
+                  }`}>
+                  <PlatformIcon platform={k} size={16} />
+                  <span className="truncate">{label}</span>
+                </a>
+              );
+            })}
           </nav>
 
           {/* Body: Form/Results（公众号浮窗挪到 body 末尾做 fixed，不挤压主结构） */}
@@ -169,6 +199,7 @@ export default function Home() {
                 loading={loading}
                 pickedPlatform={pickedPlatform}
                 pickNonce={pickNonce}
+                onPlatformChange={setActivePlatform}
               />
             </div>
 
