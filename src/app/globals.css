@@ -82,6 +82,11 @@
     overflow-x: hidden;
   }
 
+  /* 顶部导航 Web Component：custom element 默认 display:inline，显式改为 block 参与文档流 */
+  site-navbar {
+    display: block;
+  }
+
   /* Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 8px;

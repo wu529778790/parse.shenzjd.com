@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WxAuthInit from "@/components/WxAuthInit";
 import { siteConfig } from "@/config/site";
@@ -102,6 +101,22 @@ export default function RootLayout({
           src="https://unpkg.com/@wu529778790/floating-qr@latest/dist/floating-qr.wc.js"
           defer
         />
+        {/* 顶部导航 + 头像浮窗：@wu529778790/site-navbar Web Component 版
+            1. 先引入 wx-auth-sdk（头像登录依赖它）
+            2. 静默校验登录态（silent:true 绝不自动弹窗；required:false 弹窗带 × 关闭按钮）
+            3. 再引入 site-navbar（头像已内置，无需再引 user-avatar）
+            4. body 顶部放一个 <site-navbar> 标签即出现整条导航 */}
+        <script src="https://unpkg.com/wx-auth-sdk/dist/wx-auth.umd.js" defer />
+        <script
+          defer
+          dangerouslySetInnerHTML={{
+            __html: `WxAuth.init({ silent: true, required: false })`,
+          }}
+        />
+        <script
+          src="https://unpkg.com/@wu529778790/site-navbar@latest/dist/site-navbar.wc.js"
+          defer
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -120,13 +135,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased">
+      <body className="antialiased min-h-screen flex flex-col noise-overlay">
         <WxAuthInit />
-        <div className="min-h-screen flex flex-col noise-overlay">
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </div>
+        <site-navbar />
+        <main className="flex-1">{children}</main>
+        <Footer />
       </body>
     </html>
   );

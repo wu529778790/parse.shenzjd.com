@@ -115,7 +115,7 @@ export default function Home() {
       </div>
 
       {/* Main Content */}
-      <div className="relative min-h-screen" style={{ zIndex: 1 }}>
+      <div className="relative" style={{ zIndex: 1 }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
           {/* Hero Section */}
           <header className="text-center mb-8 reveal">
