@@ -80,7 +80,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
         </div>
       )}
 
-      {/* Video：封面 + 播放/下载（直链新窗口） */}
+      {/* Video：封面 + 播放/下载（小红书已走代理，内嵌当前页面播放/下载，体验更好） */}
       {!isImageType && xhsData.url && (
         <VideoPosterCard
           url={xhsData.url}
@@ -88,6 +88,7 @@ export default function XhsVideo({ data }: XhsVideoProps) {
           alt={xhsData.title || "视频封面"}
           accent="pink"
           tall
+          inline
         />
       )}
 

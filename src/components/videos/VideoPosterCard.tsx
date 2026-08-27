@@ -1,11 +1,19 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
+import { buildVideoProxyUrl } from "@/utils/videoProxy";
 
 /**
  * 统一视频展示卡片（简化版）：上方封面图 + 下方「播放视频 / 下载视频」两个链接。
- * 不直接 <video> 播放，避免服务器出口 IP（海外）分配的 CDN 节点在大陆无法播放。
  * 各平台复用此卡片，标题/作者等信息由各平台组件自行展示。
+ *
+ * 防盗链处理：小红书 xhscdn 视频直链有 Referer 防盗链，新窗口打开会 403。
+ * 这里对需要代理的直链自动走 /api/video-proxy（带 Referer），保证可播放、可下载。
+ *
+ * 两种交互模式：
+ * - inline=false（默认）：封面/播放/下载均为直链新窗口打开。
+ * - inline=true：封面/播放按钮在当前页面内嵌 <video> 播放，下载按钮在当前页面触发真实下载。
+ *   适合已走代理的源（如小红书），避免新开标签页，体验更好。
  */
 
 type AccentKey = "blue" | "red" | "orange" | "pink" | "neutral" | "purple";
@@ -75,6 +83,8 @@ interface VideoPosterCardProps {
   showDownload?: boolean;
   /** 是否显示「播放视频」按钮（默认 true；false 时封面自带点击 + 下方只剩下载） */
   showPlay?: boolean;
+  /** 内嵌播放模式：封面/播放按钮在当前页面内嵌 <video> 播放，下载走代理真实下载（适合已代理的源，如小红书） */
+  inline?: boolean;
 }
 
 export default function VideoPosterCard({
@@ -89,18 +99,27 @@ export default function VideoPosterCard({
   audioText = "下载音频",
   showDownload = true,
   showPlay = true,
+  inline = false,
 }: VideoPosterCardProps) {
   const a = ACCENTS[accent];
+  // 防盗链直链走代理，保证可播放、可下载
+  const playUrl = buildVideoProxyUrl(url);
+  // 内嵌播放状态
+  const [playing, setPlaying] = useState(false);
+
+  // 内嵌模式：点击封面/播放按钮切换为 <video> 播放器
+  const handleInlinePlay = () => setPlaying(true);
 
   return (
     <div className="space-y-3">
-      {/* 封面图（点击在新窗口打开直链，中心叠播放图标作为视觉提示） */}
-      {cover && (
+      {/* 封面图 / 内嵌播放器 */}
+      {cover && !playing && (
         <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group block rounded-2xl overflow-hidden bg-black">
+          href={inline ? undefined : playUrl}
+          target={inline ? undefined : "_blank"}
+          rel={inline ? undefined : "noopener noreferrer"}
+          onClick={inline ? handleInlinePlay : undefined}
+          className="group block rounded-2xl overflow-hidden bg-black cursor-pointer">
           <div
             className={`relative w-full ${
               tall ? "aspect-[9/16] sm:aspect-video" : "aspect-video"
@@ -127,11 +146,26 @@ export default function VideoPosterCard({
         </a>
       )}
 
-      {/* 操作链接：播放 / 下载（均为直链新窗口） */}
+      {/* 内嵌播放器（inline 模式点击播放后展示） */}
+      {inline && playing && (
+        <div className="rounded-2xl overflow-hidden bg-black">
+          <video
+            src={playUrl}
+            controls
+            autoPlay
+            playsInline
+            className={`w-full ${
+              tall ? "aspect-[9/16] sm:aspect-video" : "aspect-video"
+            } object-contain`}
+          />
+        </div>
+      )}
+
+      {/* 操作按钮：播放 / 下载（内嵌模式下封面点击即可播放，只保留下载按钮） */}
       <div className="flex flex-col sm:flex-row gap-3">
-        {showPlay && (
+        {showPlay && !inline && (
           <a
-            href={url}
+            href={playUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={`group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r ${a.gradient} ${a.hover} text-white rounded-xl font-medium transition-all duration-300 ${a.shadow} hover:-translate-y-0.5 flex-1`}>
@@ -153,9 +187,10 @@ export default function VideoPosterCard({
 
         {showDownload && (
           <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={playUrl}
+            target={inline ? undefined : "_blank"}
+            rel={inline ? undefined : "noopener noreferrer"}
+            download={inline}
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle hover:-translate-y-0.5 flex-1">
             <svg
               className="w-5 h-5 transition-transform group-hover:scale-110"

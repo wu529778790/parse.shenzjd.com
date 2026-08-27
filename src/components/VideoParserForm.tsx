@@ -205,8 +205,9 @@ export default function VideoParserForm({
   );
 
   // Process input and detect platform
+  // immediate=true 时直接发起解析（粘贴场景），否则走 500ms 防抖（手动输入场景）
   const processInputText = useCallback(
-    (text: string) => {
+    (text: string, immediate = false) => {
       const extractedUrl = extractUrl(text);
       if (extractedUrl) {
         const detected = detectPlatform(text);
@@ -224,12 +225,21 @@ export default function VideoParserForm({
         setUrl(extractedUrl);
         setPlatform(detected);
         onPlatformChange?.(detected);
-        debouncedParse(extractedUrl, detected);
+        if (immediate) {
+          // 立即解析：清掉挂起的防抖定时器，直接发起请求
+          if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+          }
+          parseVideo(extractedUrl, detected);
+        } else {
+          debouncedParse(extractedUrl, detected);
+        }
       } else {
         setDetectedPlatform(null);
       }
     },
-    [debouncedParse, onResult, onPlatformChange]
+    [debouncedParse, parseVideo, onResult, onPlatformChange]
   );
 
   // Auto-read clipboard on mount
@@ -268,6 +278,17 @@ export default function VideoParserForm({
     processInputText(text);
   };
 
+  // 粘贴时立即解析（不走防抖），避免粘贴后还要等 500ms 才转圈
+  const handlePasteEvent = () => {
+    // 让浏览器先完成默认粘贴，再读取最终值
+    setTimeout(() => {
+      const text = textareaRef.current?.value ?? "";
+      if (!text) return;
+      setInput(text);
+      processInputText(text, true);
+    }, 0);
+  };
+
   const handlePaste = async () => {
     try {
       // 检查clipboard API是否可用
@@ -280,7 +301,7 @@ export default function VideoParserForm({
 
       const text = await navigator.clipboard.readText();
       setInput(text);
-      processInputText(text);
+      processInputText(text, true);
     } catch {
       onResult(null, "粘贴失败：请检查浏览器权限或使用手动粘贴（Ctrl+V）");
     }
@@ -430,6 +451,7 @@ export default function VideoParserForm({
                 ref={textareaRef}
                 value={input}
                 onChange={handleInputChange}
+                onPaste={handlePasteEvent}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder="粘贴包含视频链接的文本，或点击粘贴按钮..."
