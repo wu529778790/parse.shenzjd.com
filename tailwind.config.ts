@@ -6,7 +6,8 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  darkMode: ["class"],
+  // 跟随系统 prefers-color-scheme，与 globals.css 中 @media (prefers-color-scheme) 机制保持一致
+  darkMode: ["media"],
   theme: {
     extend: {
       colors: {

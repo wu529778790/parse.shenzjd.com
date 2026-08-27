@@ -6,6 +6,9 @@
 
 @layer base {
   :root {
+    /* 声明浅色为默认原生配色方案，让浏览器原生控件（表单、滚动条等）跟随 */
+    color-scheme: light;
+
     /* Core Palette - Deep Space */
     --background: #030014;
     --foreground: #f0f0f5;
@@ -47,6 +50,8 @@
 
   @media (prefers-color-scheme: light) {
     :root {
+      color-scheme: light;
+
       --background: #fafafa;
       --foreground: #1a1a2e;
 
@@ -64,6 +69,13 @@
 
       --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.08);
       --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.08);
+    }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* 深色模式下声明原生配色方案为 dark，让浏览器原生控件跟随深色 */
+      color-scheme: dark;
     }
   }
 
