@@ -254,7 +254,9 @@ async function weibo(url) {
         meta = { ...fromC, ...fromM, url: fromC.url };
       }
     }
-    const { mid, ...data } = meta;
+    // 剔除 mid 字段（避免冗余，且不在响应中暴露微博内部 id）
+    const data = { ...meta };
+    delete data.mid;
     return { code: 200, msg: "解析成功", data };
   }
 
