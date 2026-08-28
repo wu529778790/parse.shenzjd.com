@@ -9,6 +9,8 @@
  * - 支持 Range 请求（浏览器播放/拖动进度条必须），透传 206 Partial Content
  * - 流式转发，不整段缓存到内存，避免大视频占用内存
  * - 透传 Content-Type / Content-Length / Accept-Ranges
+ * - 超时策略：首字节 30s 快速失败；传输中不设总时长上限（大视频弱网可能传很久），
+ *   仅在持续 30s 无新数据时判定上游挂起并中止；客户端断开时同步中止上游
  */
 export const runtime = "nodejs";
 
@@ -57,26 +59,72 @@ export async function GET(request) {
     headers.Range = range;
   }
 
+  const FIRST_BYTE_TIMEOUT_MS = 30000;
+  const upstreamController = new AbortController();
+  const FIRST_BYTE_TIMEOUT = new Error("first-byte timeout");
+
+  // 首字节超时：只覆盖到收到上游响应头为止。
+  // 不能用 AbortSignal.timeout() 一刀切——它会连同 body 流一起掐断，
+  // 大视频传输超过 30s 就会在中途断流（failed to pipe response / TimeoutError）。
+  let timer = setTimeout(
+    () => upstreamController.abort(FIRST_BYTE_TIMEOUT),
+    FIRST_BYTE_TIMEOUT_MS
+  );
+  // 客户端断开（关页面 / 播放器换 Range 重新请求）时中止上游，避免后台白拉流量
+  request.signal.addEventListener(
+    "abort",
+    () => upstreamController.abort(new Error("client aborted")),
+    { once: true }
+  );
+
   let upstream;
   try {
     upstream = await fetch(target.href, {
       headers,
-      // 视频流式转发，不设超时上限（大视频下载可能较久）
-      // 仅对首字节响应设置超时，避免上游挂起
-      signal: AbortSignal.timeout(30000),
+      signal: upstreamController.signal,
     });
   } catch (e) {
+    clearTimeout(timer);
+    if (upstreamController.signal.reason === FIRST_BYTE_TIMEOUT) {
+      logger.warn(`video-proxy 上游首字节超时: host=${target.hostname}`);
+      return new Response("Upstream timeout", { status: 504 });
+    }
+    if (request.signal.aborted) {
+      logger.warn(`video-proxy 客户端中断: host=${target.hostname}`);
+      return new Response("Client aborted", { status: 499 });
+    }
     logger.error(`video-proxy upstream fetch failed: ${e.message}`);
     return new Response(`Upstream fetch failed: ${e.message}`, {
       status: 502,
     });
   }
+  // 响应头已到，首字节超时完成使命，传输阶段改用空闲超时
+  clearTimeout(timer);
   if (!upstream.ok && upstream.status !== 206) {
     logger.warn(`video-proxy upstream error: ${upstream.status} url=${target.hostname}`);
     return new Response(`Upstream error: ${upstream.status}`, {
       status: 502,
     });
   }
+
+  // 空闲超时：传输中只要数据还在流动就放行，持续 30s 无新数据才中止
+  const armIdleTimer = () => {
+    timer = setTimeout(
+      () => upstreamController.abort(new Error("upstream idle timeout")),
+      FIRST_BYTE_TIMEOUT_MS
+    );
+  };
+  armIdleTimer();
+  const bodyGuard = new TransformStream({
+    transform(chunk, controller) {
+      clearTimeout(timer);
+      armIdleTimer();
+      controller.enqueue(chunk);
+    },
+    flush() {
+      clearTimeout(timer);
+    },
+  });
 
   const contentType =
     upstream.headers.get("content-type") || "video/mp4";
@@ -97,7 +145,7 @@ export async function GET(request) {
     responseHeaders["Content-Range"] = contentRange;
   }
 
-  return new Response(upstream.body, {
+  return new Response(upstream.body.pipeThrough(bodyGuard), {
     status: upstream.status,
     headers: responseHeaders,
   });
