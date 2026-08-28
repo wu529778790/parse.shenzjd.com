@@ -121,12 +121,12 @@ export default function Home() {
           <header className="text-center mb-8 reveal">
             {/* Title */}
             <h1 className="text-3xl sm:text-4xl font-bold mb-2 glow-text">
-              <span className="gradient-text">神族九帝</span>
+              粘贴链接，<span className="gradient-text">秒出无水印视频</span>
             </h1>
 
             {/* Subtitle */}
-            <p className="text-sm text-muted max-w-md mx-auto">
-              支持 {PLATFORM_NAMES.length}+ 平台视频解析下载 · 免费在线 · 粘贴链接即用
+            <p className="text-sm text-muted max-w-lg mx-auto">
+              抖音、B站、小红书、快手、微博等 {PLATFORM_NAMES.length}+ 平台通用 · 免费在线解析下载
             </p>
             {/* 卖点清单 */}
             <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
