@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="神族九帝 短视频解析">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset=".52" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.2" r="0.95">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.2"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+  </defs>
+
+  <!-- 圆角方底座：站点主色靛紫渐变 -->
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg)"/>
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#sheen)"/>
+
+  <!-- 双色光晕 -->
+  <g filter="url(#glow)" opacity="0.55">
+    <path d="M210 174 L342 256 L210 338 Z" transform="translate(-32 -24)" fill="#22d3ee"/>
+    <path d="M210 174 L342 256 L210 338 Z" transform="translate(32 24)" fill="#fe2c55"/>
+  </g>
+
+  <!-- 青色残影：多平台信号流（左上） -->
+  <path d="M210 174 L342 256 L210 338 Z" transform="translate(-32 -24)"
+        fill="#22d3ee" stroke="#22d3ee" stroke-width="28" stroke-linejoin="round"/>
+  <!-- 红色残影：无水印成片（右下） -->
+  <path d="M210 174 L342 256 L210 338 Z" transform="translate(32 24)"
+        fill="#fe2c55" stroke="#fe2c55" stroke-width="28" stroke-linejoin="round"/>
+  <!-- 白色主播放键：解析完成的视频 -->
+  <path d="M210 174 L342 256 L210 338 Z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="28" stroke-linejoin="round"/>
+</svg>
