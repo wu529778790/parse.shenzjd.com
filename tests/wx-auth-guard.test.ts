@@ -73,6 +73,98 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     expect(parseSpy).not.toHaveBeenCalled();
   });
 
+  it("Authorization: Bearer 有效 token（小程序端）时放行解析", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: true, user: { openid: "mp:oXXXX", type: "mp" } }), {
+        status: 200,
+      })
+    );
+    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+    const handler = createApiHandler(parseSpy);
+    const res = await handler(
+      new Request(
+        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/bearer1/",
+        { headers: { authorization: "Bearer mp.valid.token.abc" } }
+      )
+    );
+    expect(res.status).toBe(200);
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("Bearer 前缀大小写不敏感且允许多余空白", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: true }), { status: 200 })
+    );
+    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+    const handler = createApiHandler(parseSpy);
+    const res = await handler(
+      new Request(
+        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnqPF7GJYkY/trimme/",
+        { headers: { Authorization: "  bearer   mp.token.trim.me  " } }
+      )
+    );
+    expect(res.status).toBe(200);
+    // 取出的 token 已 trim，check URL 中不应有空格
+    const checkUrl = String(global.fetch.mock.calls[0][0]);
+    expect(checkUrl).toContain("token=mp.token.trim.me");
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("Authorization 头存在但非 Bearer scheme 时按无凭证处理（401）", async () => {
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock;
+    const parseSpy = vi.fn();
+    const handler = createApiHandler(parseSpy);
+    const res = await handler(
+      new Request(
+        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/",
+        { headers: { authorization: "Basic dXNlcjpwYXNz" } }
+      )
+    );
+    expect(res.status).toBe(401);
+    expect(parseSpy).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("Cookie 与 Authorization 同时存在时 Cookie 优先", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: true }), { status: 200 })
+    );
+    global.fetch = fetchMock;
+    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+    const handler = createApiHandler(parseSpy);
+    await handler(
+      new Request(
+        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnsPF7GJYkY/cookiewins/",
+        {
+          headers: {
+            cookie: "wxauth-token=cookie.token.wins",
+            authorization: "Bearer bearer.token.loses",
+          },
+        }
+      )
+    );
+    const checkUrl = String(fetchMock.mock.calls[0][0]);
+    expect(checkUrl).toContain("token=cookie.token.wins");
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("Bearer token 无效时返回 401 且不调用解析器", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: false }), { status: 200 })
+    );
+    const parseSpy = vi.fn();
+    const handler = createApiHandler(parseSpy);
+    const res = await handler(
+      new Request(
+        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/",
+        { headers: { authorization: "Bearer expired.mp.token" } }
+      )
+    );
+    expect(res.status).toBe(401);
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
   it("校验结果按 token 缓存 5 分钟：同一 token 只调一次 check", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ authenticated: true }), { status: 200 })

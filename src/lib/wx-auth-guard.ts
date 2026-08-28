@@ -4,6 +4,8 @@
  * 背景：解析接口强制要求用户已完成「关注公众号 + 验证码」认证（登录才能解析）。
  * 凭证：wx-auth-sdk 将签名 token 写入根域 Cookie `wxauth-token`（.shenzjd.com 跨子域
  *       共享），浏览器访问解析接口时自动携带，服务端在此读取并校验。
+ *       小程序端没有 Cookie，登录后通过 Authorization: Bearer <token> 头携带同一
+ *       token（校验链路相同，无需身份特判）；Cookie 优先，无 Cookie 凭证时才取 Bearer。
  * 校验：远程调 wx-auth.shenzjd.com/api/auth/check?token=xxx —— 权威校验（查用户表
  *       active 状态，取关/封禁即失效），不共享密钥。
  * 缓存：校验结果按 token 缓存 5 分钟（策略经确认：长缓存减少外部请求，代价是取关后
@@ -25,19 +27,32 @@ interface AuthCacheEntry {
 const authCache = new Map<string, AuthCacheEntry>();
 
 /**
- * 从请求 Cookie 中提取认证 token（SDK 写入的 wxauth-token）
+ * 从请求中提取认证 token：
+ * 1. Cookie `wxauth-token`（网页端 SDK 写入，优先）
+ * 2. 无 Cookie 凭证时取 Authorization: Bearer <token>（小程序端）
  * @returns token 或 null（无凭证）
  */
 export function getWxAuthToken(request: Request): string | null {
   const cookie = request.headers.get("cookie");
-  if (!cookie) return null;
+  if (!cookie) return getBearerToken(request);
   const match = cookie.match(/(?:^|;\s*)wxauth-token=([^;]+)/);
-  if (!match) return null;
+  if (!match) return getBearerToken(request);
   try {
     return decodeURIComponent(match[1]);
   } catch {
     return null;
   }
+}
+
+/**
+ * 从 Authorization 头提取 Bearer token（scheme 大小写不敏感，去前缀后 trim）
+ */
+function getBearerToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
+  if (!authorization) return null;
+  const match = authorization.match(/^\s*bearer\s+(.+)$/i);
+  if (!match) return null;
+  return match[1].trim();
 }
 
 /**
