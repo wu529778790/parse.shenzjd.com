@@ -24,22 +24,29 @@ const MERGE_TIMEOUT_MS = Number(process.env.YTDLP_MERGE_TIMEOUT_MS || 90000);
 // 合并上限：超过该时长的视频拒绝（下载合并耗时过长）
 const MAX_MERGE_DURATION_S = Number(process.env.YOUTUBE_MAX_DURATION_S || 900);
 
-// YouTube 播放器客户端策略：默认用 android（兼可绕过人机验证），tv / web_safari 作为备用。
-// 数据中心 IP 下仅切换客户端不够，还需配合 PO Token（见下）。可用环境变量覆盖。
+// YouTube 播放器客户端策略：默认用 android，tv / web_safari 作为备用。
+// 可用环境变量覆盖。
 const YOUTUBE_PLAYER_CLIENT = process.env.YOUTUBE_PLAYER_CLIENT || "android,tv,web_safari";
-// 是否启用 PO Token（Proof-of-Origin Token）：数据中心 IP 下绕过
-// "Sign in to confirm you're not a bot" 的关键。依赖 Dockerfile 安装的
-// bgutil-ytdlp-pot-provider 插件 + 部署脚本启动的 HTTP server（127.0.0.1:4416）。
-// 可用环境变量关闭。
-const YOUTUBE_PO_TOKEN = process.env.YOUTUBE_PO_TOKEN !== "0";
 // 是否启用浏览器 TLS 指纹模拟（--impersonate），绕过 TLS 指纹识别。
 // 依赖 Dockerfile 安装的 yt-dlp[default,curl-cffi]。可用环境变量关闭。
 const YOUTUBE_IMPERSONATE = process.env.YOUTUBE_IMPERSONATE !== "0";
 
-// 组装 extractor-args：player_client（多个参数用分号分隔）。
-// PO Token 由 bgutil-ytdlp-pot-provider 插件自动提供（HTTP provider 连接 127.0.0.1:4416），
-// 无需在 extractor-args 里显式指定 po_token（该参数格式是 CLIENT.CONTEXT+TOKEN，用于指定具体令牌）。
-const YOUTUBE_EXTRACTOR_ARGS = ["--extractor-args", `youtube:player_client=${YOUTUBE_PLAYER_CLIENT}`];
+// PO Token 提供方（自建 bgutil-ytdlp-pot-provider，独立工程部署在服务器宿主机端口）：
+// 地址经服务器端环境变量 POT_BASE_URL 注入（无鉴权服务，禁止写入前端或任何公开产物），
+// yt-dlp 的 bgutil 插件据此自动取 token，绕过数据中心 IP 的
+// "Sign in to confirm you're not a bot" 验证。未配置则不启用（插件默认连的
+// 127.0.0.1 在应用容器内指向容器自身，必然不可达）；提供方挂掉时插件仅告警降级，
+// 不影响解析主流程。
+const POT_BASE_URL = process.env.POT_BASE_URL || "";
+
+// 组装 extractor-args：player_client（多个参数用分号分隔）+ 可选 PO Token 提供方。
+const YOUTUBE_EXTRACTOR_ARGS = [
+  "--extractor-args",
+  `youtube:player_client=${YOUTUBE_PLAYER_CLIENT}`,
+  ...(POT_BASE_URL
+    ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${POT_BASE_URL}`]
+    : []),
+];
 
 // 附加到 yt-dlp 的通用参数（TLS 指纹模拟）
 const YOUTUBE_IMPERSONATE_ARGS = YOUTUBE_IMPERSONATE
@@ -266,6 +273,5 @@ export const _internal = {
   YOUTUBE_PLAYER_CLIENT,
   YOUTUBE_EXTRACTOR_ARGS,
   YOUTUBE_IMPERSONATE_ARGS,
-  YOUTUBE_PO_TOKEN,
   YOUTUBE_IMPERSONATE,
 };
