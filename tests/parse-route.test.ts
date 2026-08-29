@@ -111,4 +111,54 @@ describe("parse route", () => {
     const json = await res.json();
     expect(json.msg).toContain("ID 解析模式");
   });
+
+  it("routes xiaohongshu share urls to the xhs handler (PLATFORM_INFO key redbook)", async () => {
+    // 回归：identifyPlatform 对小红书返回 "redbook"（lib/platforms.ts 的 PLATFORMS.XHS），
+    // platformRoutes.js 曾误用路由目录名 "xhs" 作 key，导致统一入口报
+    // 「暂不支持 小红书 平台的统一解析」。
+    const shareUrl =
+      "https://www.xiaohongshu.com/explore/65f0c0e5000000001203d2a3";
+    const noteId = "65f0c0e5000000001203d2a3";
+    const initialState = {
+      note: {
+        currentNoteId: noteId,
+        noteDetailMap: {
+          [noteId]: {
+            note: {
+              title: "测试笔记",
+              desc: "测试描述",
+              user: { nickName: "测试作者", userId: "u1" },
+              imageList: [
+                {
+                  urlDefault:
+                    "https://sns-webpic-qc.xhscdn.com/202401/img1.jpg",
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const pageHtml = `<html><script>window.__INITIAL_STATE__=${JSON.stringify(
+      initialState
+    )}</script></html>`;
+
+    global.fetch = vi.fn().mockResolvedValue(new Response(pageHtml));
+
+    const res = await GET(
+      new Request(
+        `http://127.0.0.1/api/parse?url=${encodeURIComponent(shareUrl)}`,
+        { headers: { "x-forwarded-for": "203.0.113.43" } }
+      )
+    );
+
+    const json = await res.json();
+    expect(json).toMatchObject({
+      code: 200,
+      msg: "解析成功",
+      platform: "redbook",
+      data: { type: "image", title: "测试笔记", author: "测试作者" },
+    });
+    expect(json.data.images[0]).toContain("/api/image?url=");
+  });
 });

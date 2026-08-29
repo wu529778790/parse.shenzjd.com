@@ -6,7 +6,9 @@
 export const platformRoutes = {
   douyin: () => import("@/app/api/douyin/route.js"),
   bilibili: () => import("@/app/api/bilibili/route.js"),
-  xhs: () => import("@/app/api/xhs/route.js"),
+  // key 必须与 lib/platforms.ts 的 PLATFORM_INFO 对齐（小红书是 redbook，
+  // 统一入口 identifyPlatform 返回的 key），路由目录名仍是 /api/xhs
+  redbook: () => import("@/app/api/xhs/route.js"),
   huya: () => import("@/app/api/huya/route.js"),
   haokan: () => import("@/app/api/haokan/route.js"),
   weibo: () => import("@/app/api/weibo/route.js"),
