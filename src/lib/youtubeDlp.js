@@ -39,10 +39,16 @@ const YOUTUBE_IMPERSONATE = process.env.YOUTUBE_IMPERSONATE !== "0";
 // 不影响解析主流程。
 const POT_BASE_URL = process.env.POT_BASE_URL || "";
 
+// yt-dlp 的 fetch_pot 默认 auto：仅当客户端策略标记"必需"时才取 PO Token，而未带
+// token 的 player 请求会被 YouTube 直接以 "Sign in to confirm you're not a bot" 拦截
+// （数据中心 IP 实测如此，token 请求根本不会发出）。配置了提供方时必须强制 always，
+// 确保 player 请求先从 provider 取到 token（2026-08 实测修复 LOGIN_REQUIRED）。
+const YOUTUBE_FETCH_POT = POT_BASE_URL ? ";fetch_pot=always" : "";
+
 // 组装 extractor-args：player_client（多个参数用分号分隔）+ 可选 PO Token 提供方。
 const YOUTUBE_EXTRACTOR_ARGS = [
   "--extractor-args",
-  `youtube:player_client=${YOUTUBE_PLAYER_CLIENT}`,
+  `youtube:player_client=${YOUTUBE_PLAYER_CLIENT}${YOUTUBE_FETCH_POT}`,
   ...(POT_BASE_URL
     ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${POT_BASE_URL}`]
     : []),
