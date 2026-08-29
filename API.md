@@ -376,6 +376,25 @@ GET /api/health
 
 ---
 
+## 11. 功能开关配置
+
+**接口**: `GET /api/config`
+
+**说明**: 返回客户端功能开关（供小程序等客户端远程读取）。当前主要用于小程序审核：`videoParseEnabled` 为 `false` 时客户端隐藏视频解析入口，审核通过后将环境变量 `VIDEO_PARSE_ENABLED` 设为 `"true"` 重新部署即可放开（未配置时默认关闭）。响应禁止缓存（`Cache-Control: no-store`），开关改动实时生效。
+
+**响应示例**（默认，解析入口隐藏）:
+```json
+{
+  "code": 200,
+  "msg": "ok",
+  "data": {
+    "videoParseEnabled": false
+  }
+}
+```
+
+---
+
 ## 限制说明
 
 ### 速率限制
@@ -406,6 +425,9 @@ BILIBILI_USER_AGENT=your_user_agent
 TURSO_DB_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your_token
 STATS_API_KEY=your_stats_key
+
+# 功能开关：视频解析入口（/api/config 读取；仅值为 "true" 时放开，未配置默认关闭）
+# VIDEO_PARSE_ENABLED=true
 ```
 
 > Cloudflare Workers 部署时：`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`；Cookie 类敏感值在 CI 中由 GitHub Secrets 自动 `wrangler secret put` 注入，无需手动配置。
