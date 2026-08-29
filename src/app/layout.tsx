@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Footer from "@/components/Footer";
-import WxAuthInit from "@/components/WxAuthInit";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
@@ -102,10 +101,16 @@ export default function RootLayout({
           defer
         />
         {/* 顶部导航 + 头像浮窗：@wu529778790/site-navbar Web Component 版
-            1. 先引入 wx-auth-sdk（头像登录依赖它）
-            2. 静默校验登录态（silent:true 绝不自动弹窗；required:false 弹窗带 × 关闭按钮）
-            3. 再引入 site-navbar（头像已内置，无需再引 user-avatar）
-            4. body 顶部放一个 <site-navbar> 标签即出现整条导航 */}
+            1. 先引入 wx-auth-sdk UMD（不锁版本，跟随最新；头像登录依赖 window.WxAuth）
+            2. 弹窗样式随 SDK 版本走，需同步引入 wx-auth.css
+            3. 静默校验登录态（silent:true 绝不自动弹窗；required:false 弹窗带 × 关闭按钮）
+            4. 再引入 site-navbar（头像已内置，无需再引 user-avatar）
+            5. body 顶部放一个 <site-navbar> 标签即出现整条导航
+            解析主流程的登录弹窗由 src/lib/wx-auth-client.ts 复用同一全局实例触发 */}
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/wx-auth-sdk/dist/wx-auth.css"
+        />
         <script src="https://unpkg.com/wx-auth-sdk/dist/wx-auth.umd.js" defer />
         <script
           defer
@@ -136,7 +141,6 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased min-h-screen flex flex-col noise-overlay">
-        <WxAuthInit />
         <site-navbar />
         <main className="flex-1">{children}</main>
         <Footer />

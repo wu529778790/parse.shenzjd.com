@@ -10,7 +10,7 @@ import {
   detectPlatform,
   hasValidVideoUrl,
 } from "@/utils/share";
-import { showWxAuth } from "@/components/WxAuthInit";
+import { showWxAuth } from "@/lib/wx-auth-client";
 import PlatformIcon from "@/components/PlatformIcon";
 
 interface VideoParserFormProps {
