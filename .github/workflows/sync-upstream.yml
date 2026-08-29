@@ -63,8 +63,30 @@ jobs:
         run: |
           set -e
           git checkout "${{ steps.b.outputs.local_default }}"
-          # 保留 fork 的提交，合并上游最新提交
-          git merge --no-edit "upstream/${{ steps.b.outputs.upstream_default }}"
+          if git merge --no-edit "upstream/${{ steps.b.outputs.upstream_default }}"; then
+            echo "merge 干净，无冲突"
+          else
+            # 冲突自动解决，否则这里 exit 1 会卡死整个同步循环：
+            # push 步骤的“回退 workflow”提交让 fork 的 .github/workflows 永远固定在
+            # 旧版本，而上游持续改动 deploy-to-docker.yaml，两边必然天天冲突，
+            # 且冲突发生在本步骤，后面的兜底逻辑永远轮不到执行。
+            # 规则：.github/ 保留 fork 本地版本（ours），其余文件采纳上游（theirs）。
+            echo "merge 有冲突，自动解决"
+            while IFS= read -r -d '' f; do
+              case "$f" in
+                .github/*)
+                  git checkout --ours -- "$f" 2>/dev/null || git rm -q -f -- "$f" 2>/dev/null || true
+                  echo "  保留 fork 版本(ours): $f"
+                  ;;
+                *)
+                  git checkout --theirs -- "$f" 2>/dev/null || git rm -q -f -- "$f" 2>/dev/null || true
+                  echo "  采纳上游版本(theirs): $f"
+                  ;;
+              esac
+            done < <(git diff --name-only --diff-filter=U -z)
+            git add -A
+            git commit --no-edit
+          fi
 
       - name: Setup Node.js for verification
         uses: actions/setup-node@v4
@@ -82,16 +104,18 @@ jobs:
       - name: Push merged result
         run: |
           set -e
-          # 未配置 SYNC_TOKEN 时回退 .github/workflows/：GITHUB_TOKEN 推送 workflow
-          # 文件会被 GitHub 整次拒绝（refusing to allow a GitHub App to create or
-          # update workflow ... without workflows permission），回退后 push 不触碰
-          # workflow 文件，永不报错
+          # 未配置 SYNC_TOKEN 时回退 .github/workflows/：GITHUB_TOKEN 推送任何
+          # workflow 变更（改/增/删都算）会被 GitHub 整次拒绝（refusing to allow
+          # a GitHub App to create or update workflow ... without workflows permission）
           if [ -z "${SYNC_TOKEN:-}" ]; then
-            # 关键：必须回退到 origin/<branch> 而非 HEAD。merge 之后 HEAD 已是
-            # 合并后的上游版本，git checkout HEAD -- .github/workflows 等于没回退，
-            # push 仍携带 workflow 变更，被 GITHUB_TOKEN 的 workflows 权限限制
-            # 整次拒绝（refusing to allow a GitHub App to create or update workflow）
+            # 关键一：必须回退到 origin/<branch> 而非 HEAD。merge 之后 HEAD 已是
+            # 合并后的上游版本，git checkout HEAD -- .github/workflows 等于没回退。
+            # 关键二：先删目录再恢复，做成对 origin/<branch> 的“镜像”——否则上游
+            # 新增的 workflow 文件（新增不会触发 merge 冲突）会残留下来，push 照样
+            # 被整次拒绝。
+            rm -rf .github/workflows
             git checkout "origin/${{ steps.b.outputs.local_default }}" -- .github/workflows
+            git add -A -- .github/workflows
             git commit --no-edit -m "chore(ci): keep local workflow files (no SYNC_TOKEN)" 2>/dev/null || true
           fi
           git push origin "${{ steps.b.outputs.local_default }}"
