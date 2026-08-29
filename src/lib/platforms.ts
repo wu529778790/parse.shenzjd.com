@@ -28,7 +28,6 @@ export const PLATFORMS = {
   ACFUN: "acfun",
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
-  YOUTUBE: "youtube",
   TIKTOK: "tiktok",
 } as const;
 
@@ -205,13 +204,6 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     shortDomains: ["xspshare.baidu.com"],
     supportsIdParse: true,
   },
-  [PLATFORMS.YOUTUBE]: {
-    name: "YouTube",
-    nameEn: "Youtube",
-    domains: ["youtube.com", "youtu.be"],
-    shortDomains: ["youtu.be"],
-    supportsIdParse: false,
-  },
   [PLATFORMS.TIKTOK]: {
     name: "TikTok",
     nameEn: "Tiktok",
@@ -291,8 +283,6 @@ export const ALL_DOMAINS: string[] = [
   "quanmin.baidu.com",
   "xspshare.baidu.com",
   // 海外平台
-  "youtube.com",
-  "youtu.be",
   "tiktok.com",
   "vm.tiktok.com",
   "vt.tiktok.com",

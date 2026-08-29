@@ -177,25 +177,6 @@ const cases: ShareParseCase[] = [
     expectPlatform: "lvzhou",
     expectUrl: "https://weibo.cn/feed/xxx",
   },
-  // YouTube
-  {
-    name: "youtube-watch链接",
-    input: "https://www.youtube.com/watch?v=_m6LDzU7-Eg",
-    expectPlatform: "youtube",
-    expectUrl: "https://www.youtube.com/watch?v=_m6LDzU7-Eg",
-  },
-  {
-    name: "youtube-短链-youtu.be",
-    input: "看看这个：https://youtu.be/_m6LDzU7-Eg 超棒！",
-    expectPlatform: "youtube",
-    expectUrl: "https://youtu.be/_m6LDzU7-Eg",
-  },
-  {
-    name: "youtube-shorts链接",
-    input: "https://www.youtube.com/shorts/abcDEF12345",
-    expectPlatform: "youtube",
-    expectUrl: "https://www.youtube.com/shorts/abcDEF12345",
-  },
   // TikTok
   {
     name: "tiktok-标准链接",

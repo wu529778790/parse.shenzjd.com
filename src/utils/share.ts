@@ -61,8 +61,6 @@ export function hasValidVideoUrl(text: string): boolean {
     "x.com",
     "t.co",
     "6.cn",
-    "youtube.com",
-    "youtu.be",
     "tiktok.com",
     "vm.tiktok.com",
     "vt.tiktok.com",
@@ -133,12 +131,6 @@ export function detectPlatform(text: string): VideoPlatformKey | null {
     return "kuaishou";
   if (lower.includes("h5.pipigx.com")) return "pipigx";
   if (lower.includes("h5.pipix.com")) return "ppxia";
-  if (
-    lower.includes("youtube.com") ||
-    lower.includes("youtu.be") ||
-    lower.includes("youtube-nocookie.com")
-  )
-    return "youtube";
   if (
     lower.includes("tiktok.com") ||
     lower.includes("vm.tiktok.com") ||

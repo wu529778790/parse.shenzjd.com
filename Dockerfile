@@ -47,18 +47,14 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# yt-dlp + ffmpeg（YouTube 解析）：yt-dlp 下载分离式音视频流，
-# ffmpeg 合并为完整 MP4。仅 Docker 部署支持 YouTube（Serverless 无此环境）。
+# yt-dlp + ffmpeg（TikTok 解析）：下载渐进式 mp4 直链。仅 Docker 部署支持
+#（Serverless 无此环境）。YouTube 已下线（数据中心 IP 被全客户端拦截，见 2026-08）。
 # --break-system-packages：新版 Alpine 的 python 为 externally-managed（PEP 668），
 # 直接全局 pip install 会被拒绝；容器内安装 yt-dlp 无系统副作用，可安全绕过。
-# curl-cffi：提供浏览器 TLS 指纹（--impersonate），绕过 YouTube 第二关 TLS 识别。
-# bgutil-ytdlp-pot-provider：yt-dlp 的 PO Token 插件，经运行时环境变量 POT_BASE_URL
-# 指向自建的提供方服务（插件默认连的 127.0.0.1 在本容器内指向容器自身，不可达，
-# 必须显式指定 base_url；未配置该变量时 PO Token 功能不启用）。
+# curl-cffi：提供浏览器 TLS 指纹（--impersonate），绕过 TLS 识别。
 RUN apk add --no-cache python3 py3-pip ffmpeg \
  && pip install --no-cache-dir --break-system-packages \
       "yt-dlp[default,curl-cffi]" \
-      bgutil-ytdlp-pot-provider \
  && rm -rf /root/.cache/pip
 
 # 非 root 用户运行（node:alpine 自带 node 用户，UID 1000）

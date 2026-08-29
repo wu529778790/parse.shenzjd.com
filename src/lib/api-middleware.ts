@@ -66,11 +66,10 @@ const ROUTE_DOMAIN_MAP: Record<string, { name: string; hosts: string[] }> = {
   xinpianchang: { name: "新片场", hosts: ["xinpianchang.com"] },
   haokan: { name: "好看视频", hosts: ["haokan.baidu.com", "haokan.hao123.com"] },
   twitter: { name: "X (Twitter)", hosts: ["twitter.com", "x.com", "t.co"] },
-  youtube: { name: "YouTube", hosts: ["youtube.com", "youtu.be"] },
   tiktok: { name: "TikTok", hosts: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"] },
 };
 
-// 需强制微信认证的解析类路由 = 24 个平台专用接口 + 统一入口 /api/parse。
+// 需强制微信认证的解析类路由 = 23 个平台专用接口 + 统一入口 /api/parse。
 // health/stats/image/engines 等非解析接口是原生路由（不经本中间件），天然不受影响。
 const AUTH_REQUIRED_ROUTES = new Set<string>([
   ...Object.keys(ROUTE_DOMAIN_MAP),

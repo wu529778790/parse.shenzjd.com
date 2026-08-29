@@ -29,7 +29,6 @@ export const platformRoutes = {
   doupai: () => import("@/app/api/doupai/route.js"),
   xinpianchang: () => import("@/app/api/xinpianchang/route.js"),
   twitter: () => import("@/app/api/twitter/route.js"),
-  youtube: () => import("@/app/api/youtube/route.js"),
   tiktok: () => import("@/app/api/tiktok/route.js"),
 };
 

@@ -153,13 +153,6 @@ export const VIDEO_PLATFORMS = {
     gradient: "from-[#14171a] to-[#657786]",
     logo: "/logos/x.svg",
   },
-  youtube: {
-    name: "YouTube",
-    emoji: "▶️",
-    color: "#ff0000",
-    gradient: "from-[#ff0000] to-[#ff4d4d]",
-    logo: "/logos/youtube.svg",
-  },
   tiktok: {
     name: "TikTok",
     emoji: "🎶",

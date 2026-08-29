@@ -25,7 +25,6 @@ const MONOGRAM: Partial<Record<VideoPlatformKey, string>> = {
   xinpianchang: "新",
   haokan: "好",
   twitter: "X",
-  youtube: "Y",
   tiktok: "T",
   lvzhou: "绿",
 };

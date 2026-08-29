@@ -1,5 +1,5 @@
 /**
- * TikTok 解析：yt-dlp 封装（复用 YouTube 方案的 Docker 部署模式）
+ * TikTok 解析：yt-dlp 封装（Docker 部署模式）
  *
  * 实测（2026-08-23）：新版 yt-dlp（>=2026.08）可正常解析 TikTok；
  * 视频为「渐进式 mp4 单文件」，直接返回直链，无需 ffmpeg 合并。
