@@ -220,10 +220,16 @@ export async function GET(request) {
   }
 
   if (url) {
-    // 禁用缓存：统一入口需要为结果补充 platform 字段（各平台路由的缓存
-    // 与统一入口共享同一缓存 Map，命中缓存会绕过 unifiedParser 的
-    // platform 补充逻辑）。防刷由 createApiHandler 的限流兜底。
-    return createApiHandler((url) => unifiedParser(url), { shouldCache: false })(request);
+    // 进程内存缓存（shouldCache）仍禁用：平台路由写入的条目缺 platform 字段，
+    // 外层直接命中会绕过 unifiedParser 的 platform 补充逻辑。
+    // 改用独立命名空间的共享结果缓存（sharedCache）：缓存补全 platform 后的
+    // 最终归一化结果，Cloudflare Cache API 跨 isolate 共享，TTL 24h，命中时
+    // 探测直链防签名过期——分享链接被好友再打开时不再全量重新解析。
+    // 见 lib/result-cache.js 与 api-middleware.ts 的 sharedCache 分支
+    return createApiHandler((url) => unifiedParser(url), {
+      shouldCache: false,
+      sharedCache: true,
+    })(request);
   }
 
   if (source && id) {

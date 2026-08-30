@@ -18,6 +18,7 @@ import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
 import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
 import { honeypotResponse } from "@/lib/honeypot";
+import { getResultCache, putResultCache, resultStale } from "@/lib/result-cache";
 
 /**
  * 安全的状态码 - 确保在 200-599 范围内
@@ -33,6 +34,10 @@ export function safeStatus(code: number): number {
 export interface ApiHandlerOptions {
   shouldCache?: boolean;
   responseHeaders?: Record<string, string>;
+  // 统一入口专用的共享结果缓存（Cloudflare Cache API，跨 isolate，TTL 24h）：
+  // 缓存的是补全 platform 后的最终归一化结果，与 shouldCache 的进程内存缓存隔离；
+  // 命中时探测主直链，明确死链（签名过期）视为未命中重新解析。见 lib/result-cache.js
+  sharedCache?: boolean;
 }
 
 type ParseFunction = (url: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
@@ -84,6 +89,7 @@ export const createApiHandler = (
   const {
     shouldCache = true,
     responseHeaders = {},
+    sharedCache = false,
   } = options;
 
   const extraHeaders = {
@@ -264,6 +270,24 @@ export const createApiHandler = (
       }
     }
 
+    // 统一入口的共享结果缓存：放在认证之后（未认证用户不消费缓存）。
+    // 命中先探测主直链，明确死链（签名过期）视为未命中走重新解析，
+    // 避免把过期直链发给前端黑屏
+    if (sharedCache) {
+      const cachedResult = await getResultCache(sanitizedUrl);
+      if (cachedResult) {
+        const stale = await resultStale(cachedResult);
+        if (!stale) {
+          logParse("cache-hit", 200, Date.now() - startTime);
+          return Response.json(cachedResult, {
+            status: safeStatus(cachedResult.code || 200),
+            headers,
+          });
+        }
+        logParse("cache-stale", 200, Date.now() - startTime, "缓存直链已失效，重新解析");
+      }
+    }
+
     if (shouldCache) {
       const cached = getCachedResponse(sanitizedUrl);
       if (cached) {
@@ -339,6 +363,12 @@ export const createApiHandler = (
 
       if (shouldCache) {
         setCacheResponse(sanitizedUrl, result);
+      }
+
+      // 共享结果缓存：写入最终归一化结果（含 platform），好友/他人再打开同一
+      // 分享链接时 24h 内直接命中，不再全量重新解析
+      if (sharedCache) {
+        await putResultCache(sanitizedUrl, result);
       }
 
       return Response.json(result, {

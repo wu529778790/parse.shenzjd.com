@@ -30,7 +30,7 @@ All platform API routes (`src/app/api/{platform}/route.js`) follow the same patt
 export const GET = createApiHandler(parseFunction)
 ```
 
-`createApiHandler()` (in `src/lib/api-middleware.js`) wraps each parser with: optional Basic Auth, IP-based rate limiting (60 req/min), URL validation, SSRF protection, 5-minute in-memory cache, CORS, and error handling.
+`createApiHandler()` (in `src/lib/api-middleware.js`) wraps each parser with: optional Basic Auth, IP-based rate limiting (60 req/min), URL validation, SSRF protection, 5-minute in-memory cache, CORS, and error handling. The unified entry `/api/parse` additionally passes `sharedCache` — a 24-hour Cloudflare Cache API result cache (`src/lib/result-cache.js`) storing the platform-supplemented normalized result; on hit it probes the direct URL and re-parses when the cached link is definitively dead (404/410).
 
 Platform parsers are standalone async functions (not classes). They typically: follow short URL redirects → fetch HTML with spoofed User-Agents → extract video IDs → parse embedded JSON (`window._ROUTER_DATA`, `__APOLLO_STATE__`, etc.) → return structured JSON. The Kuaishou parser (`src/lib/kuaishouCore.js`) is the exception — it's a class with multi-strategy parsing.
 
