@@ -225,18 +225,27 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
 export function identifyPlatform(url: string): string | null {
   const hostname = new URL(url).hostname.toLowerCase();
 
+  // 第一轮：短域名（更具体，优先匹配）
   for (const [platform, info] of Object.entries(PLATFORM_INFO)) {
-    // 检查主域名
-    if (info.domains.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
-      return platform;
-    }
-    // 检查短域名
     if (info.shortDomains?.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
       return platform;
     }
   }
 
-  return null;
+  // 第二轮：主域名。同一 hostname 可能命中多个平台（如 qishui.douyin.com
+  // 同时是汽水音乐与抖音的子域名），取匹配到的最长域名（最具体）优先。
+  let best: { platform: string; domain: string } | null = null;
+  for (const [platform, info] of Object.entries(PLATFORM_INFO)) {
+    for (const d of info.domains) {
+      if (hostname === d || hostname.endsWith(`.${d}`)) {
+        if (!best || d.length > best.domain.length) {
+          best = { platform, domain: d };
+        }
+      }
+    }
+  }
+
+  return best ? best.platform : null;
 }
 
 // 获取平台信息
