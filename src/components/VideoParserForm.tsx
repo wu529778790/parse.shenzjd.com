@@ -513,7 +513,7 @@ export default function VideoParserForm({
               {/* Submit Button */}
               <div className="flex-1 sm:flex-[1.2]">
                 <div className="block text-xs text-transparent mb-1.5 h-[18px] select-none">
-                  开始解析
+                  粘贴并解析
                 </div>
                 <button
                   ref={buttonRef}
@@ -563,7 +563,7 @@ export default function VideoParserForm({
                             d="M13 10V3L4 14h7v7l9-11h-7z"
                           />
                         </svg>
-                        <span>开始解析</span>
+                        <span>粘贴并解析</span>
                       </>
                     )}
                   </div>

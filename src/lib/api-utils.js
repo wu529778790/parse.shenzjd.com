@@ -76,6 +76,12 @@ export const getCachedResponse = (url) => {
 };
 
 export const setCacheResponse = (url, data) => {
+  // 只缓存成功结果（code=200）：失败可能是瞬时反爬/网络抖动，缓存会放大错误，
+  // 用户重试时命中缓存的错误结果永远无法重新解析成功。
+  if (!data || data.code !== 200) {
+    logger.log('Skip cache for non-success result:', url.substring(0, 50) + '...');
+    return;
+  }
   // 超过阈值时触发惰性清理
   if (cache.size >= CACHE_MAX_SIZE) {
     evictExpiredCache();
