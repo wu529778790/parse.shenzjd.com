@@ -162,6 +162,107 @@ export function parseVideoData(videoInfo) {
 }
 
 /**
+ * 从抖音直播 reflow 页面 HTML 中解析直播数据。
+ *
+ * 抖音直播分享短链（v.douyin.com/xxx）重定向到
+ * webcast.amemv.com/douyin/webcast/reflow/{room_id}，该 H5 页面内嵌了
+ * React Server Component（RSC）数据块：`self.__rsc_f.push([1,"5:[...]"]`，
+ * 其中 `5:[...]` 是 RSC 序列化数据，`[...]` 的最后一个元素是 props，
+ * 含 `data.room`（房间信息）与 `data.room.streamUrl`（直播流地址）。
+ *
+ * 无需 a_bogus 签名即可拿到直播流直链（FLV / HLS），返回标准化结果或 null。
+ */
+export function parseLiveData(html) {
+  try {
+    // 提取 RSC 数据块：self.__rsc_f.push([1,"5:[...]"]）
+    // 页面含多个 push 块（流数据块以 1: 开头、房间数据块以 5: 开头），
+    // 需遍历找到含房间信息（data.room）的那个。
+    const blocks = html.matchAll(/self\.__rsc_f\.push\(\[1,"(.*?)"\]\)/gs);
+    let room = null;
+    for (const m of blocks) {
+      if (!m?.[1]) continue;
+      // 反转义得到 RSC 字符串（形如 5:[...]）
+      let rsc;
+      try {
+        rsc = JSON.parse(`"${m[1]}"`);
+      } catch {
+        continue;
+      }
+      if (typeof rsc !== "string" || !rsc.startsWith("5:")) continue;
+      // 去掉 "5:" 前缀后是 RSC 数组，最后一个元素是 props
+      try {
+        const data = JSON.parse(rsc.slice(2));
+        const props = Array.isArray(data) ? data[data.length - 1] : null;
+        const r = props?.data?.room;
+        if (r?.idStr) {
+          room = r;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    if (!room) return null;
+
+    const streamUrl = room.streamUrl || {};
+    const owner = room.owner || {};
+
+    // 直播流地址：优先 HLS（m3u8，浏览器兼容性最好），其次 FLV
+    const hlsUrl = streamUrl.hlsPullUrl || "";
+    const flvUrl = streamUrl.rtmpPullUrl || "";
+    const flvMap = streamUrl.flvPullUrl || {};
+    // 各清晰度 FLV 流（FULL_HD1=蓝光 / HD1=超清 / ORIGION=原画 / SD1=标清 / SD2=高清）
+    const qualities = Object.entries(flvMap)
+      .map(([key, url]) => ({
+        name: streamUrl.resolutionName?.[key] || key,
+        url,
+      }))
+      .filter((q) => q.url);
+
+    const url = hlsUrl || flvUrl || qualities[0]?.url || "";
+    if (!url) return null;
+
+    // 观看人数：roomViewStats.displayShort（如 "2.9万"）优先，
+    // 其次 popularityStr / webCount / userCount 兜底
+    const popularity =
+      room.roomViewStats?.displayShort ||
+      room.popularityStr ||
+      (room.webCount ? String(room.webCount) : "") ||
+      (room.userCount ? String(room.userCount) : "") ||
+      "";
+
+    return {
+      code: 200,
+      msg: "解析成功",
+      data: {
+        title: room.title || "抖音直播",
+        author: owner.nickname || "",
+        uid: owner.id ? String(owner.id) : "",
+        avatar: owner.avatarThumb?.urlList?.[0] || "",
+        cover: room.cover?.urlList?.[0] || "",
+        // 直播流直链（HLS 优先）
+        url,
+        // 直播类型标记，前端据此展示「直播中」与多清晰度
+        type: "live",
+        // 直播状态：2=直播中，其他（3/4 等）为已结束/未开播
+        liveStatus: room.status,
+        // 观看人数（字符串，如 "2.9万"）
+        liveViewerCount: popularity,
+        // 多清晰度流（FLV）
+        liveQualities: qualities,
+        // 房间 ID
+        roomId: room.idStr,
+        // 分享链接
+        shareUrl: room.shareUrl || "",
+      },
+    };
+  } catch (error) {
+    logger.error("Error parsing live data:", error);
+    return null;
+  }
+}
+
+/**
  * 从 loaderData 中提取 filter_list 的过滤原因
  */
 export function extractFilterReason(videoInfo) {
@@ -219,9 +320,13 @@ export function extractIdFromUrl(urlStr) {
     /* URL 解析失败，继续走常规路径 */
   }
 
+  // 直播链接：webcast.amemv.com/douyin/webcast/reflow/ID（抖音直播分享短链重定向目标）
+  // 必须在兜底长数字正则之前匹配，否则会被误判为 video 类型
+  let match = urlStr.match(/webcast\/reflow\/(\d+)/);
+  if (match) return { id: match[1], type: "live" };
   // 合集（mix）链接：/share/mix/detail/ID 或 /mix/detail/ID
   // 必须在兜底长数字正则之前匹配，否则会被误判为 video 类型
-  let match = urlStr.match(/mix\/detail\/(\d+)/);
+  match = urlStr.match(/mix\/detail\/(\d+)/);
   if (match) return { id: match[1], type: "mix" };
   match = urlStr.match(/video\/(\d+)/);
   if (match) return { id: match[1], type: "video" };

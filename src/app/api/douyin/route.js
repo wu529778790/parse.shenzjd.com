@@ -5,6 +5,7 @@ import {
   hasValidData,
   tryParseEmbedded,
   parseVideoData,
+  parseLiveData,
   extractFilterReason,
   isChallengeHtml,
   extractIdFromUrl,
@@ -78,6 +79,11 @@ async function douyin(url) {
     // ---- 合集（mix）链接：走独立的合集解析流程 ----
     if (contentType === "mix") {
       return await parseMix(id, ttwid);
+    }
+
+    // ---- 直播链接：走独立的直播解析流程 ----
+    if (contentType === "live") {
+      return await parseLive(id, ttwid);
     }
 
     const sharePath = contentType === "note" ? "note" : "video";
@@ -394,6 +400,73 @@ async function parseMix(mixId, ttwid) {
       // 合集总集数（供前端展示）
       totalEpisodes: mixInfo?.totalEpisodes || videos.length,
     },
+  };
+}
+
+/**
+ * 解析抖音直播（room_id）。
+ * 直播分享短链重定向到 webcast.amemv.com/douyin/webcast/reflow/{room_id}，
+ * 该 H5 页面内嵌 RSC 数据（含房间信息与直播流直链），无需 a_bogus 签名。
+ * 返回统一结构：data.type = "live"，含 HLS/FLV 直链与多清晰度。
+ */
+async function parseLive(roomId, ttwid) {
+  const buildHeaders = () => {
+    const headers = { ...MOBILE_HEADERS };
+    const cookies = [];
+    if (ttwid) cookies.push(ttwid);
+    if (process.env.DOUYIN_COOKIE) cookies.push(process.env.DOUYIN_COOKIE);
+    if (cookies.length > 0) headers.Cookie = cookies.join("; ");
+    return headers;
+  };
+
+  // 尝试多个域名 / 路径以应对机房 IP 被反爬的情况
+  const tryUrls = [
+    `https://webcast.amemv.com/douyin/webcast/reflow/${roomId}`,
+    `https://live.douyin.com/${roomId}`,
+    `https://www.douyin.com/webcast/reflow/${roomId}`,
+  ];
+
+  let lastHtml = "";
+  for (const fetchUrl of tryUrls) {
+    try {
+      const response = await fetch(fetchUrl, {
+        headers: buildHeaders(),
+        signal: AbortSignal.timeout(8000),
+      });
+      const html = await response.text();
+      lastHtml = html;
+
+      const liveResult = parseLiveData(html);
+      if (liveResult?.code === 200) {
+        const t = liveResult.data?.title || "";
+        logger.log(
+          `[${beijingNow()}] 解析抖音直播 ${roomId} 成功${t ? `：《${t.slice(0, 30)}》` : ""}`
+        );
+        return liveResult;
+      }
+    } catch {
+      /* 网络异常跳过该 URL，尝试下一个 */
+    }
+  }
+
+  // 直播已结束 / 未开播：reflow 页面可能不含流地址，但可能含房间信息
+  const endedResult = parseLiveData(lastHtml);
+  if (endedResult?.data?.roomId) {
+    logger.warn(
+      `[${beijingNow()}] 解析抖音直播 ${roomId}：直播未开播或已结束`
+    );
+    return {
+      code: 201,
+      msg: "该直播间当前未开播或已结束，无法获取直播流",
+    };
+  }
+
+  logger.warn(
+    `[${beijingNow()}] 解析抖音直播 ${roomId} 失败：未获取到直播数据。Response: ${lastHtml.replace(/\s+/g, " ").slice(0, 300)}`
+  );
+  return {
+    code: 201,
+    msg: "解析失败：未能获取直播数据，可能是直播间不存在、已结束或页面结构变化",
   };
 }
 

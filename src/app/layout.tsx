@@ -113,9 +113,19 @@ export default function RootLayout({
         />
         <script src="https://unpkg.com/wx-auth-sdk/dist/wx-auth.umd.js" defer />
         <script
-          defer
           dangerouslySetInnerHTML={{
-            __html: `WxAuth.init({ silent: true, required: false })`,
+            __html: `(function () {
+              var startedAt = Date.now();
+              var poll = function () {
+                if (window.WxAuth) {
+                  window.WxAuth.init({ silent: true, required: false });
+                  return;
+                }
+                if (Date.now() - startedAt > 10000) return; // 超时放弃，避免无限轮询
+                setTimeout(poll, 100);
+              };
+              poll();
+            })();`,
           }}
         />
         <script

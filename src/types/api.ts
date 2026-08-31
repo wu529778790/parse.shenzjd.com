@@ -28,10 +28,22 @@ export interface ParseData {
   // —— 内容信息 ——
   title?: string;
   desc?: string;
-  /** 内容类型：video / image / music / text（text 表示仅文字、无媒体可下载） */
-  type?: "video" | "image" | "music" | "text";
+  /** 内容类型：video / image / music / text / live（live 表示直播流） */
+  type?: "video" | "image" | "music" | "text" | "live";
   /** 视频时长（毫秒，抖音等平台） */
   duration?: number;
+
+  // —— 直播扩展（抖音直播等） ——
+  /** 直播状态：4=直播中，其他为未开播/已结束 */
+  liveStatus?: number;
+  /** 观看人数（字符串，如 "2.9万"） */
+  liveViewerCount?: string;
+  /** 多清晰度直播流（FLV） */
+  liveQualities?: { name: string; url: string }[];
+  /** 直播间 ID */
+  roomId?: string;
+  /** 直播间分享链接 */
+  shareUrl?: string;
 
   // —— 作者信息 ——
   author?: string;

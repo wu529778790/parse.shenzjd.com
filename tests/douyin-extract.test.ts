@@ -6,6 +6,7 @@ import {
   tryParseEmbedded,
   hasValidData,
   parseVideoData,
+  parseLiveData,
   extractFilterReason,
   isChallengeHtml,
   extractIdFromUrl,
@@ -256,5 +257,52 @@ describe("douyin-extract：页面快照回归", () => {
     // 过短数据原样返回
     const short = Buffer.from([0x01, 0x00, 0x00]);
     expect(fixDouyinFtyp(short)).toBe(short);
+  });
+
+  it("识别直播链接（webcast reflow）并返回 live 类型", () => {
+    expect(
+      extractIdFromUrl(
+        "https://webcast.amemv.com/douyin/webcast/reflow/7680142541999688502"
+      )
+    ).toEqual({ id: "7680142541999688502", type: "live" });
+    // 带查询参数也能识别
+    expect(
+      extractIdFromUrl(
+        "https://webcast.amemv.com/douyin/webcast/reflow/7680142541999688502?u_code=abc&did=xyz"
+      )
+    ).toEqual({ id: "7680142541999688502", type: "live" });
+    // 普通视频链接不能被误判为 live
+    expect(
+      extractIdFromUrl("https://www.iesdouyin.com/share/video/7680142541999688502")
+    ).toEqual({ id: "7680142541999688502", type: "video" });
+  });
+
+  it("直播 reflow 页面：解析出直播信息与流地址", () => {
+    const liveHtml = snapshot("douyin-live-reflow.html");
+    const result = parseLiveData(liveHtml);
+    expect(result).not.toBeNull();
+    expect(result.code).toBe(200);
+    expect(result.data).toMatchObject({
+      type: "live",
+      title: "总台央视新闻频道正在播出",
+      author: "央视网",
+      roomId: "7678365587243813675",
+      // 直播中（抖音 room status：2=直播中）
+      liveStatus: 2,
+    });
+    // 主直播流（HLS 优先）
+    expect(result.data.url).toContain("pull-hls");
+    // 多清晰度 FLV 流
+    expect(result.data.liveQualities.length).toBeGreaterThan(0);
+    expect(result.data.liveQualities[0].name).toBeTruthy();
+    expect(result.data.liveQualities[0].url).toContain("pull-flv");
+    // 封面与头像
+    expect(result.data.cover).toContain("douyinpic.com");
+    expect(result.data.avatar).toContain("douyinpic.com");
+  });
+
+  it("直播 reflow 页面：无有效数据时返回 null", () => {
+    expect(parseLiveData("<html><body>no data</body></html>")).toBeNull();
+    expect(parseLiveData("")).toBeNull();
   });
 });
