@@ -160,6 +160,12 @@ const cases: ShareParseCase[] = [
       "https://music.douyin.com/qishui/share/track?track_id=7031234567890123456",
   },
   {
+    name: "qsmusic-汽水短链接",
+    input: "《人生路漫漫（温柔男声）》@汽水音乐 https://qishui.douyin.com/s/iXf14pSM/",
+    expectPlatform: "qsmusic",
+    expectUrl: "https://qishui.douyin.com/s/iXf14pSM/",
+  },
+  {
     name: "huya-视频页",
     input: "https://v.huya.com/play/123456789.html",
     expectPlatform: "huya",

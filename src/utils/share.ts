@@ -40,6 +40,7 @@ export function hasValidVideoUrl(text: string): boolean {
     "bilibili.com",
     "b23.tv",
     "music.douyin.com",
+    "qishui.douyin.com",
     "h5.pipigx.com",
     "h5.pipix.com",
     "share.huoshan.com",
@@ -77,7 +78,11 @@ export function detectPlatform(text: string): VideoPlatformKey | null {
   const firstUrl = extractUrl(text) || "";
   const lower = firstUrl.toLowerCase();
 
-  if (lower.includes("music.douyin.com")) return "qsmusic";
+  if (
+    lower.includes("music.douyin.com") ||
+    lower.includes("qishui.douyin.com")
+  )
+    return "qsmusic";
   if (
     lower.includes("t.co/") ||
     lower.includes("twitter.com/") ||
