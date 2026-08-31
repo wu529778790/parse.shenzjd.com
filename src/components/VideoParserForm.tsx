@@ -329,8 +329,27 @@ export default function VideoParserForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // 输入框为空：按钮「粘贴并解析」应直接读取剪贴板粘贴并解析
     if (!url) {
-      onResult(null, "请粘贴包含视频链接的文本");
+      try {
+        if (
+          typeof navigator === "undefined" ||
+          !navigator.clipboard ||
+          typeof navigator.clipboard.readText !== "function"
+        ) {
+          onResult(null, "您的浏览器不支持自动粘贴，请手动粘贴（Ctrl+V）");
+          return;
+        }
+        const text = await navigator.clipboard.readText();
+        if (!text || !text.trim()) {
+          onResult(null, "剪贴板为空，请先复制视频链接再点击");
+          return;
+        }
+        setInput(text);
+        processInputText(text, true);
+      } catch {
+        onResult(null, "读取剪贴板失败，请检查浏览器权限或手动粘贴（Ctrl+V）");
+      }
       return;
     }
     // 链接不属于任何受支持平台：提示用户，不发起解析
@@ -518,7 +537,7 @@ export default function VideoParserForm({
                 <button
                   ref={buttonRef}
                   type="submit"
-                  disabled={loading || !url || hasResult}
+                  disabled={loading || hasResult}
                   className="magnetic-btn group relative w-full px-6 py-3.5 rounded-xl font-semibold text-white overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5 disabled:translate-y-0">
                   {/* Dynamic Gradient Background */}
                   <div className={`absolute inset-0 bg-gradient-to-r ${detectedPlatform && VIDEO_PLATFORMS[detectedPlatform] ? VIDEO_PLATFORMS[detectedPlatform].gradient : 'from-indigo-500 to-purple-600'} transition-all duration-500`} />
