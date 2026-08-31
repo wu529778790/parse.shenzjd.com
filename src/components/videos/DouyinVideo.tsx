@@ -4,7 +4,6 @@ import Image from "next/image";
 import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 import { downloadAllImages } from "@/utils/downloadImages";
-import { useDouyinVideoUrl } from "@/hooks/useDouyinVideoUrl";
 
 interface DouyinVideoProps {
   data: ApiResponse;
@@ -148,7 +147,7 @@ export default function DouyinVideo({ data }: DouyinVideoProps) {
   );
 }
 
-/** 抖音合集（mix）列表展示 —— 复用 B 站多分P 交互，每个视频可点击下载 */
+/** 抖音合集（mix）列表展示 —— PC 端暂不支持，提示用小程序解析 */
 function DouyinMixList({
   data,
   videos,
@@ -157,8 +156,6 @@ function DouyinMixList({
   videos: NonNullable<ParseData["videos"]>;
 }) {
   const parsed = data.data as ParseData;
-  const primaryVideoUrl = videos[0]?.url || "";
-  const posterUrl = parsed?.cover || videos[0]?.cover || undefined;
 
   return (
     <div className="space-y-5" style={{ touchAction: "pan-y" }}>
@@ -211,23 +208,11 @@ function DouyinMixList({
         </div>
       )}
 
-      {/* 第一个视频：封面 + 播放 */}
-      {primaryVideoUrl && (
-        <VideoPosterCard
-          url={primaryVideoUrl}
-          cover={posterUrl}
-          alt={videos[0]?.title || "视频封面"}
-          accent="orange"
-          tall
-          showDownload={false}
-        />
-      )}
-
-      {/* 合集视频列表：每个视频可点击下载 */}
-      <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-primary mb-4 flex items-center gap-2">
+      {/* PC 端暂不支持合集播放：提示用小程序解析 */}
+      <div className="glass-card p-6 flex flex-col items-center justify-center text-center gap-3">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#ff6600] to-[#ff9933] flex items-center justify-center">
           <svg
-            className="w-4 h-4 text-accent"
+            className="w-7 h-7 text-white"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -235,83 +220,19 @@ function DouyinMixList({
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
             />
           </svg>
-          合集视频 ({videos.length})
-        </h3>
-
-        <div className="space-y-3">
-          {videos.map((item, index) => (
-            <div
-              key={item.awemeId || index}
-              className="flex items-center justify-between p-4 rounded-xl bg-glass-2 hover:bg-glass-3 transition-colors duration-200">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-accent">
-                    {index + 1}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-primary line-clamp-2">
-                    {item.title || `视频 ${index + 1}`}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {item.durationFormat && (
-                      <span className="text-xs text-muted">
-                        {item.durationFormat}
-                      </span>
-                    )}
-                    {item.like ? (
-                      <span className="text-xs text-muted">
-                        {item.like >= 10000
-                          ? `${(item.like / 10000).toFixed(1)}w`
-                          : item.like}{" "}
-                        赞
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <MixVideoDownloadButton url={item.url} />
-            </div>
-          ))}
+        </div>
+        <div>
+          <p className="text-base font-semibold text-primary">
+            合集视频请用小程序解析
+          </p>
+          <p className="text-sm text-muted mt-1">
+            该链接为抖音合集/系列，共 {videos.length} 集，PC 端暂不支持播放，请使用小程序解析
+          </p>
         </div>
       </div>
     </div>
-  );
-}
-
-/** 合集单个视频的下载按钮：检测 ftyp 混淆，混淆时回退代理下载 */
-function MixVideoDownloadButton({ url }: { url: string }) {
-  const { url: resolvedUrl, checking } = useDouyinVideoUrl(url);
-  return (
-    <a
-      href={checking ? undefined : resolvedUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-disabled={checking}
-      className={`inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#ff6600] to-[#ff9933] hover:from-[#e65c00] hover:to-[#ff8800] text-white rounded-lg text-sm font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[#ff6600]/25 hover:-translate-y-0.5 flex-shrink-0 ${
-        checking ? "opacity-60 pointer-events-none" : ""
-      }`}>
-      {checking ? (
-        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-      ) : (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          strokeWidth={2}>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-          />
-        </svg>
-      )}
-      {checking ? "检测中…" : "下载"}
-    </a>
   );
 }
