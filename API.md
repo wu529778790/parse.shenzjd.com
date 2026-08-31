@@ -78,13 +78,14 @@
 - `https://v.douyin.com/xxx/`
 - `https://www.iesdouyin.com/share/video/xxx/`
 - `https://www.douyin.com/video/xxx`
+- `https://www.iesdouyin.com/share/mix/detail/xxx/`（合集/系列，返回多视频列表）
 
 **示例请求**:
 ```
 GET /api/douyin?url=https://v.douyin.com/kB9dI20w7vk/
 ```
 
-**响应示例**:
+**响应示例（单视频）**:
 ```json
 {
   "code": 200,
@@ -103,6 +104,35 @@ GET /api/douyin?url=https://v.douyin.com/kB9dI20w7vk/
       "author": "音乐作者",
       "avatar": "音乐封面"
     }
+  }
+}
+```
+
+**响应示例（合集 / 系列）**:
+合集链接返回 `data.videos` 多视频列表（与 B 站多分P 结构一致），每个视频含标题、无水印直链、时长、封面：
+```json
+{
+  "code": 200,
+  "msg": "解析成功",
+  "platform": "douyin",
+  "data": {
+    "title": "合集标题",
+    "author": "作者昵称",
+    "avatar": "头像URL",
+    "cover": "合集封面",
+    "type": "video",
+    "totalEpisodes": 119,
+    "videos": [
+      {
+        "title": "第1集标题",
+        "url": "无水印视频直链",
+        "cover": "视频封面",
+        "duration": 176,
+        "durationFormat": "02:56",
+        "awemeId": "7623721388263722286",
+        "like": 962
+      }
+    ]
   }
 }
 ```

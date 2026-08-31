@@ -10,6 +10,12 @@ export interface ParsedVideoItem {
   durationFormat?: string;
   /** 清晰度标签，如 "高清 1080P+" */
   accept?: string[];
+  /** 封面图（抖音合集等） */
+  cover?: string;
+  /** 平台视频 ID（抖音合集等） */
+  awemeId?: string;
+  /** 点赞数（抖音合集等） */
+  like?: number;
 }
 
 /**
@@ -43,6 +49,8 @@ export interface ParseData {
   images?: string[];
   /** 多分P / 多清晰度列表（bilibili） */
   videos?: ParsedVideoItem[];
+  /** 合集总集数（抖音合集等） */
+  totalEpisodes?: number;
 
   // —— 音乐扩展（汽水音乐等） ——
   name?: string;

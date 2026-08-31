@@ -15,9 +15,23 @@
 export const runtime = "nodejs";
 
 import { isBlockedIP, getClientIP, logger } from "@/lib/api-utils";
+import { fixDouyinFtyp } from "@/lib/douyin-extract";
 
 function isXhsHost(hostname) {
   return hostname === "xhscdn.com" || hostname.endsWith(".xhscdn.com");
+}
+
+// 抖音视频 CDN：会随机返回 ftyp box size 被混淆的 MP4（首字节 00→01），
+// 导致播放器无法解析。需在代理中检测并修复该混淆（见 fixDouyinFtyp）。
+function isDouyinVideoHost(hostname) {
+  return (
+    hostname === "365yg.com" ||
+    hostname.endsWith(".365yg.com") ||
+    hostname === "douyinvod.com" ||
+    hostname.endsWith(".douyinvod.com") ||
+    hostname === "douyinstatic.com" ||
+    hostname.endsWith(".douyinstatic.com")
+  );
 }
 
 export async function GET(request) {
@@ -115,11 +129,19 @@ export async function GET(request) {
     );
   };
   armIdleTimer();
+  // 抖音视频 CDN 需修复 ftyp 头混淆（仅第一个 chunk 可能含文件头）
+  const isDouyin = isDouyinVideoHost(target.hostname);
+  let firstChunk = true;
   const bodyGuard = new TransformStream({
     transform(chunk, controller) {
       clearTimeout(timer);
       armIdleTimer();
-      controller.enqueue(chunk);
+      if (isDouyin && firstChunk) {
+        firstChunk = false;
+        controller.enqueue(fixDouyinFtyp(chunk));
+      } else {
+        controller.enqueue(chunk);
+      }
     },
     flush() {
       clearTimeout(timer);

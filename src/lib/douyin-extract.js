@@ -219,7 +219,11 @@ export function extractIdFromUrl(urlStr) {
     /* URL 解析失败，继续走常规路径 */
   }
 
-  let match = urlStr.match(/video\/(\d+)/);
+  // 合集（mix）链接：/share/mix/detail/ID 或 /mix/detail/ID
+  // 必须在兜底长数字正则之前匹配，否则会被误判为 video 类型
+  let match = urlStr.match(/mix\/detail\/(\d+)/);
+  if (match) return { id: match[1], type: "mix" };
+  match = urlStr.match(/video\/(\d+)/);
   if (match) return { id: match[1], type: "video" };
   match = urlStr.match(/note\/(\d+)/);
   if (match) return { id: match[1], type: "note" };
@@ -233,6 +237,76 @@ export function extractIdFromUrl(urlStr) {
   match = urlStr.match(/share\/(video|note)\/(\d+)/);
   if (match) return { id: match[2], type: match[1] };
   return null;
+}
+
+/**
+ * 从 mix/detail 接口响应中提取合集信息
+ * 返回 { mixName, cover, author, authorId, avatar, totalEpisodes } 或 null
+ */
+export function parseMixDetail(mixDetail) {
+  try {
+    const mixInfo = mixDetail?.mix_info;
+    if (!mixInfo?.mix_id) return null;
+    const author = mixInfo.author || {};
+    return {
+      mixName: mixInfo.mix_name || "合集",
+      cover: mixInfo.cover_url?.url_list?.[0] || "",
+      author: author.nickname || "",
+      authorId: author.uid || "",
+      avatar: author.avatar_medium?.url_list?.[0] || "",
+      totalEpisodes: mixInfo.statis?.updated_to_episode || 0,
+    };
+  } catch (error) {
+    logger.error("Error parsing mix detail:", error);
+    return null;
+  }
+}
+
+/**
+ * 从 mix/aweme 接口的 aweme_list 中提取视频列表
+ * 返回标准化视频项数组（与 B 站多分P 结构一致，供 data.videos 使用）
+ */
+export function parseMixAwemeList(awemeList) {
+  if (!Array.isArray(awemeList)) return [];
+  const videos = [];
+  for (const item of awemeList) {
+    try {
+      const playAddr = item.video?.play_addr || {};
+      const urlList = Array.isArray(playAddr.url_list) ? playAddr.url_list : [];
+      let videoUrl = urlList[0]
+        ? urlList[0].replace("playwm", "play").replace("play_wm", "play")
+        : "";
+      // uri 兜底直链
+      if (!videoUrl && playAddr.uri && !playAddr.uri.startsWith("http")) {
+        videoUrl = `https://www.iesdouyin.com/aweme/v1/play/?video_id=${playAddr.uri}&ratio=1080p&line=0`;
+      }
+      if (!videoUrl) continue;
+
+      const durationMs = item.video?.duration || 0;
+      videos.push({
+        title: item.desc || "无标题",
+        url: videoUrl,
+        cover: item.video?.cover?.url_list?.[0] || "",
+        duration: durationMs > 0 ? Math.round(durationMs / 1000) : undefined,
+        durationFormat: durationMs > 0 ? formatDuration(durationMs) : undefined,
+        awemeId: item.aweme_id || "",
+        like: item.statistics?.digg_count || 0,
+      });
+    } catch {
+      /* 跳过单个异常视频 */
+    }
+  }
+  return videos;
+}
+
+/** 毫秒 → "MM:SS" / "HH:MM:SS" */
+function formatDuration(ms) {
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
 /**
@@ -256,4 +330,29 @@ export function extractTtwid(response) {
     logger.warn(`Failed to extract ttwid: ${e.message}`);
   }
   return "";
+}
+
+/**
+ * 修复抖音 MP4 的 ftyp 头混淆。
+ * 抖音 365yg.com 视频 CDN 会随机把 ftyp box 的 size 字段首字节从 0x00 改成 0x01
+ * （如 0x00000020 → 0x01000020），使播放器无法解析文件。
+ * 这里检测并还原：仅当第 4-7 字节为 "ftyp" 且 size 首字节为 0x01 时修复。
+ * 返回修复后的 Buffer；无需修复时原样返回。
+ */
+export function fixDouyinFtyp(chunk) {
+  if (chunk.length < 8) return chunk;
+  // 第 4-7 字节应为 "ftyp"
+  if (
+    chunk[4] !== 0x66 ||
+    chunk[5] !== 0x74 ||
+    chunk[6] !== 0x79 ||
+    chunk[7] !== 0x70
+  ) {
+    return chunk;
+  }
+  // size 首字节为 0x01 视为被混淆（正常应为 0x00）
+  if (chunk[0] !== 0x01) return chunk;
+  const fixed = Buffer.from(chunk);
+  fixed[0] = 0x00;
+  return fixed;
 }

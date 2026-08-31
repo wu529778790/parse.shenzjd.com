@@ -10,6 +10,8 @@ import {
   extractIdFromUrl,
   extractTtwid,
   isUserProfileUrl,
+  parseMixDetail,
+  parseMixAwemeList,
 } from "@/lib/douyin-extract";
 
 // Docker 自托管下 Node runtime 对外网 fetch 通常比 Edge 沙箱更稳定（抖音等站）
@@ -72,6 +74,12 @@ async function douyin(url) {
       };
     }
     const { id, type: contentType, redirectUrl, ttwid } = extractResult;
+
+    // ---- 合集（mix）链接：走独立的合集解析流程 ----
+    if (contentType === "mix") {
+      return await parseMix(id, ttwid);
+    }
+
     const sharePath = contentType === "note" ? "note" : "video";
 
     // ---- ID 合法性预校验 ----
@@ -303,9 +311,96 @@ async function douyin(url) {
 }
 
 /**
+ * 解析抖音合集（mix）链接。
+ * 移动端 App 的 mix 接口无需 a_bogus 签名即可访问：
+ * - /aweme/v1/mix/detail/  → 合集信息（标题/封面/作者/总集数）
+ * - /aweme/v1/mix/aweme/   → 视频列表（分页，含直链/封面/时长）
+ * 返回统一结构：data.videos 复用 B 站多分P 契约，前端可点击列表。
+ */
+async function parseMix(mixId, ttwid) {
+  const startTime = Date.now();
+  const buildHeaders = () => {
+    const headers = { ...MOBILE_HEADERS, Accept: "application/json" };
+    const cookies = [];
+    if (ttwid) cookies.push(ttwid);
+    if (process.env.DOUYIN_COOKIE) cookies.push(process.env.DOUYIN_COOKIE);
+    if (cookies.length > 0) headers.Cookie = cookies.join("; ");
+    return headers;
+  };
+
+  // 合集信息
+  let mixInfo = null;
+  try {
+    const res = await fetch(
+      `https://www.iesdouyin.com/aweme/v1/mix/detail/?mix_id=${mixId}`,
+      { headers: buildHeaders(), signal: AbortSignal.timeout(8000) }
+    );
+    const data = await res.json();
+    mixInfo = parseMixDetail(data);
+  } catch (error) {
+    logger.warn(`[${beijingNow()}] 解析抖音合集 ${mixId} 详情失败: ${error.message}`);
+  }
+
+  // 分页拉取视频列表（每页 20，最多 5 页 = 100 集，避免请求过多）
+  const videos = [];
+  let cursor = 0;
+  let hasMore = true;
+  let pageCount = 0;
+  while (hasMore && pageCount < 5 && Date.now() - startTime < 15000) {
+    try {
+      const res = await fetch(
+        `https://www.iesdouyin.com/aweme/v1/mix/aweme/?mix_id=${mixId}&cursor=${cursor}&count=20`,
+        { headers: buildHeaders(), signal: AbortSignal.timeout(8000) }
+      );
+      const data = await res.json();
+      const list = parseMixAwemeList(data.aweme_list);
+      videos.push(...list);
+      hasMore = !!data.has_more;
+      cursor = data.cursor || cursor + 20;
+      pageCount++;
+      if (!hasMore) break;
+    } catch (error) {
+      logger.warn(`[${beijingNow()}] 解析抖音合集 ${mixId} 分页 ${cursor} 失败: ${error.message}`);
+      break;
+    }
+  }
+
+  if (videos.length === 0) {
+    logger.warn(`[${beijingNow()}] 解析抖音合集 ${mixId} 失败：未获取到视频列表`);
+    return {
+      code: 201,
+      msg: "解析失败：未能获取合集视频列表，可能是合集不存在、已删除或接口受限",
+    };
+  }
+
+  const title = mixInfo?.mixName || "抖音合集";
+  logger.log(
+    `[${beijingNow()}] 解析抖音合集 ${mixId} 成功：《${title.slice(0, 30)}》共 ${videos.length} 集`
+  );
+
+  return {
+    code: 200,
+    msg: "解析成功",
+    data: {
+      title,
+      desc: mixInfo?.mixName || "",
+      author: mixInfo?.author || "",
+      authorId: mixInfo?.authorId || "",
+      avatar: mixInfo?.avatar || "",
+      cover: mixInfo?.cover || videos[0]?.cover || "",
+      type: "video",
+      // 复用 B 站多分P 结构：前端展示可点击的合集列表
+      videos,
+      // 合集总集数（供前端展示）
+      totalEpisodes: mixInfo?.totalEpisodes || videos.length,
+    },
+  };
+}
+
+/**
  * 从 URL 中提取视频 ID 和完整重定向 URL
  * 返回 { id, type, redirectUrl } 或 null
- * （网络相关逻辑保留在路由层，提取/解析纯函数见 lib/douyin-extract.js）
+ * （网络爬逻辑保留在 extractIdAndRedirectUrl，提取逻辑见 lib/douyin-extract.js）
  */
 async function extractIdAndRedirectUrl(url) {
   try {

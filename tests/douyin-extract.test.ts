@@ -11,6 +11,9 @@ import {
   extractIdFromUrl,
   extractTtwid,
   isUserProfileUrl,
+  parseMixDetail,
+  parseMixAwemeList,
+  fixDouyinFtyp,
 } from "@/lib/douyin-extract";
 
 // 页面快照：tests/snapshots/*.html
@@ -139,5 +142,119 @@ describe("douyin-extract：页面快照回归", () => {
     });
     expect(extractTtwid(res)).toBe("ttwid=abc123");
     expect(extractTtwid(new Response(null))).toBe("");
+  });
+
+  it("识别合集（mix）链接并返回 mix 类型", () => {
+    expect(
+      extractIdFromUrl(
+        "https://www.iesdouyin.com/share/mix/detail/7624080335004764170/"
+      )
+    ).toEqual({ id: "7624080335004764170", type: "mix" });
+    expect(
+      extractIdFromUrl("https://www.douyin.com/mix/detail/7624080335004764170")
+    ).toEqual({ id: "7624080335004764170", type: "mix" });
+    // 普通视频链接不能被误判为 mix
+    expect(
+      extractIdFromUrl("https://www.iesdouyin.com/share/video/7624080335004764170")
+    ).toEqual({ id: "7624080335004764170", type: "video" });
+  });
+
+  it("解析 mix/detail 合集信息", () => {
+    const detail = {
+      mix_info: {
+        mix_id: "7624080335004764170",
+        mix_name: "测试合集",
+        cover_url: { url_list: ["https://p3.douyinpic.com/cover.jpg"] },
+        author: {
+          nickname: "测试作者",
+          uid: "123",
+          avatar_medium: { url_list: ["https://p3.douyinpic.com/avatar.jpg"] },
+        },
+        statis: { updated_to_episode: 119 },
+      },
+    };
+    expect(parseMixDetail(detail)).toEqual({
+      mixName: "测试合集",
+      cover: "https://p3.douyinpic.com/cover.jpg",
+      author: "测试作者",
+      authorId: "123",
+      avatar: "https://p3.douyinpic.com/avatar.jpg",
+      totalEpisodes: 119,
+    });
+    expect(parseMixDetail({})).toBeNull();
+  });
+
+  it("parseMixAwemeList 提取视频列表（含直链/封面/时长）", () => {
+    const list = [
+      {
+        aweme_id: "7623721388263722286",
+        desc: "测试视频标题",
+        video: {
+          duration: 175679,
+          cover: { url_list: ["https://p3.douyinpic.com/cover1.jpg"] },
+          play_addr: {
+            uri: "v0200fg10000d76cguvog65uc11nnpi0",
+            url_list: [
+              "https://v5.douyinvod.com/playwm/video.mp4",
+              "https://v5.douyinvod.com/play/video.mp4",
+            ],
+          },
+        },
+        statistics: { digg_count: 962 },
+      },
+      {
+        aweme_id: "7621497256272743731",
+        desc: "第二个视频",
+        video: {
+          duration: 0,
+          cover: { url_list: [] },
+          play_addr: { uri: "v0200fg10000d76cguvoabc" },
+        },
+      },
+    ];
+    const videos = parseMixAwemeList(list);
+    expect(videos).toHaveLength(2);
+    expect(videos[0]).toMatchObject({
+      title: "测试视频标题",
+      // playwm → play（无水印）
+      url: "https://v5.douyinvod.com/play/video.mp4",
+      cover: "https://p3.douyinpic.com/cover1.jpg",
+      duration: 176,
+      durationFormat: "02:56",
+      awemeId: "7623721388263722286",
+      like: 962,
+    });
+    // 无 url_list 时用 uri 兜底直链
+    expect(videos[1].url).toContain("v0200fg10000d76cguvoabc");
+    expect(videos[1].duration).toBeUndefined();
+    expect(parseMixAwemeList(null)).toEqual([]);
+  });
+
+  it("fixDouyinFtyp 修复抖音 MP4 的 ftyp 头混淆", () => {
+    // 正常 MP4 头：ftyp size = 0x00000020
+    const normal = Buffer.from([
+      0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
+    ]);
+    // 混淆后：ftyp size 首字节 00→01（0x01000020）
+    const obfuscated = Buffer.from(normal);
+    obfuscated[0] = 0x01;
+
+    // 混淆数据被修复
+    const fixed = fixDouyinFtyp(obfuscated);
+    expect(fixed[0]).toBe(0x00);
+    expect(fixed[0]).not.toBe(obfuscated[0]);
+    // 修复后与正常头一致
+    expect(fixed.subarray(0, 8)).toEqual(normal.subarray(0, 8));
+
+    // 正常数据不被误改
+    expect(fixDouyinFtyp(normal)).toBe(normal);
+
+    // 非 ftyp 数据（如 mdat）不被误改
+    const mdat = Buffer.from([0x01, 0x00, 0x00, 0x20, 0x6d, 0x64, 0x61, 0x74]);
+    expect(fixDouyinFtyp(mdat)).toBe(mdat);
+
+    // 过短数据原样返回
+    const short = Buffer.from([0x01, 0x00, 0x00]);
+    expect(fixDouyinFtyp(short)).toBe(short);
   });
 });

@@ -1,7 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import Image from "next/image";
-import { buildVideoProxyUrl } from "@/utils/videoProxy";
+import { buildVideoProxyUrl, isDouyinVideoUrl } from "@/utils/videoProxy";
+import { useDouyinVideoUrl } from "@/hooks/useDouyinVideoUrl";
 
 /**
  * 统一视频展示卡片（简化版）：上方封面图 + 下方「播放视频 / 下载视频」两个链接。
@@ -102,10 +103,13 @@ export default function VideoPosterCard({
   inline = false,
 }: VideoPosterCardProps) {
   const a = ACCENTS[accent];
-  // 防盗链直链走代理，保证可播放、可下载
-  const playUrl = buildVideoProxyUrl(url);
   // 内嵌播放状态
   const [playing, setPlaying] = useState(false);
+  // 抖音视频：默认直链播放，检测到 ftyp 混淆时回退代理（省服务器流量）
+  // 其他平台（小红书等 Referer 防盗链）：直接走代理
+  const isDouyin = isDouyinVideoUrl(url);
+  const { url: douyinUrl, checking: douyinChecking } = useDouyinVideoUrl(url);
+  const playUrl = isDouyin ? douyinUrl : buildVideoProxyUrl(url);
 
   // 内嵌模式：点击封面/播放按钮切换为 <video> 播放器
   const handleInlinePlay = () => setPlaying(true);
@@ -147,7 +151,7 @@ export default function VideoPosterCard({
       )}
 
       {/* 内嵌播放器（inline 模式点击播放后展示） */}
-      {inline && playing && (
+      {inline && playing && !douyinChecking && (
         <div className="rounded-2xl overflow-hidden bg-black">
           <video
             src={playUrl}
@@ -165,33 +169,56 @@ export default function VideoPosterCard({
       <div className="flex flex-col sm:flex-row gap-3">
         {showPlay && !inline && (
           <a
-            href={playUrl}
+            href={douyinChecking ? undefined : playUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r ${a.gradient} ${a.hover} text-white rounded-xl font-medium transition-all duration-300 ${a.shadow} hover:-translate-y-0.5 flex-1`}>
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-              />
-            </svg>
-            {playText}
+            aria-disabled={douyinChecking}
+            className={`group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r ${a.gradient} ${a.hover} text-white rounded-xl font-medium transition-all duration-300 ${a.shadow} hover:-translate-y-0.5 flex-1 ${douyinChecking ? "opacity-60 pointer-events-none" : ""}`}>
+            {douyinChecking ? (
+              <svg
+                className="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth={2}>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                />
+              </svg>
+            )}
+            {douyinChecking ? "检测中…" : playText}
           </a>
         )}
 
         {showDownload && (
           <a
-            href={playUrl}
+            href={douyinChecking ? undefined : playUrl}
             target={inline ? undefined : "_blank"}
             rel={inline ? undefined : "noopener noreferrer"}
             download={inline}
-            className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle hover:-translate-y-0.5 flex-1">
+            aria-disabled={douyinChecking}
+            className={`group inline-flex items-center justify-center gap-2 px-6 py-3 bg-glass-2 hover:bg-glass-3 text-primary rounded-xl font-medium transition-all duration-300 border border-border-subtle hover:-translate-y-0.5 flex-1 ${douyinChecking ? "opacity-60 pointer-events-none" : ""}`}>
             <svg
               className="w-5 h-5 transition-transform group-hover:scale-110"
               fill="none"
@@ -204,7 +231,7 @@ export default function VideoPosterCard({
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
             </svg>
-            {downloadText}
+            {douyinChecking ? "检测中…" : downloadText}
           </a>
         )}
 
