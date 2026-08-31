@@ -438,12 +438,10 @@ function DouyinLivePlayer({
             url: currentStream.url,
             isLive: true,
             cors: true,
-            // 直播低延迟：关闭缓存、及时清理已播放分片
-            enableStashBuffer: false,
-            autoCleanupSourceBuffer: true,
           },
           {
             enableWorker: true,
+            // 直播低延迟：关闭缓存、及时清理已播放分片
             enableStashBuffer: false,
             autoCleanupSourceBuffer: true,
           }
