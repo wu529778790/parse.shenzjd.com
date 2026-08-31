@@ -101,33 +101,9 @@ export default function RootLayout({
           defer
         />
         {/* 顶部导航 + 头像浮窗：@wu529778790/site-navbar Web Component 版
-            1. 先引入 wx-auth-sdk UMD（不锁版本，跟随最新；头像登录依赖 window.WxAuth）
-            2. 弹窗样式随 SDK 版本走，需同步引入 wx-auth.css
-            3. 静默校验登录态（silent:true 绝不自动弹窗；required:false 弹窗带 × 关闭按钮）
-            4. 再引入 site-navbar（头像已内置，无需再引 user-avatar）
-            5. body 顶部放一个 <site-navbar> 标签即出现整条导航
-            解析主流程的登录弹窗由 src/lib/wx-auth-client.ts 复用同一全局实例触发 */}
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/wx-auth-sdk/dist/wx-auth.css"
-        />
-        <script src="https://unpkg.com/wx-auth-sdk/dist/wx-auth.umd.js" defer />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function () {
-              var startedAt = Date.now();
-              var poll = function () {
-                if (window.WxAuth) {
-                  window.WxAuth.init({ silent: true, required: false });
-                  return;
-                }
-                if (Date.now() - startedAt > 10000) return; // 超时放弃，避免无限轮询
-                setTimeout(poll, 100);
-              };
-              poll();
-            })();`,
-          }}
-        />
+            一条 JS 引入，组件内部自动加载并初始化 wx-auth-sdk（静默校验登录态），
+            无需手动引 SDK、无需写 WxAuth.init()。body 顶部放一个 <site-navbar> 标签即出现整条导航。
+            解析主流程的登录弹窗由 src/lib/wx-auth-client.ts 复用同一全局 window.WxAuth 实例触发 */}
         <script
           src="https://unpkg.com/@wu529778790/site-navbar@latest/dist/site-navbar.wc.js"
           defer
