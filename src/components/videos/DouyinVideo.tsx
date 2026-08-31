@@ -452,14 +452,18 @@ function DouyinLivePlayer({
         };
         player.attachMediaElement(video);
         player.load();
-        player
-          .play()
-          .then(() => {
-            if (!cancelled) setStatus("playing");
-          })
-          .catch(() => {
-            if (!cancelled) setStatus("error");
-          });
+        const playResult = player.play();
+        if (playResult && typeof (playResult as Promise<void>).then === "function") {
+          (playResult as Promise<void>)
+            .then(() => {
+              if (!cancelled) setStatus("playing");
+            })
+            .catch(() => {
+              if (!cancelled) setStatus("error");
+            });
+        } else {
+          setStatus("playing");
+        }
         player.on(mpegts.Events.ERROR, () => {
           if (!cancelled) setStatus("error");
         });
