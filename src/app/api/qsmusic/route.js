@@ -86,6 +86,7 @@ async function getMusicInfo(url) {
       code: 200,
       msg: "解析成功",
       data: {
+        type: "music",
         name: title,
         url: musicUrl,
         cover: cover,

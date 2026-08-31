@@ -29,6 +29,7 @@ export const PLATFORMS = {
   TWITTER: "twitter",
   QUANMIN: "quanmin", // 度小视
   TIKTOK: "tiktok",
+  QSMUSIC: "qsmusic", // 汽水音乐
 } as const;
 
 type PlatformKey = (typeof PLATFORMS)[keyof typeof PLATFORMS];
@@ -211,6 +212,13 @@ export const PLATFORM_INFO: Record<PlatformKey, PlatformInfoEntry> = {
     shortDomains: ["vm.tiktok.com", "vt.tiktok.com"],
     supportsIdParse: false,
   },
+  [PLATFORMS.QSMUSIC]: {
+    name: "汽水音乐",
+    nameEn: "Qishui Music",
+    domains: ["music.douyin.com", "qishui.douyin.com"],
+    shortDomains: ["qishui.douyin.com"],
+    supportsIdParse: true,
+  },
 };
 
 // 从 URL 识别平台
@@ -282,6 +290,9 @@ export const ALL_DOMAINS: string[] = [
   "t.co",
   "quanmin.baidu.com",
   "xspshare.baidu.com",
+  // 汽水音乐
+  "music.douyin.com",
+  "qishui.douyin.com",
   // 海外平台
   "tiktok.com",
   "vm.tiktok.com",

@@ -72,6 +72,7 @@ const ROUTE_DOMAIN_MAP: Record<string, { name: string; hosts: string[] }> = {
   haokan: { name: "好看视频", hosts: ["haokan.baidu.com", "haokan.hao123.com"] },
   twitter: { name: "X (Twitter)", hosts: ["twitter.com", "x.com", "t.co"] },
   tiktok: { name: "TikTok", hosts: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"] },
+  qsmusic: { name: "汽水音乐", hosts: ["music.douyin.com", "qishui.douyin.com"] },
 };
 
 // 需强制微信认证的解析类路由 = 23 个平台专用接口 + 统一入口 /api/parse。

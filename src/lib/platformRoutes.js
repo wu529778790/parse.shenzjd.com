@@ -30,6 +30,7 @@ export const platformRoutes = {
   xinpianchang: () => import("@/app/api/xinpianchang/route.js"),
   twitter: () => import("@/app/api/twitter/route.js"),
   tiktok: () => import("@/app/api/tiktok/route.js"),
+  qsmusic: () => import("@/app/api/qsmusic/route.js"),
 };
 
 /** 平台 key → 解析函数获取器（兼容注册函数与动态导入的 route） */
