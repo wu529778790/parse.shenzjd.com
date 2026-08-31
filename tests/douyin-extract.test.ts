@@ -271,6 +271,12 @@ describe("douyin-extract：页面快照回归", () => {
         "https://webcast.amemv.com/douyin/webcast/reflow/7680142541999688502?u_code=abc&did=xyz"
       )
     ).toEqual({ id: "7680142541999688502", type: "live" });
+    // 直播间完整链接 live.douyin.com/{room_id}（room_id 为 12 位，不满足 15 位兜底）
+    expect(
+      extractIdFromUrl(
+        "https://live.douyin.com/870887192950?enter_from_merge=link_share&enter_method=copy_link_share"
+      )
+    ).toEqual({ id: "870887192950", type: "live" });
     // 普通视频链接不能被误判为 live
     expect(
       extractIdFromUrl("https://www.iesdouyin.com/share/video/7680142541999688502")

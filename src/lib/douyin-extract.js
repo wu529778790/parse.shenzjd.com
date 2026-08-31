@@ -324,6 +324,10 @@ export function extractIdFromUrl(urlStr) {
   // 必须在兜底长数字正则之前匹配，否则会被误判为 video 类型
   let match = urlStr.match(/webcast\/reflow\/(\d+)/);
   if (match) return { id: match[1], type: "live" };
+  // 直播链接：live.douyin.com/ID（直播间完整链接，room_id 通常为 12 位数字）
+  // 必须在兜底长数字正则之前匹配，否则 12 位 room_id 不满足 15 位兜底会漏识别
+  match = urlStr.match(/live\.douyin\.com\/(\d+)/);
+  if (match) return { id: match[1], type: "live" };
   // 合集（mix）链接：/share/mix/detail/ID 或 /mix/detail/ID
   // 必须在兜底长数字正则之前匹配，否则会被误判为 video 类型
   match = urlStr.match(/mix\/detail\/(\d+)/);

@@ -525,7 +525,11 @@ async function extractIdAndRedirectUrl(url) {
 
     return null;
   } catch (error) {
-    logger.error("Error extracting ID:", error);
+    // fetch 失败（反爬/超时/网络错）时，仍尝试从原始 URL 直接提取 ID。
+    // 直播链接 live.douyin.com/{room_id} 等无需重定向即可识别，避免误报「无法解析」
+    logger.warn(`[${beijingNow()}] 提取抖音链接重定向失败，尝试从原始 URL 提取: ${error.message}`);
+    const fallback = extractIdFromUrl(url);
+    if (fallback) return { ...fallback, redirectUrl: url, ttwid: "" };
     return null;
   }
 }
