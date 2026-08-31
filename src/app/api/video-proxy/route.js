@@ -74,16 +74,13 @@ export async function GET(request) {
   }
 
   const FIRST_BYTE_TIMEOUT_MS = 30000;
-  const upstreamController = new AbortController();
   const FIRST_BYTE_TIMEOUT = new Error("first-byte timeout");
 
-  // 首字节超时：只覆盖到收到上游响应头为止。
-  // 不能用 AbortSignal.timeout() 一刀切——它会连同 body 流一起掐断，
-  // 大视频传输超过 30s 就会在中途断流（failed to pipe response / TimeoutError）。
-  let timer = setTimeout(
-    () => upstreamController.abort(FIRST_BYTE_TIMEOUT),
-    FIRST_BYTE_TIMEOUT_MS
-  );
+  // upstreamController 改为可重新赋值：重试时整组替换。
+  // 每次 fetch 前 arm 一个新的首字节超时定时器到当前 controller。
+  let upstreamController = new AbortController();
+  let timer = null;
+
   // 客户端断开（关页面 / 播放器换 Range 重新请求）时中止上游，避免后台白拉流量
   request.signal.addEventListener(
     "abort",
@@ -91,26 +88,73 @@ export async function GET(request) {
     { once: true }
   );
 
-  let upstream;
-  try {
-    upstream = await fetch(target.href, {
-      headers,
-      signal: upstreamController.signal,
-    });
-  } catch (e) {
+  /**
+   * 起一个首字节超时：到点 abort 当前 upstreamController。
+   * 不能用 AbortSignal.timeout() 一刀切——它会连同 body 流一起掐断，
+   * 大视频传输超过 30s 就会在中途断流（failed to pipe response / TimeoutError）。
+   */
+  const armFirstByteTimer = () => {
     clearTimeout(timer);
-    if (upstreamController.signal.reason === FIRST_BYTE_TIMEOUT) {
-      logger.warn(`video-proxy 上游首字节超时: host=${target.hostname}`);
-      return new Response("Upstream timeout", { status: 504 });
+    timer = setTimeout(
+      () => upstreamController.abort(FIRST_BYTE_TIMEOUT),
+      FIRST_BYTE_TIMEOUT_MS
+    );
+  };
+  armFirstByteTimer();
+
+  /**
+   * 偶发重试：抖音/小红书 CDN 经常在并发拉流时主动 cancel/重置连接，
+   * fetch 抛 ECONNRESET / fetch failed。对客户端尚未断开的情况做指数退避重试，
+   * 把"上游临时抽风"消化掉，避免用户看到 502。
+   * - 客户端断开 / 首字节超时：不重试
+   * - 每次重试都重建 AbortController（旧的已 aborted 无法复用）
+   * - 退避：500ms → 1500ms
+   */
+  const MAX_RETRIES = 2;
+  let upstream;
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // 非首次重试前等待（指数退避）
+    if (attempt > 0) {
+      if (request.signal.aborted) break;
+      const backoffMs = 500 * Math.pow(3, attempt - 1); // 500, 1500
+      logger.warn(
+        `video-proxy 重试第 ${attempt} 次: host=${target.hostname} backoff=${backoffMs}ms err=${lastErr?.message}`
+      );
+      await new Promise((r) => setTimeout(r, backoffMs));
+      if (request.signal.aborted) break;
+      // 重建 controller（旧 controller 已 aborted，无法复用）
+      upstreamController = new AbortController();
+      armFirstByteTimer();
     }
-    if (request.signal.aborted) {
-      logger.warn(`video-proxy 客户端中断: host=${target.hostname}`);
-      return new Response("Client aborted", { status: 499 });
+    try {
+      upstream = await fetch(target.href, {
+        headers,
+        signal: upstreamController.signal,
+      });
+      break; // 成功拿到响应头，跳出重试循环
+    } catch (e) {
+      lastErr = e;
+      clearTimeout(timer);
+      // 首字节超时 / 客户端中断：不重试，直接返回
+      if (upstreamController.signal.reason === FIRST_BYTE_TIMEOUT) {
+        logger.warn(`video-proxy 上游首字节超时: host=${target.hostname}`);
+        return new Response("Upstream timeout", { status: 504 });
+      }
+      if (request.signal.aborted) {
+        logger.warn(`video-proxy 客户端中断: host=${target.hostname}`);
+        return new Response("Client aborted", { status: 499 });
+      }
+      // 其他错误（fetch failed / ECONNRESET 等）：继续重试循环
+      if (attempt === MAX_RETRIES) {
+        logger.error(
+          `video-proxy upstream fetch failed (重试 ${MAX_RETRIES} 次后放弃): ${e.message}`
+        );
+        return new Response(`Upstream fetch failed: ${e.message}`, {
+          status: 502,
+        });
+      }
     }
-    logger.error(`video-proxy upstream fetch failed: ${e.message}`);
-    return new Response(`Upstream fetch failed: ${e.message}`, {
-      status: 502,
-    });
   }
   // 响应头已到，首字节超时完成使命，传输阶段改用空闲超时
   clearTimeout(timer);
