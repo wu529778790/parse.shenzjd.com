@@ -1,20 +1,9 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { ApiResponse, ParseData } from "@/types/api";
 import VideoPosterCard from "./VideoPosterCard";
 import { downloadAllImages } from "@/utils/downloadImages";
-
-// 动态加载 mpegts.js（仅客户端，避免 SSR 引入浏览器 API）。
-// mpegts.js 是 flv.js 的继任者，专为现代打包工具（webpack 5 / Turbopack）优化，
-// 解决了 flv.js 1.6.2 在 Web Worker 中的 ES module 兼容问题。
-let mpegtsPromise: Promise<typeof import("mpegts.js").default> | null = null;
-function loadMpegts() {
-  if (!mpegtsPromise) {
-    mpegtsPromise = import("mpegts.js").then((m) => m.default);
-  }
-  return mpegtsPromise;
-}
 
 interface DouyinVideoProps {
   data: ApiResponse;
@@ -254,18 +243,12 @@ function DouyinMixList({
   );
 }
 
-/** 抖音直播卡片：展示直播信息 + 内嵌 FLV 播放器（mpegts.js） */
+/** 抖音直播卡片：展示直播信息 + 提示用小程序解析（PC 端不内嵌播放） */
 function DouyinLiveCard({ data }: { data: ApiResponse }) {
   const d = data.data as ParseData;
   // 抖音 webcast room status：2=直播中，其他（3/4 等）=已结束/未开播
   const isLiveNow = d.liveStatus === 2;
-  const qualities = d.liveQualities || [];
   const shareUrl = d.shareUrl || "";
-  // 主清晰度：优先 FLV 流（flv.js 可播），无 FLV 时回退 HLS
-  const flvStreams = qualities.filter((q) => q.url.includes(".flv"));
-  const defaultFlv = flvStreams[0]?.url || "";
-  // 若服务端只返回了 HLS 主链（无 FLV 多清晰度），前端无法内嵌播放
-  const canInlinePlay = !!defaultFlv;
 
   return (
     <div className="space-y-5" style={{ touchAction: "pan-y" }}>
@@ -318,26 +301,33 @@ function DouyinLiveCard({ data }: { data: ApiResponse }) {
         </div>
       </div>
 
-      {/* 内嵌播放器：优先 FLV（mpegts.js），否则显示封面 + HLS 直链 */}
-      {canInlinePlay && isLiveNow ? (
-        <DouyinLivePlayer
-          streams={flvStreams}
-          poster={d.cover}
-        />
-      ) : (
-        d.cover && (
-          <div className="rounded-2xl overflow-hidden bg-black">
-            <Image
-              src={d.cover}
-              alt={d.title || "直播封面"}
-              width={800}
-              height={450}
-              className="w-full h-auto object-contain"
-              unoptimized
+      {/* PC 端不内嵌直播：提示用小程序解析（与合集一致） */}
+      <div className="glass-card p-6 flex flex-col items-center justify-center text-center gap-3">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#ff6600] to-[#ff9933] flex items-center justify-center">
+          <svg
+            className="w-7 h-7 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={2}>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
             />
-          </div>
-        )
-      )}
+          </svg>
+        </div>
+        <div>
+          <p className="text-base font-semibold text-primary">
+            直播请用小程序解析
+          </p>
+          <p className="text-sm text-muted mt-1">
+            {isLiveNow
+              ? "该链接为抖音直播，PC 端暂不支持播放，请使用小程序解析观看"
+              : "该直播间当前未开播，请使用小程序解析查看"}
+          </p>
+        </div>
+      </div>
 
       {/* 打开抖音直播间 */}
       {shareUrl && (
@@ -360,188 +350,6 @@ function DouyinLiveCard({ data }: { data: ApiResponse }) {
           </svg>
           打开抖音直播间
         </a>
-      )}
-
-      {/* 直播说明 */}
-      <div className="glass-card p-4 flex items-start gap-2 text-xs text-muted">
-        <svg
-          className="w-4 h-4 flex-shrink-0 mt-0.5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          strokeWidth={2}>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
-          />
-        </svg>
-        <span>
-          直播为实时流媒体，当前页面内嵌播放；直播结束后流地址将失效。
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 内嵌 FLV 直播播放器（mpegts.js + MSE）。
- * 支持多清晰度切换；浏览器不支持 MSE 或播放失败时提示用外部播放器。
- */
-function DouyinLivePlayer({
-  streams,
-  poster,
-}: {
-  streams: { name: string; url: string }[];
-  poster?: string;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<{ destroy: () => void; unload?: () => void } | null>(null);
-  const [current, setCurrent] = useState(0);
-  const [status, setStatus] = useState<"loading" | "playing" | "error" | "unsupported">("loading");
-
-  const currentStream = streams[current] || streams[0];
-
-  // 清理播放器
-  const destroyPlayer = useCallback(() => {
-    try {
-      playerRef.current?.unload?.();
-      playerRef.current?.destroy();
-    } catch {
-      /* 忽略销毁异常 */
-    }
-    playerRef.current = null;
-  }, []);
-
-  // 初始化 mpegts.js 并播放
-  useEffect(() => {
-    let cancelled = false;
-    let mpegts: typeof import("mpegts.js").default | null = null;
-
-    (async () => {
-      try {
-        mpegts = await loadMpegts();
-        if (cancelled) return;
-        if (!mpegts.isSupported()) {
-          setStatus("unsupported");
-          return;
-        }
-        const video = videoRef.current;
-        if (!video || !currentStream?.url) {
-          setStatus("error");
-          return;
-        }
-        setStatus("loading");
-        const player = mpegts.createPlayer(
-          {
-            type: "flv",
-            url: currentStream.url,
-            isLive: true,
-            cors: true,
-          },
-          {
-            enableWorker: true,
-            // 直播低延迟：关闭缓存、及时清理已播放分片
-            enableStashBuffer: false,
-            autoCleanupSourceBuffer: true,
-          }
-        );
-        playerRef.current = player as unknown as {
-          destroy: () => void;
-          unload?: () => void;
-        };
-        player.attachMediaElement(video);
-        player.load();
-        const playResult = player.play();
-        if (playResult && typeof (playResult as Promise<void>).then === "function") {
-          (playResult as Promise<void>)
-            .then(() => {
-              if (!cancelled) setStatus("playing");
-            })
-            .catch(() => {
-              if (!cancelled) setStatus("error");
-            });
-        } else {
-          setStatus("playing");
-        }
-        player.on(mpegts.Events.ERROR, () => {
-          if (!cancelled) setStatus("error");
-        });
-      } catch {
-        if (!cancelled) setStatus("error");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      destroyPlayer();
-    };
-  }, [currentStream?.url, destroyPlayer]);
-
-  // 清晰度切换时重新播放
-  const handleSwitch = (index: number) => {
-    if (index === current) return;
-    destroyPlayer();
-    setCurrent(index);
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-2xl overflow-hidden bg-black relative aspect-video">
-        <video
-          ref={videoRef}
-          controls
-          playsInline
-          poster={poster}
-          className="w-full h-full object-contain"
-        />
-
-        {/* 加载 / 错误 / 不支持遮罩 */}
-        {status !== "playing" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 text-center p-4">
-            {status === "loading" && (
-              <>
-                <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <p className="text-sm text-white/80">正在连接直播流…</p>
-              </>
-            )}
-            {status === "error" && (
-              <>
-                <p className="text-sm text-white/80">直播流播放失败</p>
-                <p className="text-xs text-white/50">
-                  可能是网络受限或直播已结束，请刷新重试或打开抖音直播间
-                </p>
-              </>
-            )}
-            {status === "unsupported" && (
-              <>
-                <p className="text-sm text-white/80">当前浏览器不支持内嵌播放</p>
-                <p className="text-xs text-white/50">
-                  请使用 Chrome / Edge 等现代浏览器，或打开抖音直播间
-                </p>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 清晰度切换 */}
-      {streams.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {streams.map((s, i) => (
-            <button
-              key={`${s.name}-${i}`}
-              type="button"
-              onClick={() => handleSwitch(i)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all duration-200 ${
-                i === current
-                  ? "bg-[#ff6600]/15 border-[#ff6600]/50 text-[#ff6600]"
-                  : "bg-glass-2 hover:bg-glass-3 text-primary border-border-subtle"
-              }`}>
-              {s.name}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   );
