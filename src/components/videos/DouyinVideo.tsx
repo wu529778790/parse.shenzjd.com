@@ -323,7 +323,6 @@ function DouyinLiveCard({ data }: { data: ApiResponse }) {
         <DouyinLivePlayer
           streams={flvStreams}
           poster={d.cover}
-          title={d.title || "直播"}
         />
       ) : (
         d.cover && (
@@ -392,17 +391,14 @@ function DouyinLiveCard({ data }: { data: ApiResponse }) {
 function DouyinLivePlayer({
   streams,
   poster,
-  title,
 }: {
   streams: { name: string; url: string }[];
   poster?: string;
-  title: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<{ destroy: () => void; unload?: () => void } | null>(null);
   const [current, setCurrent] = useState(0);
   const [status, setStatus] = useState<"loading" | "playing" | "error" | "unsupported">("loading");
-  const [supported, setSupported] = useState<boolean | null>(null);
 
   const currentStream = streams[current] || streams[0];
 
@@ -427,11 +423,9 @@ function DouyinLivePlayer({
         mpegts = await loadMpegts();
         if (cancelled) return;
         if (!mpegts.isSupported()) {
-          setSupported(false);
           setStatus("unsupported");
           return;
         }
-        setSupported(true);
         const video = videoRef.current;
         if (!video || !currentStream?.url) {
           setStatus("error");
