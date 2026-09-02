@@ -11,8 +11,10 @@ import * as kuaishouCore from "@/lib/kuaishouCore";
 import * as douyinFallback from "@/lib/douyinFallback";
 
 function makeRequest(url) {
+  // 分平台接口对外已 403 拒绝（只允许 /api/parse 内部转发），
+  // 本用例聚焦快手路由的兜底逻辑，故带 x-parse-internal 标记模拟内部转发绕过 403。
   return new Request(`http://127.0.0.1/api/kuaishou?url=${encodeURIComponent(url)}`, {
-    headers: { "x-forwarded-for": "203.0.113.42" },
+    headers: { "x-forwarded-for": "203.0.113.42", "x-parse-internal": "1" },
   });
 }
 

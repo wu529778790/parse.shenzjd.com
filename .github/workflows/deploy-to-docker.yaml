@@ -59,8 +59,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
+      - name: Run unit tests
         run: npm test
+
+      - name: Run live parse tests (real links via /api/parse)
+        # 真机解析：用内置真实链接走统一接口 /api/parse 回归各平台。
+        # parse-live.test.ts 依赖 LIVE_URL_* 环境变量，未配置时自动跳过（0 用例）；
+        # 各 *-note.test.ts 内置真实链接，会真实请求上游，验证统一接口聚合正确。
+        # 真实链接受上游网络/反爬/限流影响可能偶发失败，故 continue-on-error，
+        # 不阻断单元测试与部署（单元测试 npm test 才是硬性门槛）。
+        continue-on-error: true
+        run: npm run test:live
 
   build:
     runs-on: ubuntu-latest

@@ -15,18 +15,17 @@
  */
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { GET as GETBilibili } from "@/app/api/bilibili/route.js";
+import { GET as GETParse } from "@/app/api/parse/route.js";
 
-// RUN_LIVE_PARSE 由 npm run test:live 注入；BILIBILI_NOTE_TEST 供单独调试本文件使用
-// （setup-dotenv.ts 会清除 RUN_LIVE_PARSE，除非通过 test:live 脚本运行）。
 const RUN =
   process.env.RUN_LIVE_PARSE === "1" || process.env.BILIBILI_NOTE_TEST === "1";
 
 const LIVE_TIMEOUT = Number(process.env.LIVE_PARSE_TIMEOUT_MS || 120000);
 
+// 统一走聚合接口 /api/parse：由服务端识别平台并转发到对应解析器。
 function req(shareUrl: string) {
   return new Request(
-    `http://127.0.0.1/api/bilibili?url=${encodeURIComponent(shareUrl)}`,
+    `http://127.0.0.1/api/parse?url=${encodeURIComponent(shareUrl)}`,
     { headers: { "x-forwarded-for": "203.0.113.42" } }
   );
 }
@@ -42,7 +41,7 @@ const CASES = [
 describe.skipIf(!RUN)("B站视频链接真机解析", () => {
   for (const c of CASES) {
     it(c.name, async () => {
-      const res = await GETBilibili(req(c.url));
+      const res = await GETParse(req(c.url));
       const json = await res.json();
 
       // 归一化后成功返回 code=200

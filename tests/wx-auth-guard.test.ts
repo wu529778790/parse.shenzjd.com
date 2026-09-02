@@ -29,7 +29,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/"
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnrPF7GJYkY/"
       )
     );
     expect(res.status).toBe(401);
@@ -49,7 +49,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnrPF7GJYkY/",
         { headers: { cookie: "wxauth-token=valid.token.abc" } }
       )
     );
@@ -65,7 +65,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnrPF7GJYkY/",
         { headers: { cookie: "wxauth-token=bad.token.xyz" } }
       )
     );
@@ -83,7 +83,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/bearer1/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnrPF7GJYkY/bearer1/",
         { headers: { authorization: "Bearer mp.valid.token.abc" } }
       )
     );
@@ -99,7 +99,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnqPF7GJYkY/trimme/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnqPF7GJYkY/trimme/",
         { headers: { Authorization: "  bearer   mp.token.trim.me  " } }
       )
     );
@@ -117,7 +117,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnrPF7GJYkY/",
         { headers: { authorization: "Basic dXNlcjpwYXNz" } }
       )
     );
@@ -135,7 +135,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnsPF7GJYkY/cookiewins/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnsPF7GJYkY/cookiewins/",
         {
           headers: {
             cookie: "wxauth-token=cookie.token.wins",
@@ -157,7 +157,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const handler = createApiHandler(parseSpy);
     const res = await handler(
       new Request(
-        "http://127.0.0.1/api/douyin?url=https://v.douyin.com/gnrPF7GJYkY/",
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnrPF7GJYkY/",
         { headers: { authorization: "Bearer expired.mp.token" } }
       )
     );
@@ -175,12 +175,12 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const cookie = { cookie: "wxauth-token=cached-token-0001" };
     // 两次请求用不同 URL：避免命中解析结果缓存，专门验证认证缓存
     await handler(
-      new Request("http://127.0.0.1/api/douyin?url=https://v.douyin.com/aaa/", {
+      new Request("http://127.0.0.1/api/parse?url=https://v.douyin.com/aaa/", {
         headers: cookie,
       })
     );
     await handler(
-      new Request("http://127.0.0.1/api/douyin?url=https://v.douyin.com/bbb/", {
+      new Request("http://127.0.0.1/api/parse?url=https://v.douyin.com/bbb/", {
         headers: cookie,
       })
     );
@@ -192,7 +192,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
     const handler = createApiHandler(parseSpy);
     const res = await handler(
-      new Request("http://internal.local/api/douyin?url=https://v.douyin.com/zzz/", {
+      new Request("http://internal.local/api/parse?url=https://v.douyin.com/zzz/", {
         headers: { "x-parse-internal": "1" },
       })
     );

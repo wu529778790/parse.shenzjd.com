@@ -23,7 +23,7 @@ describe("api-middleware", () => {
       },
     });
 
-    const req = new Request("http://127.0.0.1/api/bilibili?url=https://www.bilibili.com/video/BV1xx411c7mD");
+    const req = new Request("http://127.0.0.1/api/parse?url=https://www.bilibili.com/video/BV1xx411c7mD");
     const res = await handler(req);
     const json = await res.json();
 
@@ -108,11 +108,15 @@ describe("api-middleware", () => {
     const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
     const handler = createApiHandler(parseSpy, { shouldCache: false });
 
+    // 分平台接口对外已 403 拒绝（只允许 /api/parse 内部转发），
+    // 本用例聚焦「域名白名单校验」，故带 x-parse-internal 标记模拟内部转发，
+    // 绕过 403 拦截，验证 wtturl.cn 已加入 douyin 白名单、不再 400 拒绝。
     const req = new Request(
       "http://127.0.0.1/api/douyin?url=" +
         encodeURIComponent(
           "https://link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F6891626572860706051"
-        )
+        ),
+      { headers: { "x-parse-internal": "1" } }
     );
     const res = await handler(req);
 
@@ -126,7 +130,7 @@ describe("api-middleware", () => {
     const parseSpy = vi.fn();
     const handler = createApiHandler(parseSpy, { shouldCache: false });
 
-    const req = new Request("http://127.0.0.1/api/douyin?url=https://v.douyin.com/xxxxx/");
+    const req = new Request("http://127.0.0.1/api/parse?url=https://v.douyin.com/xxxxx/");
     const res = await handler(req);
 
     expect(res.status).toBe(200);
@@ -143,7 +147,7 @@ describe("api-middleware", () => {
     const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
     const handler = createApiHandler(parseSpy, { shouldCache: false });
 
-    const req = new Request("http://127.0.0.1/api/bilibili?url=https://www.bilibili.com/video/BV1xx411c7mD");
+    const req = new Request("http://127.0.0.1/api/parse?url=https://www.bilibili.com/video/BV1xx411c7mD");
     const res = await handler(req);
 
     expect(res.status).toBe(200);
