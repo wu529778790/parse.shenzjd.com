@@ -335,7 +335,7 @@ async function xhs(url) {
       }
     }
 
-    return output(404, "该内容不包含视频或图片");
+    return output(404, "该资源已删除");
   } catch (error) {
     logger.error("xhs parse error:", error);
     return output(500, "服务器内部错误");
