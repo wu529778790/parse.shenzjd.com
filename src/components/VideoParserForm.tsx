@@ -124,7 +124,7 @@ export default function VideoParserForm({
 
   // 解析函数（带缓存、重试、可取消）
   const parseVideo = useCallback(
-    async (url: string, platform: string, retryCount = 0) => {
+    async (url: string, platform: VideoPlatformKey | "auto", retryCount = 0) => {
       if (!url) return;
 
       // 微信强制关注：每次发起解析都弹出（不可关闭），关注验证通过后才继续解析
@@ -203,7 +203,7 @@ export default function VideoParserForm({
 
   // 防抖解析：每次先清掉前一个定时器，避免连续输入触发多次请求
   const debouncedParse = useCallback(
-    (url: string, platform: string) => {
+    (url: string, platform: VideoPlatformKey | "auto") => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }

@@ -48,6 +48,10 @@ async function bilibiliRequest(url, headers) {
         ...headers,
         "User-Agent": BILIBILI_USER_AGENT,
         Cookie: BILIBILI_COOKIE,
+        // B站 API 校验 Referer：海外出口（如 GitHub Actions / 海外服务器）不带
+        // 正确 Referer 会被风控拦截（code=-412/-403），带上 bilibili.com 来源
+        // 可正常返回国内数据。
+        Referer: "https://www.bilibili.com/",
       },
     });
     return await response.json();
@@ -64,7 +68,14 @@ async function getBilibiliVideoInfo(url) {
     let bvid;
     
     if (parsedUrl.hostname === "b23.tv") {
-      const response = await fetch(url, { redirect: "follow" });
+      // b23.tv 短链重定向：带 UA + Referer，避免海外出口被 B站风控拦截
+      const response = await fetch(url, {
+        redirect: "follow",
+        headers: {
+          "User-Agent": BILIBILI_USER_AGENT,
+          Referer: "https://www.bilibili.com/",
+        },
+      });
       const redirectUrl = new URL(response.url);
       bvid = redirectUrl.pathname;
     } else if (
