@@ -127,7 +127,32 @@ export const createApiHandler = (
       // 日志失败不影响主流程
     }
 
-    // IP 黑名单拦截（蜜罐模式）：绕过前端、直连解析接口的爬虫/脚本（名单见 api-utils.js）。
+    // 分平台专用接口（/api/douyin、/api/xhs 等）对外不暴露：
+    // 只允许统一入口 /api/parse 的内部转发（带 x-parse-internal 标记）调用，
+    // 外部直接请求分接口一律拒绝，引导改用统一接口。统一入口 /api/parse 本身放行。
+    const routeName = String(routeMatch?.[1] || "");
+    if (
+      routeName &&
+      routeName !== "parse" &&
+      ROUTE_DOMAIN_MAP[routeName] &&
+      !isInternalRequest
+    ) {
+      logger.warn(
+        `分平台接口对外访问被拒绝: route=${routeName} ip=${clientIP}`
+      );
+      return Response.json(
+        {
+          code: 403,
+          msg: "该接口已合并到统一解析入口，请改用 /api/parse?url=<分享链接>",
+        },
+        {
+          status: 403,
+          headers,
+        }
+      );
+    }
+
+    // IP 黑名单拦截（蜜罐模式）：绕过前端、预调解析接口的爬虫/脚本（名单见 api-utils.js）。
     // 命中不再 403 拒绝，而是返回 200 + 结构化蜜罐数据（宣传公众号），
     // 让脚本误以为抓取成功、继续消费，实际拿到的是引导文案（见 lib/honeypot.ts）。
     // 放在 rateLimit 之前（静态 Set/前缀查询零成本）。
@@ -211,7 +236,6 @@ export const createApiHandler = (
     // 否则任意 URL（如 threads.com）都会被当成抖音尝试解析——先 fetch 外部站、
     // 再报「无法提取视频 ID」，白费流量且报错误导。统一入口（/api/parse）与
     // 内部转发（/api/parser）不在映射表内，跳过（/api/parse 已有 identifyPlatform 校验）。
-    const routeName = String(routeMatch?.[1] || "");
     const routeDomain = ROUTE_DOMAIN_MAP[routeName];
     if (routeDomain) {
       try {

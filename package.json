@@ -13,7 +13,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:live": "RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts",
+    "test:live": "RUN_LIVE_PARSE=1 vitest run tests/live/parse-live.test.ts tests/live/douyin-note.test.ts tests/live/xhs-note.test.ts tests/live/bilibili-note.test.ts tests/live/qsmusic-note.test.ts tests/live/weibo-note.test.ts tests/live/twitter-note.test.ts",
     "test:watch": "vitest",
     "build:cf": "opennextjs-cloudflare build"
   },

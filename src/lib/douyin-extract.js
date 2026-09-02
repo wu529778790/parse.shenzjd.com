@@ -117,10 +117,18 @@ export function parseVideoData(videoInfo) {
       : "";
 
     // uri 兜底直链（参考 video-unwatermark sharepage.py）：
-    // 分享页未内嵌 url_list 但只要拿到 video_id（uri），即可构造官方播放接口直链。
+    // 分享页未内嵌 url_list 但只要拿到视频地址（uri），可构造官方播放接口直链。
     // 返回 302 跳转到真实 CDN，前端代理可正常跟随。
     if (!videoResUrl && play.uri && !play.uri.startsWith("http")) {
       videoResUrl = `https://www.iesdouyin.com/aweme/v1/play/?video_id=${play.uri}&ratio=1080p&line=0`;
+    }
+
+    // 图文（note）类型没有视频，只有图片。此时 video.play_addr 里存的是
+    // 背景音乐的播放地址（aweme.snssdk.com/aweme/v1/play/?video_id=<mp3>），
+    // 不能当作视频直链返回，否则前端拿到的是音乐地址、点播放黑屏。
+    // 仅视频类型（isVideo）才返回 url 字段；图文类型置空。
+    if (!isVideo) {
+      videoResUrl = "";
     }
 
     // 背景音乐/原声音频直链（music.play_url.url_list[0]），供「下载音频」使用

@@ -12,6 +12,7 @@ import {
 } from "@/utils/share";
 import { showWxAuth } from "@/lib/wx-auth-client";
 import PlatformIcon from "@/components/PlatformIcon";
+import { toFrontendPlatform } from "@/utils/platform-map";
 
 interface VideoParserFormProps {
   onResult: (data: ApiResponse | null, errorMsg: string) => void;
@@ -149,8 +150,10 @@ export default function VideoParserForm({
       onResult(null, "");
 
       try {
+        // 统一走聚合接口 /api/parse：由服务端识别平台并转发到对应解析器。
+        // 前端不再按平台调用分接口（分接口对外不暴露）。
         const response = await fetch(
-          `/api/${platform}?url=${encodeURIComponent(url)}`,
+          `/api/parse?url=${encodeURIComponent(url)}`,
           { signal: controller.signal }
         );
         const data: ApiResponse = await response.json();
@@ -159,7 +162,11 @@ export default function VideoParserForm({
         if (controller.signal.aborted) return;
 
         if (data.code === 1 || data.code === 200) {
-          data.platform = platform as VideoPlatformKey;
+          // 统一接口返回的 platform 是后端 key（如 redbook/pipixia），
+          // 映射回前端 key（xhs/ppxia）供渲染组件正确匹配。
+          data.platform =
+            toFrontendPlatform(data.platform) ??
+            (platform === "auto" ? undefined : platform);
           onResult(data, "");
           setHasResult(true);
           writeCache(cacheKey, data);
