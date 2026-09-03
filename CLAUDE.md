@@ -22,21 +22,22 @@ Run a single test file: `npx vitest run tests/share.test.ts`
 
 ## Architecture
 
-### Backend: Middleware + Per-Platform Parsers
+### Backend: Middleware + Parser Modules in lib
 
-All platform API routes (`src/app/api/{platform}/route.js`) follow the same pattern:
+Platform parsers live as pure async functions in `src/lib/parsers/{platform}.js` (default export, no HTTP boundary). Each platform API route (`src/app/api/{platform}/route.js`) is a thin wrapper around one:
 
 ```
-export const GET = createApiHandler(parseFunction)
+import douyin from "@/lib/parsers/douyin";
+export const GET = createApiHandler(douyin);
 ```
 
-`createApiHandler()` (in `src/lib/api-middleware.js`) wraps each parser with: optional Basic Auth, IP-based rate limiting (60 req/min), URL validation, SSRF protection, 5-minute in-memory cache, CORS, and error handling. The unified entry `/api/parse` additionally passes `sharedCache` — a 24-hour Cloudflare Cache API result cache (`src/lib/result-cache.js`) storing the platform-supplemented normalized result; on hit it probes the direct URL and re-parses when the cached link is definitively dead (404/410).
+Platform routes are **externally blocked** — `createApiHandler()` (in `src/lib/api-middleware.ts`) returns 403 for every route in its `ROUTE_DOMAIN_MAP` except `/api/parse`; they exist as shells for possible future re-exposure. The unified entry `/api/parse` does NOT forward over HTTP: it resolves parsers via `getPlatformParser()` (`src/lib/platformRoutes.js`, lazy `import()` of the lib modules) and calls the function directly. Never reintroduce an internal-forwarding marker header — a client-forgeable header (`x-parse-internal`) once bypassed auth/quota/analytics.
 
-Platform parsers are standalone async functions (not classes). They typically: follow short URL redirects → fetch HTML with spoofed User-Agents → extract video IDs → parse embedded JSON (`window._ROUTER_DATA`, `__APOLLO_STATE__`, etc.) → return structured JSON. The Kuaishou parser (`src/lib/kuaishouCore.js`) is the exception — it's a class with multi-strategy parsing.
+`createApiHandler()` wraps the unified entry with: WeChat auth guard (wxauth-token cookie / Bearer → remote check via wx-auth, 5-min per-token cache), free-quota + ad-unlock gate (in-memory, single-process only), IP-based rate limiting (60 req/min, in-memory), URL validation, SSRF protection, honeypot for blacklisted IPs, CORS, and error handling. `/api/parse` passes `sharedCache` — a 24-hour result cache (`src/lib/result-cache.js`; Cloudflare Cache API on Workers, in-memory Map fallback on Node) storing the normalized result; on hit it probes the direct URL and re-parses when the cached link is definitively dead (404/410). All routes run on Node.js runtime.
 
-The unified endpoint `/api/parse` auto-detects the platform from a URL and dynamically imports the correct parser. It runs on Edge runtime. Most routes use Edge runtime; the Douyin route explicitly uses Node.js runtime for Docker compatibility.
+Analytics (`src/lib/analytics.js`) buffers parse events in memory and batch-flushes them to Turso (20 events or 30s, one pipeline request); `queryStats()` caches its full-table aggregation for 5 minutes — do not reintroduce per-request DB writes/reads.
 
-The proxy route (`/api/proxy/route.ts`) forwards media requests with appropriate Referer/Cookie headers, with special handling for Bilibili and Douyin CDNs.
+Platform parsers are standalone async functions (not classes). They typically: follow short URL redirects → fetch HTML with spoofed User-Agents → extract video IDs → parse embedded JSON (`window._ROUTER_DATA`, `__APOLLO_STATE__`, etc.) → return structured JSON. Several keep module-level state for anonymous-cookie reuse (Douyin `ttwidCache`, Bilibili `anonCookieCache`, Weibo visitor cookie), persisted in the Turso `kv_store` table when configured. The Kuaishou core (`src/lib/kuaishouCore.js`) is a class with multi-strategy parsing.
 
 ### Frontend: Single Page App
 

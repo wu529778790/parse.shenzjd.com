@@ -121,11 +121,6 @@ export const createApiHandler = (
     const corsHeaders = getCorsHeaders(request.headers.get('origin') || '') as Record<string, string>;
     const headers = { ...corsHeaders, ...extraHeaders };
 
-    // 统一入口（/api/parse）内部转发到平台路由时带 x-parse-internal 标记：
-    // 此时不重复记录行为分析（避免一次解析写两条 parse/parser 记录），
-    // 统计只由最外层请求记录一次。
-    const isInternalRequest = request.headers.get("x-parse-internal") === "1";
-
     // 获取客户端IP
     const clientIP = getClientIP(request);
     logger.log(`API request from IP: ${clientIP}`);
@@ -146,16 +141,13 @@ export const createApiHandler = (
       // 日志失败不影响主流程
     }
 
-    // 分平台专用接口（/api/douyin、/api/xhs 等）对外不暴露：
-    // 只允许统一入口 /api/parse 的内部转发（带 x-parse-internal 标记）调用，
-    // 外部直接请求分接口一律拒绝，引导改用统一接口。统一入口 /api/parse 本身放行。
+    // 分平台专用接口（/api/douyin、/api/xhs 等）对外一律拒绝：
+    // 解析函数已下沉 lib/parsers/，统一入口 /api/parse 直接函数调用，
+    // 不存在"内部转发"——因此这里不再有任何头/参数可以绕过 403
+    // （旧版用客户端可伪造的 x-parse-internal 头区分内外，已被废除）。
+    // 统一入口 /api/parse 本身不在映射表内，正常放行。
     const routeName = String(routeMatch?.[1] || "");
-    if (
-      routeName &&
-      routeName !== "parse" &&
-      ROUTE_DOMAIN_MAP[routeName] &&
-      !isInternalRequest
-    ) {
+    if (routeName && routeName !== "parse" && ROUTE_DOMAIN_MAP[routeName]) {
       logger.warn(
         `分平台接口对外访问被拒绝: route=${routeName} ip=${clientIP}`
       );
@@ -253,8 +245,10 @@ export const createApiHandler = (
 
     // 平台域名白名单校验：/api/douyin 等专用接口只接受本平台域名链接。
     // 否则任意 URL（如 threads.com）都会被当成抖音尝试解析——先 fetch 外部站、
-    // 再报「无法提取视频 ID」，白费流量且报错误导。统一入口（/api/parse）与
-    // 内部转发（/api/parser）不在映射表内，跳过（/api/parse 已有 identifyPlatform 校验）。
+    // 再报「无法提取视频 ID」，白费流量且报错误导。
+    // 当前平台路由在上方已一律 403，本检查实际不可达；保留作为防线：
+    // 若未来放开某平台路由对外访问（带认证），白名单立即生效。
+    // 统一入口（/api/parse）不在映射表内，跳过（已有 identifyPlatform 校验）。
     const routeDomain = ROUTE_DOMAIN_MAP[routeName];
     if (routeDomain) {
       try {
@@ -294,11 +288,11 @@ export const createApiHandler = (
 
     // 解析类接口强制微信认证（登录才能解析）：
     // 读取 SDK 写入的 wxauth-token Cookie → 远程校验（5 分钟缓存）→ 未认证 401。
-    // 豁免：内部转发（/api/parse 最外层已认证，内层是服务端构造的请求无浏览器 Cookie）、
-    // 非解析类接口（health/stats/image/engines 等原生路由不经本中间件）、VITEST 测试环境。
+    // 豁免：非解析类接口（health/stats/image/engines 等原生路由不经本中间件）、
+    // VITEST 测试环境。
     // 认证通过的 token 记录到外层变量，供下方免费配额门禁与成功计数复用。
     let wxAuthToken: string | null = null;
-    if (!isInternalRequest && process.env.VITEST !== "true" && AUTH_REQUIRED_ROUTES.has(routeName)) {
+    if (process.env.VITEST !== "true" && AUTH_REQUIRED_ROUTES.has(routeName)) {
       wxAuthToken = getWxAuthToken(request);
       const authenticated = wxAuthToken ? await checkWxAuthToken(wxAuthToken) : false;
       if (!authenticated) {
@@ -353,9 +347,8 @@ export const createApiHandler = (
     // 连续【成功】解析满 freeQuota 次后，下一次请求必须携带一次性 grant（广告解锁，
     // wx-auth 验票核销）才放行；未满额直接放行，由下方成功分支计数。
     // 放在缓存命中之后 —— 命中缓存（24h shared / 5min 内存）不算真实解析，直接放行不计数。
-    // 豁免：内部转发（最外层已判定）、非解析类路由、VITEST。
+    // 豁免：非解析类路由、VITEST。
     if (
-      !isInternalRequest &&
       process.env.VITEST !== "true" &&
       AUTH_REQUIRED_ROUTES.has(routeName) &&
       wxAuthToken &&
@@ -401,17 +394,15 @@ export const createApiHandler = (
         logParse("failed", 400, duration, "解析失败（无返回结果）");
         logger.warn(`Parse failed after ${duration}ms for URL: ${sanitizedUrl.substring(0, 80)}`);
         // 失败也记录：便于发现未支持/失效的平台与链接。
-        // 注意：必须 await —— CF Workers 响应返回后 isolate 冻结，
-        // fire-and-forget 的 Turso 写入请求会被丢弃（线上曾因此零入库）。
-        if (!isInternalRequest) {
-          await recordParse({
-            platform: String(routeMatch?.[1] || ""),
-            url: sanitizedUrl,
-            ip: clientIP,
-            status: "failed",
-            reason: "解析失败（无返回结果）",
-          }).catch(() => {});
-        }
+        // recordParse 只入内存缓冲（analytics 内部攒批刷写），无 DB I/O，
+        // 无须 await（Docker 常驻进程，响应返回后缓冲照常刷写）。
+        recordParse({
+          platform: String(routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "failed",
+          reason: "解析失败（无返回结果）",
+        });
         return Response.json(
           parseErrorResponse("解析失败"),
           {
@@ -424,32 +415,27 @@ export const createApiHandler = (
       // 统一响应模型：成功结果在出口统一归一化（code=200 + data 统一字段契约）
       const result = normalizeResult(rawResult);
 
-      // 解析结果（成功/失败）异步记录行为分析。
-      // 必须 await（同 CF Workers isolate 冻结问题），写入失败静默不影响主流程
+      // 解析结果（成功/失败）记录行为分析（analytics 内部攒批异步刷写）
       if (result?.code === 200) {
-        if (!isInternalRequest) {
-          await recordParse({
-            platform: String(result.platform || routeMatch?.[1] || ""),
-            url: sanitizedUrl,
-            ip: clientIP,
-            status: "success",
-          }).catch(() => {});
-          // 只有【网页端真实成功解析】才累计免费配额（小程序端、失败、缓存命中不计）
-          if (wxAuthToken && !isMpClient && isUnlockQuotaEnabled()) {
-            recordQuotaSuccess(wxAuthToken);
-          }
+        recordParse({
+          platform: String(result.platform || routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "success",
+        });
+        // 只有【网页端真实成功解析】才累计免费配额（小程序端、失败、缓存命中不计）
+        if (wxAuthToken && !isMpClient && isUnlockQuotaEnabled()) {
+          recordQuotaSuccess(wxAuthToken);
         }
         logParse("success", 200, Date.now() - startTime);
       } else {
-        if (!isInternalRequest) {
-          await recordParse({
-            platform: String(result?.platform || routeMatch?.[1] || ""),
-            url: sanitizedUrl,
-            ip: clientIP,
-            status: "failed",
-            reason: String(result?.msg || "解析失败"),
-          }).catch(() => {});
-        }
+        recordParse({
+          platform: String(result?.platform || routeMatch?.[1] || ""),
+          url: sanitizedUrl,
+          ip: clientIP,
+          status: "failed",
+          reason: String(result?.msg || "解析失败"),
+        });
         logParse(
           "failed",
           Number(result?.code || 0),
@@ -476,15 +462,13 @@ export const createApiHandler = (
       const errMsg = error instanceof Error ? error.message : "Unknown error";
       logParse("error", 500, duration, errMsg);
       logger.error(`API error after ${duration}ms:`, errMsg);
-      if (!isInternalRequest) {
-        await recordParse({
-          platform: String(routeMatch?.[1] || ""),
-          url: sanitizedUrl,
-          ip: clientIP,
-          status: "failed",
-          reason: errMsg,
-        }).catch(() => {});
-      }
+      recordParse({
+        platform: String(routeMatch?.[1] || ""),
+        url: sanitizedUrl,
+        ip: clientIP,
+        status: "failed",
+        reason: errMsg,
+      });
       return Response.json(
         serverErrorResponse(error),
         {

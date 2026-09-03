@@ -188,16 +188,18 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     expect(parseSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("内部转发（x-parse-internal）跳过守卫", async () => {
-    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+  it("x-parse-internal 头不再绕过认证（回归：伪造内部标记应 401）", async () => {
+    // 旧版中间件信任客户端可伪造的 x-parse-internal 头跳过认证，已废除；
+    // 内部转发改为统一入口直接函数调用，该头对守卫不再有任何作用。
+    const parseSpy = vi.fn();
     const handler = createApiHandler(parseSpy);
     const res = await handler(
-      new Request("http://internal.local/api/parse?url=https://v.douyin.com/zzz/", {
+      new Request("http://127.0.0.1/api/parse?url=https://v.douyin.com/zzz/", {
         headers: { "x-parse-internal": "1" },
       })
     );
-    expect(parseSpy).toHaveBeenCalledTimes(1);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    expect(parseSpy).not.toHaveBeenCalled();
   });
 
   it("非解析类路由（route=test）跳过守卫", async () => {

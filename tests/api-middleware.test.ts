@@ -103,20 +103,40 @@ describe("api-middleware", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
-  it("allows 抖音跳转域名 link.wtturl.cn（不再 400 拒绝）", async () => {
-    // 回归：wtturl.cn 加入 douyin 白名单后，链接应进入解析流程（跳过 400）
+  it("分平台路由对外一律 403，x-parse-internal 头不再能绕过（回归）", async () => {
+    // 旧版中间件信任客户端可伪造的 x-parse-internal 头：带上即可绕过
+    // 平台路由 403、微信认证、配额与统计。内部转发已改为统一入口直接
+    // 函数调用，该头不再有任何特权。
+    const parseSpy = vi.fn();
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const douyinUrl =
+      "http://127.0.0.1/api/douyin?url=" +
+      encodeURIComponent("https://v.douyin.com/gnrPF7GJYkY/");
+
+    const withoutHeader = await handler(new Request(douyinUrl));
+    expect(withoutHeader.status).toBe(403);
+    expect(parseSpy).not.toHaveBeenCalled();
+
+    const withHeader = await handler(
+      new Request(douyinUrl, { headers: { "x-parse-internal": "1" } })
+    );
+    expect(withHeader.status).toBe(403);
+    const json = await withHeader.json();
+    expect(json.msg).toContain("统一解析入口");
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
+  it("统一入口不受分平台 403 影响，抖音跳转域名 link.wtturl.cn 正常进入解析", async () => {
+    // 回归：wtturl.cn 加入 douyin 白名单后，统一入口不应在中间件层被拒
     const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
     const handler = createApiHandler(parseSpy, { shouldCache: false });
 
-    // 分平台接口对外已 403 拒绝（只允许 /api/parse 内部转发），
-    // 本用例聚焦「域名白名单校验」，故带 x-parse-internal 标记模拟内部转发，
-    // 绕过 403 拦截，验证 wtturl.cn 已加入 douyin 白名单、不再 400 拒绝。
     const req = new Request(
-      "http://127.0.0.1/api/douyin?url=" +
+      "http://127.0.0.1/api/parse?url=" +
         encodeURIComponent(
           "https://link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F6891626572860706051"
-        ),
-      { headers: { "x-parse-internal": "1" } }
+        )
     );
     const res = await handler(req);
 
