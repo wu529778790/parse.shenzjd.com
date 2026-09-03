@@ -45,8 +45,14 @@ function cleanUrlParameters(url) {
 // B站会临时拦截（code=-412 风控 / -403 无权限），此时重试通常可恢复。
 const RISK_CODES = new Set([-412, -403, -400]);
 
-// 带重试的 B 站 API 请求：网络错误或风控码时重试（最多 2 次，间隔递增），
-// 规避海外出口被 B 站临时风控导致的偶发「解析失败」。
+// 判断响应是否为 HTML（B站对海外 IP 风控时，API 接口会返回 HTML 拦截页而非 JSON，
+// 形如 "<!DOCTYPE html>..."，response.json() 会抛 "Unexpected token '<'"）。
+function isHtmlResponse(text) {
+  return /^\s*<!DOCTYPE|^\s*<html/i.test(text);
+}
+
+// 带重试的 B 站 API 请求：网络错误、风控码、或 HTML 拦截页时重试（最多 2 次，
+// 间隔递增），规避海外出口被 B 站临时风控导致的偶发「解析失败」。
 async function bilibiliRequest(url, headers, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -61,7 +67,34 @@ async function bilibiliRequest(url, headers, retries = 2) {
           Referer: "https://www.bilibili.com/",
         },
       });
-      const json = await response.json();
+      const text = await response.text();
+      // 返回 HTML 拦截页：海外 IP 被风控，重试通常可恢复
+      if (isHtmlResponse(text)) {
+        if (attempt < retries) {
+          logger.warn(
+            `B站返回 HTML 拦截页（海外IP风控），第 ${attempt + 1} 次重试: ${url.slice(0, 80)}`
+          );
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          continue;
+        }
+        logger.error("B站持续返回 HTML 拦截页（海外IP被风控）:", url.slice(0, 80));
+        return { code: -412, msg: "风控拦截", html: true };
+      }
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // 非 JSON 也非 HTML（异常响应）：按网络错误重试
+        if (attempt < retries) {
+          logger.warn(
+            `bilibili 响应非 JSON，第 ${attempt + 1} 次重试: ${url.slice(0, 80)}`
+          );
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          continue;
+        }
+        logger.error("bilibili 响应非 JSON:", text.slice(0, 200));
+        return null;
+      }
       // 命中风控码且还有重试次数：短暂等待后重试
       if (json && RISK_CODES.has(json.code) && attempt < retries) {
         logger.warn(
@@ -211,3 +244,6 @@ export const GET = createApiHandler(getBilibiliVideoInfo, {
     "Cache-Control": "no-store, no-cache, must-revalidate",
   },
 });
+
+// 测试辅助：导出内部请求函数供单测验证风控/HTML 拦截处理
+export { bilibiliRequest };
