@@ -9,14 +9,22 @@ import {
   extractFilterReason,
   isChallengeHtml,
   extractIdFromUrl,
-  extractTtwid,
   isUserProfileUrl,
   parseMixDetail,
   parseMixAwemeList,
 } from "@/lib/douyin-extract";
+import {
+  extractDouyinTtwid,
+  getDouyinTtwid,
+  saveDouyinTtwid,
+} from "@/lib/douyin-cookie";
 
 // Docker 自托管下 Node runtime 对外网 fetch 通常比 Edge 沙箱更稳定（抖音等站）
 export const runtime = "nodejs";
+
+// 模块级 ttwid 缓存：Docker 常驻进程内跨请求复用，避免每次请求都查库。
+// 首次从 Turso 读取，后续请求内直接复用；响应返回新 ttwid 时更新。
+let ttwidCache = "";
 
 // 多组 UA 轮询（参考 video-unwatermark sharepage.py 的 DOUYIN_HEADER_SETS）。
 // 顺序关键：抖音 App UA（aweme/...）实测是唯一会下发 ttwid 的 UA，
@@ -52,6 +60,12 @@ async function douyin(url) {
   try {
     const DOUYIN_COOKIE = process.env.DOUYIN_COOKIE || "";
 
+    // 首次进入时从 Turso 加载持久化的 ttwid 到模块缓存（仅加载一次，
+    // 后续请求内直接复用；未配置 Turso 时静默跳过）。
+    if (!ttwidCache) {
+      ttwidCache = await getDouyinTtwid();
+    }
+
     // ---- Step 1: 从短链 / 分享链接中提取视频 ID 和完整重定向 URL ----
     const extractResult = await extractIdAndRedirectUrl(url);
     // 短链实际跳转到用户主页（/share/user/ 或带 sec_uid）：
@@ -76,14 +90,18 @@ async function douyin(url) {
     }
     const { id, type: contentType, redirectUrl, ttwid } = extractResult;
 
-    // ---- 合集（mix）链接：走独立的合集解析流程 ----
+    // 优先复用持久化的 ttwid（稳定是关键，避免每次请求都重新握手）；
+    // 本次请求新拿到的 ttwid 作为兜底。
+    const effectiveTtwid = ttwidCache || ttwid || "";
+
+    // ---- 合集（mix）链接：直接走独立的合集解析流程 ----
     if (contentType === "mix") {
-      return await parseMix(id, ttwid);
+      return await parseMix(id, effectiveTtwid);
     }
 
     // ---- 直播链接：走独立的直播解析流程 ----
     if (contentType === "live") {
-      return await parseLive(id, ttwid);
+      return await parseLive(id, effectiveTtwid);
     }
 
     const sharePath = contentType === "note" ? "note" : "video";
@@ -111,7 +129,7 @@ async function douyin(url) {
 
     // 抖音二次握手机制：匿名首次访问只下发 ttwid cookie（无需登录），
     // 带 ttwid 的第二次请求才会返回视频数据。维护一个极简 cookie jar。
-    let ttwidCookie = ttwid || "";
+    let ttwidCookie = effectiveTtwid;
     // 整体请求预算：2 轮 × 3 组 UA × 4 URL 最坏可能很慢，用 20s 硬上限兜底
     const startTime = Date.now();
     const buildFetchHeaders = (ua) => {
@@ -164,10 +182,13 @@ async function douyin(url) {
             const html = await response.text();
             lastHtml = html;
 
-            // 从响应头收集 ttwid，供后续请求使用（App UA 才会下发）
-            const newTtwid = extractTtwid(response);
+            // 从响应头收集 ttwid，供后续请求使用（App UA 才会下发）；
+            // 更新模块缓存并异步持久化，供后续请求稳定复用。
+            const newTtwid = extractDouyinTtwid(response);
             if (newTtwid && ttwidCookie !== newTtwid) {
               ttwidCookie = newTtwid;
+              ttwidCache = newTtwid;
+              saveDouyinTtwid(newTtwid); // fire-and-forget，不阻塞主流程
             }
 
             // 检查是否被重定向到国际版
@@ -491,7 +512,7 @@ async function extractIdAndRedirectUrl(url) {
     }
 
     // 从响应头收集匿名 ttwid（首次访问抖音会自动下发，无需登录）
-    const ttwid = extractTtwid(response);
+    const ttwid = extractDouyinTtwid(response);
 
     // 从最终 URL 中提取 ID
     const result = extractIdFromUrl(finalUrl);
