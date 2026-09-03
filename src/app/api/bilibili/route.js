@@ -41,24 +41,50 @@ function cleanUrlParameters(url) {
   }
 }
 
-async function bilibiliRequest(url, headers) {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        ...headers,
-        "User-Agent": BILIBILI_USER_AGENT,
-        Cookie: BILIBILI_COOKIE,
-        // B站 API 校验 Referer：海外出口（如 GitHub Actions / 海外服务器）不带
-        // 正确 Referer 会被风控拦截（code=-412/-403），带上 bilibili.com 来源
-        // 可正常返回国内数据。
-        Referer: "https://www.bilibili.com/",
-      },
-    });
-    return await response.json();
-  } catch (error) {
-    logger.error("Error making bilibili request:", error.message);
-    return null;
+// B站风控/反爬返回的错误码：海外出口（Cloudflare Workers 等）请求频繁时，
+// B站会临时拦截（code=-412 风控 / -403 无权限），此时重试通常可恢复。
+const RISK_CODES = new Set([-412, -403, -400]);
+
+// 带重试的 B 站 API 请求：网络错误或风控码时重试（最多 2 次，间隔递增），
+// 规避海外出口被 B 站临时风控导致的偶发「解析失败」。
+async function bilibiliRequest(url, headers, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          ...headers,
+          "User-Agent": BILIBILI_USER_AGENT,
+          Cookie: BILIBILI_COOKIE,
+          // B站 API 校验 Referer：海外出口（如 GitHub Actions / 海外服务器）不带
+          // 正确 Referer 会被风控拦截（code=-412/-403），带上 bilibili.com 来源
+          // 可正常返回国内数据。
+          Referer: "https://www.bilibili.com/",
+        },
+      });
+      const json = await response.json();
+      // 命中风控码且还有重试次数：短暂等待后重试
+      if (json && RISK_CODES.has(json.code) && attempt < retries) {
+        logger.warn(
+          `B站风控码 ${json.code}，第 ${attempt + 1} 次重试: ${url.slice(0, 80)}`
+        );
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        continue;
+      }
+      return json;
+    } catch (error) {
+      // 网络错误（超时/断连）：还有重试次数则重试
+      if (attempt < retries) {
+        logger.warn(
+          `bilibili 请求网络错误(${error.message})，第 ${attempt + 1} 次重试`
+        );
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        continue;
+      }
+      logger.error("Error making bilibili request:", error.message);
+      return null;
+    }
   }
+  return null;
 }
 
 async function getBilibiliVideoInfo(url) {
@@ -108,6 +134,13 @@ async function getBilibiliVideoInfo(url) {
     
     if (!videoInfo || videoInfo.code !== 0) {
       logger.warn("Failed to fetch video info, response:", videoInfo);
+      // 区分「视频不存在/已删除」与「风控拦截」：前者是确定失败，后者是临时风控
+      if (videoInfo && RISK_CODES.has(videoInfo.code)) {
+        return { code: 0, msg: "B站风控拦截，请稍后重试" };
+      }
+      if (videoInfo && (videoInfo.code === -404 || videoInfo.code === 62002)) {
+        return { code: 0, msg: "视频不存在或已删除" };
+      }
       return { code: 0, msg: "解析失败！" };
     }
     
@@ -135,6 +168,22 @@ async function getBilibiliVideoInfo(url) {
     });
     
     const bilijson = (await Promise.all(playUrlPromises)).filter(Boolean);
+    
+    // 所有分P的播放地址都拿不到（如风控/版权限制）：仍返回视频信息，但提示播放地址获取失败
+    if (bilijson.length === 0) {
+      logger.warn("bilibili playurl all failed, bvid:", bvid);
+      return {
+        code: 0,
+        msg: "获取播放地址失败，请稍后重试",
+        title: videoInfo.data.title,
+        imgurl: videoInfo.data.pic,
+        desc: videoInfo.data.desc,
+        user: {
+          name: videoInfo.data.owner.name,
+          user_img: videoInfo.data.owner.face,
+        },
+      };
+    }
     
     logger.log("Successfully parsed bilibili video, pages:", bilijson.length);
     
