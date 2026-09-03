@@ -446,7 +446,6 @@ DOUYIN_COOKIE=your_cookie
 DOUYIN_USER_AGENT=your_user_agent
 
 # 哔哩哔哩
-BILIBILI_COOKIE=your_cookie
 BILIBILI_USER_AGENT=your_user_agent
 
 # 微博（已改为自动游客模式，无需配置 Cookie；见下方说明）

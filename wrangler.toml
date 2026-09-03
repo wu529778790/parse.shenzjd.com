@@ -11,7 +11,7 @@ compatibility_flags = ["nodejs_compat"]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
-# 非敏感环境变量（DOUYIN_COOKIE / WEIBO_COOKIE / BILIBILI_COOKIE 等敏感值
+# 非敏感环境变量（DOUYIN_COOKIE / WEIBO_COOKIE 等敏感值
 # 在 Worker 的 Settings → Variables and Secrets 中添加，不写入本文件）
 [vars]
 BILIBILI_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

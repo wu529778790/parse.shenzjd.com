@@ -43,7 +43,7 @@
    - **Build command（构建命令）**：`npm run build:cf`
    - **Deploy command（部署命令）**：`npx wrangler deploy`
 3. 部署成功后，在 Worker 的 **Settings → Variables and Secrets → Secrets** 中添加（可选，用于提升解析成功率）：
-   - `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`
+   - `DOUYIN_COOKIE`、`WEIBO_COOKIE`
    - （`BILIBILI_USER_AGENT` 已写入 `wrangler.toml` 的 `[vars]`，无需配置）
 4. 之后每次 push 到 `main`，Cloudflare 自动重新构建并部署。
 
@@ -99,7 +99,7 @@ npm test
 
 2. 可选：`LIVE_PARSE_TIMEOUT_MS`（默认 `120000`）用于单条用例超时（毫秒）。
 
-3. 抖音 / 微博 / 哔哩哔哩等若解析失败，请检查 `.env` 中是否按需配置了 `DOUYIN_COOKIE`、`WEIBO_COOKIE`、`BILIBILI_COOKIE`（与 `API.md` 一致）。
+3. 抖音 / 微博 / 哔哩哔哩等若解析失败，请检查 `.env` 中是否按需配置了 `DOUYIN_COOKIE`、`WEIBO_COOKIE`（与 `API.md` 一致）。
 
 说明：真机测试受地区、风控、Cookie 与链接失效影响，失败时请更换测试文件中的有效分享链后重试。
 

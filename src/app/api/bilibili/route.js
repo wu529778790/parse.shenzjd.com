@@ -1,13 +1,20 @@
 import { createApiHandler } from "@/lib/api-middleware";
 import { logger } from "@/lib/api-utils";
+import {
+  extractBilibiliAnonCookie,
+  getBiliAnonCookie,
+  saveBiliAnonCookie,
+} from "@/lib/bilibili-cookie";
 
 export const runtime = "nodejs";
+
+// 模块级匿名 Cookie 缓存：单次请求内复用，避免每次 fetch 都查库。
+// 首次从 Turso 读取，后续请求内直接复用；响应返回新 Cookie 时更新。
+let anonCookieCache = "";
 
 // 从环境变量获取配置
 const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT || 
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36";
-
-const BILIBILI_COOKIE = process.env.BILIBILI_COOKIE || "";
 
 // B站按请求出口 IP 分配 CDN 节点：海外出口（如本服务器在新加坡）拿到 akamaized.net
 // 海外节点，大陆用户浏览器无法播放。直链签名（upsig/uparams）不绑定 host，
@@ -51,22 +58,53 @@ function isHtmlResponse(text) {
   return /^\s*<!DOCTYPE|^\s*<html/i.test(text);
 }
 
+// 补全浏览器请求头，让 B 站风控认为请求来自真实浏览器而非爬虫。
+// 海外出口（新加坡服务器）仅靠 UA/Referer 仍可能被风控，补全这些头 + 稳定
+// 复用的匿名 Cookie（buvid3 等设备指纹）可显著降低被拦截概率。
+function buildBilibiliHeaders(extra = {}) {
+  const headers = {
+    ...extra,
+    "User-Agent": BILIBILI_USER_AGENT,
+    // B站 API 要求 Referer：海外出口（如 GitHub Actions / 海外服务器）不带
+    // 正确 Referer 会被风控返回 code=-412/-403，带上 bilibili.com 来源
+    // 可正常返回国内数据。
+    Referer: "https://www.bilibili.com/",
+    Origin: "https://www.bilibili.com",
+    Accept: "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    "Sec-Ch-Ua":
+      '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "X-Requested-With": "XMLHttpRequest",
+  };
+  // 带上稳定复用的匿名 Cookie（buvid3 等设备指纹），让 B 站认为请求来自
+  // 正常浏览的游客而非爬虫，显著降低海外出口被风控的概率。
+  if (anonCookieCache) {
+    headers.Cookie = anonCookieCache;
+  }
+  return headers;
+}
+
 // 带重试的 B 站 API 请求：网络错误、风控码、或 HTML 拦截页时重试（最多 2 次，
 // 间隔递增），规避海外出口被 B 站临时风控导致的偶发「解析失败」。
 async function bilibiliRequest(url, headers, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, {
-        headers: {
-          ...headers,
-          "User-Agent": BILIBILI_USER_AGENT,
-          Cookie: BILIBILI_COOKIE,
-          // B站 API 校验 Referer：海外出口（如 GitHub Actions / 海外服务器）不带
-          // 正确 Referer 会被风控拦截（code=-412/-403），带上 bilibili.com 来源
-          // 可正常返回国内数据。
-          Referer: "https://www.bilibili.com/",
-        },
+        headers: buildBilibiliHeaders(headers),
       });
+      // 从响应头捕获 B 站下发的匿名 Cookie（首次访问会自动下发 buvid3 等），
+      // 更新模块缓存并异步持久化，供后续请求稳定复用。
+      const newCookie = extractBilibiliAnonCookie(response);
+      if (newCookie && newCookie !== anonCookieCache) {
+        anonCookieCache = newCookie;
+        saveBiliAnonCookie(newCookie); // fire-and-forget，不阻塞主流程
+      }
       const text = await response.text();
       // 返回 HTML 拦截页：海外 IP 被风控，重试通常可恢复
       if (isHtmlResponse(text)) {
@@ -122,6 +160,11 @@ async function bilibiliRequest(url, headers, retries = 2) {
 
 async function getBilibiliVideoInfo(url) {
   try {
+    // 首次进入时从 Turso 加载持久化的匿名 Cookie 到模块缓存（仅加载一次，
+    // 后续请求内直接复用；未配置 Turso 时静默跳过）。
+    if (!anonCookieCache) {
+      anonCookieCache = await getBiliAnonCookie();
+    }
     const cleanUrl = cleanUrlParameters(url);
     const parsedUrl = new URL(cleanUrl);
     let bvid;
@@ -244,6 +287,3 @@ export const GET = createApiHandler(getBilibiliVideoInfo, {
     "Cache-Control": "no-store, no-cache, must-revalidate",
   },
 });
-
-// 测试辅助：导出内部请求函数供单测验证风控/HTML 拦截处理
-export { bilibiliRequest };
