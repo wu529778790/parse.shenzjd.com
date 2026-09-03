@@ -11,6 +11,10 @@ import {
   hasValidVideoUrl,
 } from "@/utils/share";
 import { showWxAuth } from "@/lib/wx-auth-client";
+import {
+  unlockByAd,
+  unlockRequestHeaders,
+} from "@/lib/floating-unlock-client";
 import PlatformIcon from "@/components/PlatformIcon";
 import { toFrontendPlatform } from "@/utils/platform-map";
 
@@ -152,14 +156,38 @@ export default function VideoParserForm({
       try {
         // 统一走聚合接口 /api/parse：由服务端识别平台并转发到对应解析器。
         // 前端不再按平台调用分接口（分接口对外不暴露）。
-        const response = await fetch(
-          `/api/parse?url=${encodeURIComponent(url)}`,
-          { signal: controller.signal }
-        );
-        const data: ApiResponse = await response.json();
+        const requestParse = async (
+          extraHeaders: Record<string, string> = {}
+        ): Promise<{ status: number; data: ApiResponse }> => {
+          const response = await fetch(
+            `/api/parse?url=${encodeURIComponent(url)}`,
+            { signal: controller.signal, headers: extraHeaders }
+          );
+          const data: ApiResponse = await response.json();
+          return { status: response.status, data };
+        };
 
+        // 403 + needsUnlock 标记 = 服务端判定「登录用户免费次数已用完」，需先看广告解锁
+        const isNeedsUnlock = (d: ApiResponse): boolean =>
+          (d as unknown as { data?: { needsUnlock?: boolean } }).data
+            ?.needsUnlock === true;
+
+        const first = await requestParse();
         // 请求已被取消（用户切换了新解析），丢弃结果
         if (controller.signal.aborted) return;
+
+        let data = first.data;
+        if (first.status === 403 && isNeedsUnlock(data)) {
+          // 看完广告拿到一次性 grant，带票据重发本次请求（放行权在服务端验票核销）
+          const unlock = await unlockByAd();
+          if (!unlock.ok) {
+            onResult(null, "广告解锁未完成，请稍后重试");
+            return;
+          }
+          const retried = await requestParse(unlockRequestHeaders(unlock));
+          if (controller.signal.aborted) return;
+          data = retried.data;
+        }
 
         if (data.code === 1 || data.code === 200) {
           // 统一接口返回的 platform 是后端 key（如 redbook/pipixia），

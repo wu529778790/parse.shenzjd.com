@@ -17,6 +17,13 @@ import {
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
 import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
+import { enforceFloatingUnlock } from "@/lib/floating-unlock-verify";
+import {
+  isUnlockQuotaEnabled,
+  isQuotaFull,
+  recordQuotaSuccess,
+  resetQuota,
+} from "@/lib/unlock-quota";
 import { honeypotResponse } from "@/lib/honeypot";
 import { getResultCache, putResultCache, resultStale } from "@/lib/result-cache";
 
@@ -277,9 +284,11 @@ export const createApiHandler = (
     // 读取 SDK 写入的 wxauth-token Cookie → 远程校验（5 分钟缓存）→ 未认证 401。
     // 豁免：内部转发（/api/parse 最外层已认证，内层是服务端构造的请求无浏览器 Cookie）、
     // 非解析类接口（health/stats/image/engines 等原生路由不经本中间件）、VITEST 测试环境。
+    // 认证通过的 token 记录到外层变量，供下方免费配额门禁与成功计数复用。
+    let wxAuthToken: string | null = null;
     if (!isInternalRequest && process.env.VITEST !== "true" && AUTH_REQUIRED_ROUTES.has(routeName)) {
-      const wxToken = getWxAuthToken(request);
-      const authenticated = wxToken ? await checkWxAuthToken(wxToken) : false;
+      wxAuthToken = getWxAuthToken(request);
+      const authenticated = wxAuthToken ? await checkWxAuthToken(wxAuthToken) : false;
       if (!authenticated) {
         logParse("failed", 401, Date.now() - startTime, "未完成微信认证");
         logger.warn(
@@ -321,6 +330,48 @@ export const createApiHandler = (
         return Response.json(cached, {
           headers,
         });
+      }
+    }
+
+    // 登录用户免费配额门禁（服务端内存计数，Docker / Node 单进程部署可靠）：
+    // 连续【成功】解析满 freeQuota 次后，下一次请求必须携带一次性 grant（广告解锁，
+    // wx-auth 验票核销）才放行；未满额直接放行，由下方成功分支计数。
+    // 放在缓存命中之后 —— 命中缓存（24h shared / 5min 内存）不算真实解析，直接放行不计数。
+    // 豁免：内部转发（最外层已判定）、非解析类路由、VITEST。
+    if (
+      !isInternalRequest &&
+      process.env.VITEST !== "true" &&
+      AUTH_REQUIRED_ROUTES.has(routeName) &&
+      wxAuthToken &&
+      isUnlockQuotaEnabled()
+    ) {
+      if (isQuotaFull(wxAuthToken)) {
+        const gate = await enforceFloatingUnlock(request, headers);
+        if (!gate.pass) {
+          logParse(
+            "failed",
+            403,
+            Date.now() - startTime,
+            `免费次数用尽 reason=${gate.reason}`
+          );
+          if (gate.reason === "missing") {
+            // 无验票头：明确告诉前端「免费次数已用完，先看广告」，带 needsUnlock 标记，
+            // 前端据此弹广告解锁并用 grant 重发本次请求。
+            return Response.json(
+              {
+                code: 403,
+                msg: "免费解析次数已用完，观看一条广告即可继续解析",
+                data: { needsUnlock: true },
+              },
+              { status: safeStatus(403), headers }
+            );
+          }
+          // rejected / unreachable：grant 已核销失效或验票服务不可达，
+          // 返回标准 403（不带 needsUnlock，避免前端无限重试广告）
+          return gate.response;
+        }
+        // 广告验票通过（wx-auth 已核销该 grant）：清零配额，本次解析放行，算新一轮第一次
+        resetQuota(wxAuthToken);
       }
     }
 
@@ -366,6 +417,10 @@ export const createApiHandler = (
             ip: clientIP,
             status: "success",
           }).catch(() => {});
+          // 只有【真实成功解析】才累计免费配额（失败/缓存命中不计）
+          if (wxAuthToken && isUnlockQuotaEnabled()) {
+            recordQuotaSuccess(wxAuthToken);
+          }
         }
         logParse("success", 200, Date.now() - startTime);
       } else {
