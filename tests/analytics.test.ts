@@ -3,11 +3,12 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // 在导入 analytics 前 mock turso-client，避免单元测试连接真实数据库
 const mockExecute = vi.fn();
+const mockBatch = vi.fn();
 vi.mock("@/lib/turso-client", () => ({
-  createTursoClient: vi.fn(() => ({ execute: mockExecute })),
+  createTursoClient: vi.fn(() => ({ execute: mockExecute, batch: mockBatch })),
 }));
 
-// 动态导入以支持 vi.resetModules 重置模块级缓存（db / tableReady）
+// 动态导入以支持 vi.resetModules 重置模块级缓存（db / tableReady / 缓冲区 / 统计缓存）
 let analytics;
 
 async function loadAnalytics() {
@@ -23,10 +24,13 @@ describe("analytics", () => {
     vi.clearAllMocks();
     mockExecute.mockReset();
     mockExecute.mockResolvedValue({ rows: [] });
+    mockBatch.mockReset();
+    mockBatch.mockResolvedValue([]);
     await loadAnalytics();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    if (analytics) await analytics.__flushAnalyticsForTest();
     if (originalUrl === undefined) delete process.env.TURSO_DB_URL;
     else process.env.TURSO_DB_URL = originalUrl;
     if (originalToken === undefined) delete process.env.TURSO_AUTH_TOKEN;
@@ -49,7 +53,7 @@ describe("analytics", () => {
     expect(await analytics.queryStats()).toBeNull();
   });
 
-  it("配置后 recordParse 建表并插入成功记录", async () => {
+  it("recordParse 只入缓冲不直写，flush 时一次批量插入（含建表）", async () => {
     process.env.TURSO_DB_URL = "libsql://test.turso.io";
     process.env.TURSO_AUTH_TOKEN = "test-token";
     await analytics.recordParse({
@@ -61,17 +65,22 @@ describe("analytics", () => {
     expect(createTursoClient).toHaveBeenCalledWith(
       expect.objectContaining({ url: "libsql://test.turso.io", authToken: "test-token" })
     );
-    expect(mockExecute).toHaveBeenCalled();
-    const insert = mockExecute.mock.calls.find(
-      ([arg]) => typeof arg === "object" && String(arg.sql).startsWith("INSERT")
-    );
-    expect(insert).toBeTruthy();
-    expect(insert[0].args[0]).toBe("kuaishou");
-    expect(insert[0].args[1]).toBe("https://v.kuaishou.com/abc");
-    expect(insert[0].args[3]).toBe("success");
+    // 事件还在缓冲区：尚未发生任何 INSERT
+    expect(mockBatch).not.toHaveBeenCalled();
+
+    await analytics.__flushAnalyticsForTest();
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+    const stmts = mockBatch.mock.calls[0][0];
+    expect(stmts).toHaveLength(1);
+    expect(stmts[0].sql).toMatch(/^INSERT INTO parse_events/);
+    expect(stmts[0].args[0]).toBe("kuaishou");
+    expect(stmts[0].args[1]).toBe("https://v.kuaishou.com/abc");
+    expect(stmts[0].args[3]).toBe("success");
+    // IP 已匿名化（64 位十六进制 SHA-256），不落明文
+    expect(stmts[0].args[2]).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("配置后 recordParse 可记录失败事件（status=failed + reason）", async () => {
+  it("多条事件合并为一次批量写入", async () => {
     process.env.TURSO_DB_URL = "libsql://test.turso.io";
     process.env.TURSO_AUTH_TOKEN = "test-token";
     await analytics.recordParse({
@@ -81,12 +90,39 @@ describe("analytics", () => {
       status: "failed",
       reason: "虎牙视频解析失败",
     });
-    const insert = mockExecute.mock.calls.find(
-      ([arg]) => typeof arg === "object" && String(arg.sql).startsWith("INSERT")
-    );
-    expect(insert).toBeTruthy();
-    expect(insert[0].args[3]).toBe("failed");
-    expect(insert[0].args[4]).toBe("虎牙视频解析失败");
+    await analytics.recordParse({
+      platform: "douyin",
+      url: "https://v.douyin.com/abc",
+      ip: "203.0.113.7",
+    });
+    await analytics.__flushAnalyticsForTest();
+
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+    const stmts = mockBatch.mock.calls[0][0];
+    expect(stmts).toHaveLength(2);
+    expect(stmts[0].args[3]).toBe("failed");
+    expect(stmts[0].args[4]).toBe("虎牙视频解析失败");
+    expect(stmts[1].args[0]).toBe("douyin");
+  });
+
+  it("批量写入失败时回灌缓冲，下次 flush 重试", async () => {
+    process.env.TURSO_DB_URL = "libsql://test.turso.io";
+    process.env.TURSO_AUTH_TOKEN = "test-token";
+    mockBatch.mockRejectedValueOnce(new Error("Turso HTTP 503"));
+    await analytics.recordParse({
+      platform: "weibo",
+      url: "https://weibo.com/x",
+      ip: "203.0.113.8",
+    });
+    await analytics.__flushAnalyticsForTest();
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+
+    // 第二次 flush：失败回灌的事件被重试
+    await analytics.__flushAnalyticsForTest();
+    expect(mockBatch).toHaveBeenCalledTimes(2);
+    const stmts = mockBatch.mock.calls[1][0];
+    expect(stmts).toHaveLength(1);
+    expect(stmts[0].args[0]).toBe("weibo");
   });
 
   it("配置后 queryStats 返回聚合结果（含 success/failed 维度）", async () => {
@@ -100,5 +136,22 @@ describe("analytics", () => {
     expect(stats.totals).toBeTruthy();
     expect(stats.byPlatform[0].platform).toBe("douyin");
     expect(stats.byPlatform[0].failed).toBe(1);
+  });
+
+  it("queryStats 结果走 5 分钟内存缓存：TTL 内不重复查询", async () => {
+    process.env.TURSO_DB_URL = "libsql://test.turso.io";
+    process.env.TURSO_AUTH_TOKEN = "test-token";
+    mockExecute.mockResolvedValue({
+      rows: [{ platform: "douyin", total: 6, success: 5, failed: 1 }],
+    });
+    const selectCalls = () =>
+      mockExecute.mock.calls.filter(
+        ([arg]) => typeof arg === "string" && arg.startsWith("SELECT")
+      ).length;
+    const first = await analytics.queryStats();
+    expect(selectCalls()).toBe(3); // 三条聚合查询只在首次执行
+    const second = await analytics.queryStats();
+    expect(second).toBe(first); // 命中缓存：同一对象、零额外扫表
+    expect(selectCalls()).toBe(3);
   });
 });
