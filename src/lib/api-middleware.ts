@@ -89,6 +89,18 @@ const AUTH_REQUIRED_ROUTES = new Set<string>([
   "parse",
 ]);
 
+// 小程序端识别（本站自判，不依赖 wx-auth 返回用户类型）：
+// 小程序环境没有 Cookie，登录后通过 Authorization: Bearer <token> 携带凭证；
+// 请求若带 Bearer 头且无 wxauth-token Cookie，即视为小程序端。
+// 取舍说明：拥有有效 token 的客户端若改为 Bearer 直连会被当作小程序端免广告
+// （但要先关注公众号拿到 token；若后续发现滥用，可恢复按 wx-auth user.type 判定的方案）。
+function isMpClientRequest(request: Request): boolean {
+  const authorization = request.headers.get("authorization");
+  if (!authorization || !/^\s*bearer\s+/i.test(authorization)) return false;
+  const cookie = request.headers.get("cookie") || "";
+  return !/(?:^|;\s*)wxauth-token=/i.test(cookie);
+}
+
 // 通用 API 处理函数
 export const createApiHandler = (
   parseFunction: ParseFunction,
@@ -304,6 +316,10 @@ export const createApiHandler = (
       }
     }
 
+    // 小程序端识别（本站自判，供下方配额门禁判断）：Bearer 通道且无 Cookie → 小程序端，
+    // 跳过网页端的免费配额/广告解锁（小程序端有自己的激励视频/授权体系）。
+    const isMpClient = isMpClientRequest(request);
+
     // 统一入口的共享结果缓存：放在认证之后（未认证用户不消费缓存）。
     // 命中先探测主直链，明确死链（签名过期）视为未命中走重新解析，
     // 避免把过期直链发给前端黑屏
@@ -343,6 +359,7 @@ export const createApiHandler = (
       process.env.VITEST !== "true" &&
       AUTH_REQUIRED_ROUTES.has(routeName) &&
       wxAuthToken &&
+      !isMpClient &&
       isUnlockQuotaEnabled()
     ) {
       if (isQuotaFull(wxAuthToken)) {
@@ -417,8 +434,8 @@ export const createApiHandler = (
             ip: clientIP,
             status: "success",
           }).catch(() => {});
-          // 只有【真实成功解析】才累计免费配额（失败/缓存命中不计）
-          if (wxAuthToken && isUnlockQuotaEnabled()) {
+          // 只有【网页端真实成功解析】才累计免费配额（小程序端、失败、缓存命中不计）
+          if (wxAuthToken && !isMpClient && isUnlockQuotaEnabled()) {
             recordQuotaSuccess(wxAuthToken);
           }
         }

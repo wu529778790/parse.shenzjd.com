@@ -181,6 +181,52 @@ describe("floating-unlock 免费配额门禁（Docker 内存计数）", () => {
     expect(blocked.status).toBe(403);
   });
 
+  it("小程序端（Bearer、无 Cookie）连续解析不受配额限制", async () => {
+    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+    const handler = createApiHandler(parseSpy);
+    const token = "mp-bearer-001";
+    // 小程序端：Authorization: Bearer 携带凭证，无 Cookie
+    const mpRequest = (urlPath) =>
+      new Request(parseUrl(urlPath), {
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+    for (let i = 1; i <= 6; i++) {
+      const res = await handler(mpRequest(`https://v.douyin.com/mp${i}/`));
+      expect(res.status).toBe(200);
+    }
+    expect(parseSpy).toHaveBeenCalledTimes(6);
+    // 全程不触发广告解锁验票
+    const verifyCalls = global.fetch.mock.calls.filter((c) =>
+      String(c[0]).includes("/api/auth/mp-reward/verify")
+    );
+    expect(verifyCalls).toHaveLength(0);
+  });
+
+  it("带 Cookie 的网页请求即使携带多余 Bearer 头也不按小程序端放过（防伪造）", async () => {
+    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+    const handler = createApiHandler(parseSpy);
+    const token = "cookie-plus-bearer-001";
+    // 网页端 Cookie 登录，同时带一个多余 Bearer 头（伪造场景，应仍按网页端计配额）
+    const trickyRequest = (urlPath) =>
+      new Request(parseUrl(urlPath), {
+        headers: {
+          cookie: `wxauth-token=${token}`,
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+    for (let i = 1; i <= 3; i++) {
+      const res = await handler(trickyRequest(`https://v.douyin.com/g${i}/`));
+      expect(res.status).toBe(200);
+    }
+    // 第 4 次仍应触发网页端广告门禁
+    const blocked = await handler(trickyRequest("https://v.douyin.com/g4/"));
+    expect(blocked.status).toBe(403);
+    const json = await blocked.json();
+    expect(json.data.needsUnlock).toBe(true);
+  });
+
   it("门禁通过 FLOATING_UNLOCK_GATE=0 强制关闭后，满额也不拦截", async () => {
     process.env.FLOATING_UNLOCK_GATE = "0";
     const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
