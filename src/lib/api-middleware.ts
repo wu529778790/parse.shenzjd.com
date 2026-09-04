@@ -323,8 +323,11 @@ export const createApiHandler = (
         const stale = await resultStale(cachedResult);
         if (!stale) {
           logParse("cache-hit", 200, Date.now() - startTime);
+          // HTTP 状态固定 200（body.code 承载业务码）：新鲜解析路径对失败结果
+          // 也返回 HTTP 200（见下方 Response.json(result, { headers })），
+          // 命中已删除等永久失败缓存条目时须与之一致
           return Response.json(cachedResult, {
-            status: safeStatus(cachedResult.code || 200),
+            status: 200,
             headers,
           });
         }

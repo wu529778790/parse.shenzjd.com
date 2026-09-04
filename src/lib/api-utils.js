@@ -1,5 +1,9 @@
 // API 工具函数：缓存、速率限制和日志
 
+// 「内容已删除」统一文案：解析器对确定性的永久失败（原内容已删除/不可见）统一返回
+// 此 msg，result-cache 据此把这类失败也写入共享缓存（瞬时反爬失败仍然不缓存）
+export const DELETED_CONTENT_MSG = "该内容已被删除";
+
 // 环境检测
 const isDevelopment = process.env.NODE_ENV === 'development';
 

@@ -32,10 +32,34 @@ describe("result-cache", () => {
     expect(await getResultCache(url)).toMatchObject({ platform: "douyin" });
   });
 
-  it("never caches failed results", async () => {
+  it("never caches transient failed results", async () => {
     const url = "https://v.douyin.com/fail123/";
     await putResultCache(url, { code: 400, msg: "解析失败" });
+    await putResultCache(url, { code: 0, msg: "B站风控拦截，请稍后重试" });
     expect(await getResultCache(url)).toBeNull();
+  });
+
+  it("caches permanent deleted-content failures (code 404)", async () => {
+    const url = "https://xhslink.cn/o/deleted1";
+    await putResultCache(url, {
+      code: 404,
+      msg: "该内容已被删除",
+      platform: "xhs",
+      data: [],
+    });
+    expect(await getResultCache(url)).toMatchObject({
+      code: 404,
+      msg: "该内容已被删除",
+    });
+  });
+
+  it("caches permanent deleted-content failures (code 0, bilibili shape)", async () => {
+    const url = "https://www.bilibili.com/video/BV1deleted/";
+    await putResultCache(url, { code: 0, msg: "该内容已被删除", platform: "bilibili" });
+    expect(await getResultCache(url)).toMatchObject({
+      code: 0,
+      msg: "该内容已被删除",
+    });
   });
 
   it("returns null for unknown urls", async () => {

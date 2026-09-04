@@ -24,7 +24,10 @@ async function parseVideoId(videoId) {
     return { code: 400, msg: "全民K歌数据解析失败" };
   }
   const data = root?.detail;
-  if (!data?.playurl_video) {
+  // MV/视频作品的播放地址在 playurl_video；唱歌类作品（纯音频）该字段为空字符串，
+  // 播放地址在 playurl（m4a 音频直链）。两个字段都取不到才算失败。
+  const playUrl = data?.playurl_video || data?.playurl || "";
+  if (!data || !playUrl) {
     return { code: 404, msg: "未找到作品播放地址" };
   }
   return {
@@ -36,7 +39,7 @@ async function parseVideoId(videoId) {
       avatar: data.avatar || "",
       uid: String(data.uid || ""),
       cover: data.cover || "",
-      url: data.playurl_video,
+      url: playUrl,
     },
   };
 }

@@ -17,6 +17,7 @@
  *   行为一致，仅不跨实例共享
  */
 import { verifyDirectUrl } from "@/lib/verifyUrl";
+import { DELETED_CONTENT_MSG } from "@/lib/api-utils";
 
 /** 分享打开窗口按天计，直链时效由命中探测兜底，故 TTL 取一整天 */
 const TTL_SECONDS = 24 * 60 * 60;
@@ -57,11 +58,16 @@ export async function getResultCache(url) {
 }
 
 /**
- * 写缓存。只缓存成功结果（code=200）：失败可能是瞬时反爬，缓存会放大错误。
+ * 写缓存。缓存两类结果：
+ * - 成功结果（code=200）；
+ * - 永久性失败（msg 为「该内容已被删除」，code 404/0 均可）：内容删除是不可逆的
+ *   确定失败，缓存可避免同一条已删除链接被不同用户反复全量解析（2026-09-04 日志
+ *   中一条已删除小红书笔记被重复解析 5 次）；瞬时反爬失败仍不缓存，避免放大错误。
  * 写失败只影响下次命中率，不阻断本次响应。
  */
 export async function putResultCache(url, result) {
-  if (!result || result.code !== 200) return;
+  const isPermanentFailure = !!result && result.msg === DELETED_CONTENT_MSG;
+  if (!result || (result.code !== 200 && !isPermanentFailure)) return;
   if (cacheAvailable()) {
     try {
       await caches.default.put(

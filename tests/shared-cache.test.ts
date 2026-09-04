@@ -46,6 +46,25 @@ describe("api-middleware sharedCache (统一入口共享结果缓存)", () => {
     expect(resultCacheMocks.putResultCache).not.toHaveBeenCalled();
   });
 
+  it("serves a cached deleted-content failure with HTTP 200 + body code 404", async () => {
+    // 缓存的「该内容已被删除」条目命中时，HTTP 状态须与新鲜解析路径一致（200），
+    // 业务码 404 由 body.code 承载
+    resultCacheMocks.getResultCache.mockResolvedValue({
+      code: 404,
+      msg: "该内容已被删除",
+      platform: "xhs",
+      data: [],
+    });
+    resultCacheMocks.resultStale.mockResolvedValue(false);
+    const parseSpy = vi.fn();
+
+    const res = await makeHandler(parseSpy)(makeRequest());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ code: 404, msg: "该内容已被删除" });
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
   it("re-parses and writes back when the cached direct url is dead", async () => {
     resultCacheMocks.getResultCache.mockResolvedValue({
       code: 200,

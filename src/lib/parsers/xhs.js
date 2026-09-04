@@ -4,7 +4,7 @@
  * 逻辑原样下沉自路由文件，行为未改动。
  */
 
-import { logger } from "@/lib/api-utils";
+import { logger, DELETED_CONTENT_MSG } from "@/lib/api-utils";
 
 
 /** 小红书 H5：桌面 Chrome UA，短链统一走 https */
@@ -200,6 +200,13 @@ async function xhs(url) {
     console.log("[xhs] finalUrl:", finalUrl);
     console.log("[xhs] html length:", html?.length || 0);
 
+    // 已删除/不可见笔记：小红书会把短链重定向到 /explore 并附带 undertake_note_error
+    // 参数（值如「该内容暂时无法查看」）。这是确定失败，直接明确告知已删除，
+    // 不进入页面解析（此时页面里也不会有目标笔记的媒体数据）
+    if (finalUrl.includes("undertake_note_error=")) {
+      return output(404, DELETED_CONTENT_MSG);
+    }
+
     if (!html) {
       return output(400, "请求失败，未获取到页面内容");
     }
@@ -339,7 +346,7 @@ async function xhs(url) {
       }
     }
 
-    return output(404, "该资源已删除");
+    return output(404, DELETED_CONTENT_MSG);
   } catch (error) {
     logger.error("xhs parse error:", error);
     return output(500, "服务器内部错误");

@@ -4,7 +4,7 @@
  * 逻辑原样下沉自路由文件，行为未改动。
  */
 
-import { logger } from "@/lib/api-utils";
+import { logger, DELETED_CONTENT_MSG } from "@/lib/api-utils";
 import {
   extractBilibiliAnonCookie,
   getBiliAnonCookie,
@@ -214,12 +214,13 @@ async function getBilibiliVideoInfo(url) {
     
     if (!videoInfo || videoInfo.code !== 0) {
       logger.warn("Failed to fetch video info, response:", videoInfo);
-      // 区分「视频不存在/已删除」与「风控拦截」：前者是确定失败，后者是临时风控
+      // 区分「视频不存在/已删除」与「风控拦截」：前者是确定失败（-404/62002 不在
+      // RISK_CODES 重试名单内，直接返回不重试），后者是临时风控
       if (videoInfo && RISK_CODES.has(videoInfo.code)) {
         return { code: 0, msg: "B站风控拦截，请稍后重试" };
       }
       if (videoInfo && (videoInfo.code === -404 || videoInfo.code === 62002)) {
-        return { code: 0, msg: "视频不存在或已删除" };
+        return { code: 0, msg: DELETED_CONTENT_MSG };
       }
       return { code: 0, msg: "解析失败！" };
     }
