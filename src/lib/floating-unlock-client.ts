@@ -1,21 +1,19 @@
 /**
- * floating-unlock · 广告解锁前端通用封装（与 wx-auth-client 同款懒加载策略）
+ * floating-unlock · 广告弹窗前端通用封装（与 wx-auth-client 同款懒加载策略）
  *
  * 库形态：@wu529778790/floating-unlock 的 Web Component 版（unpkg 引入，
  * 自动注册 <floating-unlock>，注册后元素提供 unlock(): Promise<{ ok, ticket, grant }>）。
- * 本模块不装 npm 依赖，SDK 发版站点零改动；unlock() 仅在真正需要解锁的动作处
- * （如解析被配额拦截后）才懒加载脚本并注入元素，不参与页面初始加载。
+ * 本模块不装 npm 依赖，SDK 发版站点零改动；unlock() 仅在真正需要弹窗时
+ * 才懒加载脚本并注入元素，不参与页面初始加载。
  *
- * 用法（触发时机后续接线时在业务动作前调用）：
- *   import { unlockByAd, unlockRequestHeaders } from "@/lib/floating-unlock-client";
+ * 用法（当前产品口径：纯提示弹窗，不阻断业务）：
+ *   import { unlockByAd } from "@/lib/floating-unlock-client";
  *
- *   const { ok, ticket, grant } = await unlockByAd();
- *   if (!ok) return;                    // 用户未看完广告 / SDK 异常 → 中断动作
- *   // 放行权在服务端：把 ticket + grant 随业务请求带给后端验票
- *   fetch("/api/parse?...", { headers: unlockRequestHeaders({ ok, ticket, grant }) })
+ *   // 每 N 次成功解析弹一次；fire-and-forget，结果不参与任何业务判断
+ *   void unlockByAd().catch(() => {});
  *
- * 约定：{ ok: true } 只代表「看完了广告并拿到一次性票据」，不代表业务放行；
- * 业务后端必须用 ticket + grant 调 wx-auth verify 核销后才放行。
+ * 约定：后端已无验票门禁，unlock() 返回的 ticket/grant 不再需要上送，
+ * 弹窗被关闭/失败也不做任何重试或拦截。
  */
 
 import { floatingUnlockConfig } from "@/config/floating-unlock";
@@ -170,10 +168,12 @@ function toResult(raw: unknown): FloatingUnlockResult {
 }
 
 /**
- * 发起一次激励视频广告解锁。
+ * 发起一次激励视频广告弹窗。
  *
- * @returns { ok: true, ticket, grant } 解锁成功；此时仍需把 ticket+grant 交给后端验票
- *          { ok: false } 用户取消/失败/超时/SDK 未就绪 → 业务应中断本次动作
+ * @returns { ok: true, ticket, grant } 用户看完了广告
+ *          { ok: false } 用户取消/失败/超时/SDK 未就绪
+ *          当前产品口径下结果仅供调用方参考（一般 fire-and-forget），
+ *          不参与任何业务判断，后端也不验票。
  *
  * 注意：并发调用会共享同一次弹窗结果（内部有 in-flight 去重），避免叠多个弹窗。
  */
@@ -209,20 +209,4 @@ export async function unlockByAd(
   } finally {
     inflight = null;
   }
-}
-
-/**
- * 把解锁结果转成随业务请求携带的验票头（fetch headers 可直接展开）。
- * 仅 ok=true 且有 ticket/grant 时返回票据头；否则返回空对象（后端将 403 拒绝）。
- */
-export function unlockRequestHeaders(
-  result: FloatingUnlockResult
-): Record<string, string> {
-  if (result.ok && result.ticket && result.grant) {
-    return {
-      "X-Unlock-Ticket": result.ticket,
-      "X-Unlock-Grant": result.grant,
-    };
-  }
-  return {};
 }

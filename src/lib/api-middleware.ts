@@ -17,13 +17,6 @@ import {
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
 import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
-import { enforceFloatingUnlock } from "@/lib/floating-unlock-verify";
-import {
-  isUnlockQuotaEnabled,
-  isQuotaFull,
-  recordQuotaSuccess,
-  resetQuota,
-} from "@/lib/unlock-quota";
 import { honeypotResponse } from "@/lib/honeypot";
 import { getResultCache, putResultCache, resultStale } from "@/lib/result-cache";
 
@@ -88,18 +81,6 @@ const AUTH_REQUIRED_ROUTES = new Set<string>([
   ...Object.keys(ROUTE_DOMAIN_MAP),
   "parse",
 ]);
-
-// 小程序端识别（本站自判，不依赖 wx-auth 返回用户类型）：
-// 小程序环境没有 Cookie，登录后通过 Authorization: Bearer <token> 携带凭证；
-// 请求若带 Bearer 头且无 wxauth-token Cookie，即视为小程序端。
-// 取舍说明：拥有有效 token 的客户端若改为 Bearer 直连会被当作小程序端免广告
-// （但要先关注公众号拿到 token；若后续发现滥用，可恢复按 wx-auth user.type 判定的方案）。
-function isMpClientRequest(request: Request): boolean {
-  const authorization = request.headers.get("authorization");
-  if (!authorization || !/^\s*bearer\s+/i.test(authorization)) return false;
-  const cookie = request.headers.get("cookie") || "";
-  return !/(?:^|;\s*)wxauth-token=/i.test(cookie);
-}
 
 // 通用 API 处理函数
 export const createApiHandler = (
@@ -310,11 +291,8 @@ export const createApiHandler = (
       }
     }
 
-    // 小程序端识别（本站自判，供下方配额门禁判断）：Bearer 通道且无 Cookie → 小程序端，
-    // 跳过网页端的免费配额/广告解锁（小程序端有自己的激励视频/授权体系）。
-    const isMpClient = isMpClientRequest(request);
-
     // 统一入口的共享结果缓存：放在认证之后（未认证用户不消费缓存）。
+    // 命中先探测主直链，明确死链（签名过期）视为未命中走重新解析，
     // 命中先探测主直链，明确死链（签名过期）视为未命中走重新解析，
     // 避免把过期直链发给前端黑屏
     if (sharedCache) {
@@ -346,47 +324,8 @@ export const createApiHandler = (
       }
     }
 
-    // 登录用户免费配额门禁（服务端内存计数，Docker / Node 单进程部署可靠）：
-    // 连续【成功】解析满 freeQuota 次后，下一次请求必须携带一次性 grant（广告解锁，
-    // wx-auth 验票核销）才放行；未满额直接放行，由下方成功分支计数。
-    // 放在缓存命中之后 —— 命中缓存（24h shared / 5min 内存）不算真实解析，直接放行不计数。
-    // 豁免：非解析类路由、VITEST。
-    if (
-      process.env.VITEST !== "true" &&
-      AUTH_REQUIRED_ROUTES.has(routeName) &&
-      wxAuthToken &&
-      !isMpClient &&
-      isUnlockQuotaEnabled()
-    ) {
-      if (isQuotaFull(wxAuthToken)) {
-        const gate = await enforceFloatingUnlock(request, headers);
-        if (!gate.pass) {
-          logParse(
-            "failed",
-            403,
-            Date.now() - startTime,
-            `免费次数用尽 reason=${gate.reason}`
-          );
-          if (gate.reason === "missing") {
-            // 无验票头：明确告诉前端「免费次数已用完，先看广告」，带 needsUnlock 标记，
-            // 前端据此弹广告解锁并用 grant 重发本次请求。
-            return Response.json(
-              {
-                code: 403,
-                msg: "免费解析次数已用完，观看一条广告即可继续解析",
-                data: { needsUnlock: true },
-              },
-              { status: safeStatus(403), headers }
-            );
-          }
-          // rejected / unreachable：grant 已核销失效或验票服务不可达，
-          // 返回标准 403（不带 needsUnlock，避免前端无限重试广告）
-          return gate.response;
-        }
-        // 广告验票通过（wx-auth 已核销该 grant）：清零配额，本次解析放行，算新一轮第一次
-        resetQuota(wxAuthToken);
-      }
-    }
+    // 登录用户免费配额/广告解锁门禁已下线：后端不再做任何次数校验与验票，
+    // 广告弹窗改为纯前端行为（每 3 次成功解析弹一次，关不关都不影响解析）。
 
     try {
       logger.log(`Parsing URL: ${sanitizedUrl.substring(0, 80)}...`);
@@ -426,10 +365,6 @@ export const createApiHandler = (
           ip: clientIP,
           status: "success",
         });
-        // 只有【网页端真实成功解析】才累计免费配额（小程序端、失败、缓存命中不计）
-        if (wxAuthToken && !isMpClient && isUnlockQuotaEnabled()) {
-          recordQuotaSuccess(wxAuthToken);
-        }
         logParse("success", 200, Date.now() - startTime);
       } else {
         recordParse({

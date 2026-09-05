@@ -11,10 +11,10 @@ import {
   hasValidVideoUrl,
 } from "@/utils/share";
 import { showWxAuth } from "@/lib/wx-auth-client";
-import {
-  unlockByAd,
-  unlockRequestHeaders,
-} from "@/lib/floating-unlock-client";
+// 广告弹窗暂时下线：产品口径改为「完全放开让用户用」，弹窗相关代码先注释保留，
+// 恢复时取消下方注释（并恢复 countSuccessAndMaybePopup 定义与成功分支的调用）。
+// import { unlockByAd } from "@/lib/floating-unlock-client";
+// import { floatingUnlockConfig } from "@/config/floating-unlock";
 import PlatformIcon from "@/components/PlatformIcon";
 import { toFrontendPlatform } from "@/utils/platform-map";
 
@@ -31,6 +31,37 @@ interface VideoParserFormProps {
 // 纯 sessionStorage 操作，不依赖组件状态，放模块级避免重建
 const CACHE_TTL = 5 * 60 * 1000;
 const CACHE_MAX = 20;
+
+// 广告提示弹窗（暂时下线，整段注释保留，恢复时取消注释即可）：
+// 每成功解析 freeQuota 次弹一次，纯前端行为、不阻断——弹窗看不看、关不关
+// 都不影响解析结果与后续使用。后端已无任何配额校验。
+// const POPUP_COUNTER_KEY = "parse:adPopupCount";
+// const POPUP_EVERY = floatingUnlockConfig.freeQuota;
+//
+// let popupCount = 0;
+// try {
+//   popupCount = parseInt(localStorage.getItem(POPUP_COUNTER_KEY) || "0", 10) || 0;
+// } catch {
+//   // localStorage 不可用（隐私模式等）：退化为内存计数
+// }
+//
+// // 成功解析后调用：累加计数，攒满一轮就 fire-and-forget 弹一次广告窗
+// function countSuccessAndMaybePopup(): void {
+//   popupCount += 1;
+//   try {
+//     localStorage.setItem(POPUP_COUNTER_KEY, String(popupCount));
+//   } catch {
+//     // 写不进就只用内存计数
+//   }
+//   if (popupCount < POPUP_EVERY) return;
+//   popupCount = 0;
+//   try {
+//     localStorage.setItem(POPUP_COUNTER_KEY, "0");
+//   } catch {
+//     // 同上
+//   }
+//   void unlockByAd().catch(() => {});
+// }
 
 // 读取缓存：命中且未过期返回数据，否则删除过期项
 function readCache(cacheKey: string): ApiResponse | null {
@@ -167,27 +198,12 @@ export default function VideoParserForm({
           return { status: response.status, data };
         };
 
-        // 403 + needsUnlock 标记 = 服务端判定「登录用户免费次数已用完」，需先看广告解锁
-        const isNeedsUnlock = (d: ApiResponse): boolean =>
-          (d as unknown as { data?: { needsUnlock?: boolean } }).data
-            ?.needsUnlock === true;
-
+        // 后端已无配额/验票门禁，直接请求、直接用结果
         const first = await requestParse();
         // 请求已被取消（用户切换了新解析），丢弃结果
         if (controller.signal.aborted) return;
 
-        let data = first.data;
-        if (first.status === 403 && isNeedsUnlock(data)) {
-          // 看完广告拿到一次性 grant，带票据重发本次请求（放行权在服务端验票核销）
-          const unlock = await unlockByAd();
-          if (!unlock.ok) {
-            onResult(null, "广告解锁未完成，请稍后重试");
-            return;
-          }
-          const retried = await requestParse(unlockRequestHeaders(unlock));
-          if (controller.signal.aborted) return;
-          data = retried.data;
-        }
+        const data = first.data;
 
         if (data.code === 1 || data.code === 200) {
           // 统一接口返回的 platform 是后端 key（如 redbook/pipixia），
@@ -198,6 +214,7 @@ export default function VideoParserForm({
           onResult(data, "");
           setHasResult(true);
           writeCache(cacheKey, data);
+          // countSuccessAndMaybePopup(); // 广告弹窗暂时下线
         } else {
           onResult(null, data.msg || "解析失败");
         }
