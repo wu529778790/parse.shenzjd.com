@@ -110,7 +110,7 @@ async function loadKeysFromDb() {
     const parsed = JSON.parse(rows[0].value);
     if (parsed?.imgKey && parsed?.subKey) return parsed;
     return null;
-  } catch (e) {
+  } catch {
     // kv_store 表可能尚未创建（匿名 Cookie 模块会建表），静默降级
     return null;
   }
