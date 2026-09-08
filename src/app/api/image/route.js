@@ -22,6 +22,16 @@ function isXhsHost(hostname) {
   return hostname === "xhscdn.com" || hostname.endsWith(".xhscdn.com");
 }
 
+// B站图床（封面/头像）：对外站 Referer 返回 403，需带 bilibili 来源
+function isBiliHost(hostname) {
+  return (
+    hostname === "hdslb.com" ||
+    hostname.endsWith(".hdslb.com") ||
+    hostname === "bilibili.com" ||
+    hostname.endsWith(".bilibili.com")
+  );
+}
+
 export async function GET(request) {
   // IP 黑名单：图片代理返回二进制图片，无法套用解析接口的 JSON 蜜罐，
   // 此处对黑名单 IP 保持 403（图片代理只是前端加载资源的通道，不承载解析宣传）。
@@ -64,6 +74,11 @@ export async function GET(request) {
   // 小红书图床防盗链：必须 Referer: xiaohongshu.com，否则 403
   if (isXhsHost(target.hostname)) {
     headers.Referer = "https://www.xiaohongshu.com/";
+  }
+  // B站图床防盗链：必须 Referer: bilibili.com，否则 403；http 一并升级 https
+  if (isBiliHost(target.hostname)) {
+    headers.Referer = "https://www.bilibili.com/";
+    target.protocol = "https:";
   }
 
   let upstream;

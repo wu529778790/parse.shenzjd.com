@@ -37,6 +37,14 @@ function generateBuvid3() {
   return `${hex(8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(4)}${hex(8)}infoc`;
 }
 
+// B站图床（封面/头像）防盗链：hdslb.com 对外站 Referer 返回 403，且返回的是
+// http 链接在 HTTPS 页面触发混合内容。参照小红书解析的做法，统一转成本站
+// /api/image 图片代理（代理侧带 bilibili Referer，见 api/image/route.js）。
+function proxyBiliImage(url) {
+  if (!url) return url;
+  return `/api/image?url=${encodeURIComponent(url)}`;
+}
+
 function normalizeCdnHost(url) {
   try {
     const parsed = new URL(url);
@@ -288,11 +296,11 @@ async function getBilibiliVideoInfo(url) {
         code: 0,
         msg: "获取播放地址失败，请稍后重试",
         title: videoInfo.data.title,
-        imgurl: videoInfo.data.pic,
+        imgurl: proxyBiliImage(videoInfo.data.pic),
         desc: videoInfo.data.desc,
         user: {
           name: videoInfo.data.owner.name,
-          user_img: videoInfo.data.owner.face,
+          user_img: proxyBiliImage(videoInfo.data.owner.face),
         },
       };
     }
@@ -303,12 +311,12 @@ async function getBilibiliVideoInfo(url) {
       code: 1,
       msg: "解析成功！",
       title: videoInfo.data.title,
-      imgurl: videoInfo.data.pic,
+      imgurl: proxyBiliImage(videoInfo.data.pic),
       desc: videoInfo.data.desc,
       data: bilijson,
       user: {
         name: videoInfo.data.owner.name,
-        user_img: videoInfo.data.owner.face,
+        user_img: proxyBiliImage(videoInfo.data.owner.face),
       },
     };
   } catch (error) {
