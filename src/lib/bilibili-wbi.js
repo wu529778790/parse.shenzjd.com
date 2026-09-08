@@ -24,10 +24,7 @@
 import { createHash } from "node:crypto";
 import { createTursoClient } from "@/lib/turso-client";
 import { logger } from "@/lib/api-utils";
-
-const BILIBILI_USER_AGENT =
-  process.env.BILIBILI_USER_AGENT ||
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+import { biliFetch, BILIBILI_USER_AGENT } from "@/lib/bilibili-fetch";
 
 // 密钥缓存有效期：官方每日轮换，取 12h 保守值
 const WBI_KEY_TTL_MS = 12 * 60 * 60 * 1000;
@@ -134,7 +131,7 @@ async function saveKeysToDb(keys) {
 /** 请求 nav 接口拉取最新密钥，失败返回 null */
 async function fetchKeysFromNav() {
   try {
-    const response = await fetch("https://api.bilibili.com/x/web-interface/nav", {
+    const response = await biliFetch("https://api.bilibili.com/x/web-interface/nav", {
       headers: {
         "User-Agent": BILIBILI_USER_AGENT,
         Referer: "https://www.bilibili.com/",

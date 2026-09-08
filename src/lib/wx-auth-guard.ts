@@ -26,6 +26,15 @@ interface AuthCacheEntry {
 
 const authCache = new Map<string, AuthCacheEntry>();
 
+interface UserInfoCacheEntry {
+  authenticated: boolean;
+  isAdmin: boolean;
+  expiresAt: number;
+}
+
+// 用户详情缓存（isAdmin 变化频率极低，与 check 同款 5 分钟策略）
+const userInfoCache = new Map<string, UserInfoCacheEntry>();
+
 /**
  * 从请求中提取认证 token：
  * 1. Cookie `wxauth-token`（网页端 SDK 写入，优先）
@@ -101,4 +110,59 @@ export async function checkWxAuthToken(token: string): Promise<boolean> {
     });
   }
   return authenticated;
+}
+
+/**
+ * 查询认证用户详情（含管理员标记），供管理类接口做放权判断。
+ * 走 wx-auth 的 /api/auth/userinfo（签名 token 校验后返回 role/isAdmin 等）。
+ * 缓存策略与 checkWxAuthToken 一致：命中 5 分钟内直接返回；
+ * 服务异常 fail closed（authenticated=false）且不缓存。
+ */
+export async function getWxAuthUser(request: Request): Promise<{
+  authenticated: boolean;
+  isAdmin: boolean;
+}> {
+  const token = getWxAuthToken(request);
+  if (!token) return { authenticated: false, isAdmin: false };
+
+  const cached = userInfoCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { authenticated: cached.authenticated, isAdmin: cached.isAdmin };
+  }
+
+  let authenticated = false;
+  let isAdmin = false;
+  let checkError = false;
+  try {
+    const response = await fetch(
+      `${AUTH_API_BASE}/api/auth/userinfo?token=${encodeURIComponent(token)}`,
+      {
+        headers: { "user-agent": "parse.shenzjd.com/auth-guard" },
+        signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
+      }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      authenticated = data?.authenticated === true;
+      isAdmin = authenticated && data?.user?.isAdmin === true;
+    } else {
+      checkError = true;
+    }
+  } catch (error) {
+    checkError = true;
+    console.error(
+      "[wx-auth-guard] 用户详情 userinfo 请求失败:",
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  if (!checkError) {
+    if (userInfoCache.size >= AUTH_CACHE_MAX) userInfoCache.clear();
+    userInfoCache.set(token, {
+      authenticated,
+      isAdmin,
+      expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
+    });
+  }
+  return { authenticated, isAdmin };
 }

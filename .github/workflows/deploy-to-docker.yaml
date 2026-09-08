@@ -119,8 +119,9 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # 不用 GHA 缓存：cleanup-actions.yaml 每天清空全部缓存（免费配额仅 0.5GB，
+          # 装不下镜像层），cache-from 永远命中不了，而 cache-to 导出全部层实测
+          # 每次耗时 ~168s（2026-09-08 构建日志），纯属浪费，故移除。
           provenance: false
           sbom: false
           # 传入 git sha 作为稳定 buildId，避免滚动部署前后端 build 不一致

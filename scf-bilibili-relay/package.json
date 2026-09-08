@@ -1,0 +1,9 @@
+{
+  "name": "bilibili-relay",
+  "version": "1.1.0",
+  "description": "B站请求中继（腾讯云函数事件函数），供 parse.shenzjd.com 海外服务器转发 B站 API 请求",
+  "main": "index.js",
+  "dependencies": {},
+  "license": "MIT",
+  "private": true
+}

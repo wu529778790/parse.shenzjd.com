@@ -11,20 +11,31 @@ import {
   saveBiliAnonCookie,
 } from "@/lib/bilibili-cookie";
 import { signWbiParams } from "@/lib/bilibili-wbi";
+import { biliFetch, BILIBILI_USER_AGENT } from "@/lib/bilibili-fetch";
 
 
 // 模块级匿名 Cookie 缓存：单次请求内复用，避免每次 fetch 都查库。
 // 首次从 Turso 读取，后续请求内直接复用；响应返回新 Cookie 时更新。
 let anonCookieCache = "";
 
-// 从环境变量获取配置
-const BILIBILI_USER_AGENT = process.env.BILIBILI_USER_AGENT || 
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36";
+// 从环境变量获取配置（UA 已统一写死在 bilibili-fetch.js，此处无需重复配置）
 
 // B站按请求出口 IP 分配 CDN 节点：海外出口（如本服务器在新加坡）拿到 akamaized.net
 // 海外节点，大陆用户浏览器无法播放。直链签名（upsig/uparams）不绑定 host，
 // 把海外 host 归一化为国内镜像节点（bilivideo.com）即可在大陆正常播放。
 const BILI_CN_HOST = "upos-sz-mirrorbd.bilivideo.com";
+
+// 本地生成稳定 buvid3 兜底：B站对「无 Cookie 裸请求」风控最严，而匿名 Cookie
+// 只有在请求成功后才会从响应头捕获——被 -412 拦截的 IP 永远等不到下发（死循环）。
+// 参照 B站前端 buvid3 格式（UUID 大写 + infoc 后缀）本地生成一个进程级稳定的
+// 设备指纹直接带上，配合 WBI 签名把「裸请求」特征清零。
+function generateBuvid3() {
+  const hex = (n) =>
+    Array.from({ length: n }, () =>
+      Math.floor(Math.random() * 16).toString(16).toUpperCase()
+    ).join("");
+  return `${hex(8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(4)}${hex(8)}infoc`;
+}
 
 function normalizeCdnHost(url) {
   try {
@@ -100,7 +111,7 @@ function buildBilibiliHeaders(extra = {}) {
 async function bilibiliRequest(url, headers, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(url, {
+      const response = await biliFetch(url, {
         headers: buildBilibiliHeaders(headers),
       });
       // 从响应头捕获 B 站下发的匿名 Cookie（首次访问会自动下发 buvid3 等），
@@ -166,9 +177,13 @@ async function bilibiliRequest(url, headers, retries = 2) {
 async function getBilibiliVideoInfo(url) {
   try {
     // 首次进入时从 Turso 加载持久化的匿名 Cookie 到模块缓存（仅加载一次，
-    // 后续请求内直接复用；未配置 Turso 时静默跳过）。
+    // 后续请求内直接复用；未配置 Turso 时静默跳过）。仍无 Cookie（如 IP 被风控
+    // 等不到 B站下发）时本地生成稳定 buvid3 兜底，避免裸请求。
     if (!anonCookieCache) {
       anonCookieCache = await getBiliAnonCookie();
+    }
+    if (!anonCookieCache) {
+      anonCookieCache = `buvid3=${generateBuvid3()}`;
     }
     const cleanUrl = cleanUrlParameters(url);
     const parsedUrl = new URL(cleanUrl);
@@ -176,7 +191,7 @@ async function getBilibiliVideoInfo(url) {
     
     if (parsedUrl.hostname === "b23.tv") {
       // b23.tv 短链重定向：带 UA + Referer，避免海外出口被 B站风控拦截
-      const response = await fetch(url, {
+      const response = await biliFetch(url, {
         redirect: "follow",
         headers: {
           "User-Agent": BILIBILI_USER_AGENT,

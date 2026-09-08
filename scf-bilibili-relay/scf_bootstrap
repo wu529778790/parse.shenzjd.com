@@ -1,0 +1,4 @@
+#!/bin/bash
+# 腾讯云函数 Web 函数启动脚本（必须监听 0.0.0.0:9000）
+export PORT=9000
+exec node index.js

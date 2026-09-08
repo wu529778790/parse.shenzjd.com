@@ -21,7 +21,8 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "next": "^15.3.9",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "undici": "^8.10.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
