@@ -10,6 +10,7 @@ import {
   getBiliAnonCookie,
   saveBiliAnonCookie,
 } from "@/lib/bilibili-cookie";
+import { signWbiParams } from "@/lib/bilibili-wbi";
 
 
 // 模块级匿名 Cookie 缓存：单次请求内复用，避免每次 fetch 都查库。
@@ -205,10 +206,14 @@ async function getBilibiliVideoInfo(url) {
     logger.log("Processing bilibili video, bvid:", bvid);
     
     const headers = { "Content-Type": "application/json;charset=UTF-8" };
-    
+
+    // WBI 签名：B站 Web API 要求携带 wts + w_rid，缺失会被风控拦截（-412）。
+    // 拿不到签名密钥时降级为裸请求（保持旧行为，靠重试兜底）。
+    const signedViewQuery = await signWbiParams({ bvid });
+
     // 获取视频信息
     const videoInfo = await bilibiliRequest(
-      `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
+      `https://api.bilibili.com/x/web-interface/view?${signedViewQuery ?? `bvid=${bvid}`}`,
       headers
     );
     
@@ -227,8 +232,19 @@ async function getBilibiliVideoInfo(url) {
     
     // 并行获取所有分P的播放地址
     const playUrlPromises = videoInfo.data.pages.map(async (page) => {
+      const signedPlayQuery = await signWbiParams({
+        otype: "json",
+        fnver: 0,
+        fnval: 3,
+        player: 3,
+        qn: 112,
+        bvid,
+        cid: page.cid,
+        platform: "html5",
+        high_quality: 1,
+      });
       const playUrl = await bilibiliRequest(
-        `https://api.bilibili.com/x/player/playurl?otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=${bvid}&cid=${page.cid}&platform=html5&high_quality=1`,
+        `https://api.bilibili.com/x/player/playurl?${signedPlayQuery ?? `otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=${bvid}&cid=${page.cid}&platform=html5&high_quality=1`}`,
         headers
       );
       
