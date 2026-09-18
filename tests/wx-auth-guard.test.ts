@@ -184,7 +184,12 @@ describe("wx-auth guard (解析接口强制认证)", () => {
         headers: cookie,
       })
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // 只统计 check 调用：认证之后还有积分门禁（balance/spend）会走同一个 fetch，
+    // 但「认证结果按 token 缓存」只由 check 调用次数体现
+    const checkCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("/api/auth/check")
+    );
+    expect(checkCalls).toHaveLength(1);
     expect(parseSpy).toHaveBeenCalledTimes(2);
   });
 

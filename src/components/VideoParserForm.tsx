@@ -133,7 +133,6 @@ export default function VideoParserForm({
 
   // 请求生命周期管理：避免重复请求、卸载后仍执行
   const abortRef = useRef<AbortController | null>(null);
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 取消所有进行中的请求与定时器（切换解析 / 卸载时调用）
@@ -141,10 +140,6 @@ export default function VideoParserForm({
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
-    }
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
     }
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current);
@@ -246,19 +241,11 @@ export default function VideoParserForm({
     [onResult, setLoading]
   );
 
-  // 防抖解析：每次先清掉前一个定时器，避免连续输入触发多次请求
-  const debouncedParse = useCallback(
-    (url: string, platform: VideoPlatformKey | "auto") => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      debounceTimerRef.current = setTimeout(
-        () => parseVideo(url, platform),
-        500
-      );
-    },
-    [parseVideo]
-  );
+  // 注意（2026-09-18 计费改造）：手动输入不再自动发起解析。
+  // 解析改为「每次扣 1 积分」的计费动作后，原来的「输入停顿 500ms 即解析」
+  // 会在打字过程中触发多次解析 = 多次扣分，必须把发起解析收口到显式动作：
+  // 粘贴（文本域 onPaste / 「粘贴」按钮）、点击「粘贴并解析」、点击平台 chip。
+  // 自动读剪贴板同理——只填充输入框，由用户确认后再解析。
 
   // Process input and detect platform
   // immediate=true 时直接发起解析（粘贴场景），否则走 500ms 防抖（手动输入场景）
@@ -281,24 +268,21 @@ export default function VideoParserForm({
         setUrl(extractedUrl);
         setPlatform(detected);
         onPlatformChange?.(detected);
+        // 只有显式动作（immediate=true：粘贴、点「粘贴并解析」、点平台 chip）才发起解析；
+        // 手动输入/剪贴板自动填充（immediate=false）只更新状态，等用户确认
         if (immediate) {
-          // 立即解析：清掉挂起的防抖定时器，直接发起请求
-          if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current);
-            debounceTimerRef.current = null;
-          }
           parseVideo(extractedUrl, detected);
-        } else {
-          debouncedParse(extractedUrl, detected);
         }
       } else {
         setDetectedPlatform(null);
       }
     },
-    [debouncedParse, parseVideo, onResult, onPlatformChange]
+    [parseVideo, onResult, onPlatformChange]
   );
 
-  // Auto-read clipboard on mount
+  // 进页面自动读剪贴板：**只把链接填进输入框，不再自动解析**——
+  // 解析已是按次扣积分的计费动作，用户没有任何操作就被扣分是说不通的
+  //（剪贴板里恰好有链接 ≠ 用户此刻想解析）。用户确认后点「粘贴并解析」即可。
   const hasAutoReadRef = useRef(false);
   useEffect(() => {
     if (hasAutoReadRef.current) return;
