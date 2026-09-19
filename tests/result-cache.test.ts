@@ -67,7 +67,7 @@ describe("result-cache", () => {
   });
 
   it("marks stale only on definitive dead links (404/410)", async () => {
-    // 主直链 404：明确死链
+    // 主直链 404：HEAD 明确死链，GET 复核仍 404 → 判失效
     global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
     expect(
       await resultStale({ code: 200, data: { url: "https://cdn.example.com/video.mp4" } })
@@ -79,17 +79,29 @@ describe("result-cache", () => {
       await resultStale({ code: 200, data: { url: "https://cdn.example.com/video.mp4" } })
     ).toBe(false);
 
+    // HEAD 404 但 GET Range 可用（抖音 CDN 实测行为）→ 不判失效
+    global.fetch = vi.fn().mockImplementation((url, init) => {
+      const method = init?.method || "GET";
+      return Promise.resolve(
+        new Response(null, { status: method === "HEAD" ? 404 : 206 })
+      );
+    });
+    expect(
+      await resultStale({ code: 200, data: { url: "https://cdn.example.com/video.mp4" } })
+    ).toBe(false);
+
     // 无直链（纯图集）→ 无可探测，不判失效
     expect(await resultStale({ code: 200, data: {} })).toBe(false);
   });
 
   it("probes bilibili first part when main url is empty", async () => {
+    // 410 死链：HEAD + GET 复核各一次
     global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 410 }));
     const stale = await resultStale({
       code: 200,
       data: { videos: [{ url: "https://cdn.example.com/p1.mp4" }] },
     });
     expect(stale).toBe(true);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });
