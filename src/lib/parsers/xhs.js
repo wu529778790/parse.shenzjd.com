@@ -35,11 +35,53 @@ function normalizeXhsUrl(url) {
 }
 
 /**
- * 短链与笔记页：手动跟随重定向，兼容 xhslink.com 的 o/ 短链
+ * 短链与笔记页：手动跟随重定向，兼容 xhslink.com 的 o/ 短链。
+ * 小红书对部分分享链接（或无 Cookie 的服务器请求）会强制 302 到
+ * /login?redirectPath=<真实笔记页>；此时提取 redirectPath 直接请求
+ * 真实笔记页重试，避免把登录页当笔记页解析。
  */
 async function fetchXhsNoteHtml(url) {
   const target = normalizeXhsUrl(url);
+  const { html, finalUrl } = await fetchWithRedirects(target);
+  if (isLoginUrl(finalUrl)) {
+    const realNoteUrl = extractRedirectPath(finalUrl);
+    if (realNoteUrl) {
+      const retry = await fetchWithRedirects(realNoteUrl);
+      // 重试后仍是登录页 → 该笔记确实需要登录态，交由上层给出明确提示
+      if (!isLoginUrl(retry.finalUrl)) {
+        return retry;
+      }
+      return { html: retry.html, finalUrl: retry.finalUrl, loginRequired: true };
+    }
+    return { html, finalUrl, loginRequired: true };
+  }
+  return { html, finalUrl };
+}
 
+function isLoginUrl(url) {
+  try {
+    const u = new URL(url);
+    return (
+      u.hostname.toLowerCase().includes("xiaohongshu.com") &&
+      /^\/login$/.test(u.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function extractRedirectPath(loginUrl) {
+  try {
+    const u = new URL(loginUrl);
+    const redirect = u.searchParams.get("redirectPath");
+    if (redirect && /^https?:\/\//.test(redirect)) return redirect;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+async function fetchWithRedirects(target) {
   // 第一步：请求短链，手动处理重定向
   let response = await fetch(target, {
     headers: {
@@ -195,7 +237,7 @@ async function pickStableVideoUrl(entry) {
 
 async function xhs(url) {
   try {
-    const { html, finalUrl } = await fetchXhsNoteHtml(url);
+    const { html, finalUrl, loginRequired } = await fetchXhsNoteHtml(url);
 
     console.log("[xhs] finalUrl:", finalUrl);
     console.log("[xhs] html length:", html?.length || 0);
@@ -205,6 +247,16 @@ async function xhs(url) {
     // 不进入页面解析（此时页面里也不会有目标笔记的媒体数据）
     if (finalUrl.includes("undertake_note_error=")) {
       return output(404, DELETED_CONTENT_MSG);
+    }
+
+    // 短链被强制跳到登录页且重试真实笔记地址后仍被拦：
+    // 该笔记需要登录态才能查看，明确提示而不是笼统的「数据结构不匹配」
+    if (loginRequired || isLoginUrl(finalUrl)) {
+      console.log("[xhs] 需要登录态，无法解析:", finalUrl);
+      return output(
+        403,
+        "该笔记需要登录小红书后才能查看，暂无法解析，可尝试在 App 内重新分享"
+      );
     }
 
     if (!html) {
