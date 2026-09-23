@@ -14,11 +14,11 @@
  *
  * 幂等（最重要契约）：actionId 是「本次用户动作」的随机 ID，网络超时重发必须复用
  * 同一个，否则同一次解析会被扣两次；wx-auth 侧 point_ledger.action_id 是 UNIQUE
- * 索引，兜底保证只扣一次。
+ * 索引，兜底保证只扣一次。正因如此，wx-auth-endpoint 层的瞬时重试对 spend 也安全。
  */
 
-const AUTH_API_BASE =
-  process.env.WXAUTH_API_BASE || "https://wx-auth.shenzjd.com";
+import { wxAuthFetch } from "@/lib/wx-auth-endpoint";
+
 const BALANCE_TIMEOUT_MS = 3000;
 const SPEND_TIMEOUT_MS = 3000;
 const CHECKIN_TIMEOUT_MS = 3000;
@@ -64,9 +64,9 @@ export async function fetchPointsBalance(
   token: string
 ): Promise<PointsBalance | null> {
   try {
-    const response = await fetch(`${AUTH_API_BASE}/api/points/balance`, {
+    const response = await wxAuthFetch("/api/points/balance", {
       headers: authHeaders(token),
-      signal: AbortSignal.timeout(BALANCE_TIMEOUT_MS),
+      timeoutMs: BALANCE_TIMEOUT_MS,
     });
     if (!response.ok) {
       console.error(`[wx-auth-points] balance 查询失败 HTTP ${response.status}`);
@@ -108,7 +108,7 @@ export async function spendParsePoints(
   actionId: string
 ): Promise<SpendResult> {
   try {
-    const response = await fetch(`${AUTH_API_BASE}/api/points/spend`, {
+    const response = await wxAuthFetch("/api/points/spend", {
       method: "POST",
       headers: {
         ...authHeaders(token),
@@ -119,7 +119,7 @@ export async function spendParsePoints(
         actionId,
         scene: PARSE_SCENE,
       }),
-      signal: AbortSignal.timeout(SPEND_TIMEOUT_MS),
+      timeoutMs: SPEND_TIMEOUT_MS,
     });
 
     // 409 = 账本明确判定余额不足（唯一需要「拦截」的业务分支）
@@ -159,14 +159,14 @@ export async function checkinPoints(
   token: string
 ): Promise<{ granted: number; balance: number | null } | null> {
   try {
-    const response = await fetch(`${AUTH_API_BASE}/api/points/checkin`, {
+    const response = await wxAuthFetch("/api/points/checkin", {
       method: "POST",
       headers: {
         ...authHeaders(token),
         "content-type": "application/json",
       },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(CHECKIN_TIMEOUT_MS),
+      timeoutMs: CHECKIN_TIMEOUT_MS,
     });
     if (!response.ok) {
       console.error(`[wx-auth-points] checkin 失败 HTTP ${response.status}`);

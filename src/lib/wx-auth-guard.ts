@@ -6,18 +6,21 @@
  *       共享），浏览器访问解析接口时自动携带，服务端在此读取并校验。
  *       小程序端没有 Cookie，登录后通过 Authorization: Bearer <token> 头携带同一
  *       token（校验链路相同，无需身份特判）；Cookie 优先，无 Cookie 凭证时才取 Bearer。
- * 校验：远程调 wx-auth.shenzjd.com/api/auth/check?token=xxx —— 权威校验（查用户表
- *       active 状态，取关/封禁即失效），不共享密钥。
+ * 校验：远程调 wx-auth 的 /api/auth/check?token=xxx —— 权威校验（查用户表
+ *       active 状态，取关/封禁即失效），不共享密钥。地址与重试见
+ *       lib/wx-auth-endpoint.ts（内网优先，瞬时失败自愈一次）。
  * 缓存：校验结果按 token 缓存 5 分钟（策略经确认：长缓存减少外部请求，代价是取关后
  *       最长 5 分钟内仍可解析）；「明确未认证」也缓存（防刷），「认证服务异常」不缓存
  *       （fail closed 拒绝本次，服务恢复后立即生效）。
  */
 
-const AUTH_API_BASE =
-  process.env.WXAUTH_API_BASE || "https://wx-auth.shenzjd.com";
+import { wxAuthFetch } from "@/lib/wx-auth-endpoint";
+
 const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
 const AUTH_CACHE_MAX = 500;
-const AUTH_FETCH_TIMEOUT_MS = 5000;
+// 单次尝试超时。原来 5s 是「一次定生死」，现在允许重试一次（见 wx-auth-endpoint），
+// 故单次收到 2.5s：最坏 2×2.5s+退避 ≈ 原最坏 5s，但单次抖动可自愈。
+const AUTH_FETCH_TIMEOUT_MS = 2500;
 
 interface AuthCacheEntry {
   authenticated: boolean;
@@ -80,11 +83,11 @@ export async function checkWxAuthToken(token: string): Promise<boolean> {
   let authenticated = false;
   let checkError = false;
   try {
-    const response = await fetch(
-      `${AUTH_API_BASE}/api/auth/check?token=${encodeURIComponent(token)}`,
+    const response = await wxAuthFetch(
+      `/api/auth/check?token=${encodeURIComponent(token)}`,
       {
         headers: { "user-agent": "parse.shenzjd.com/auth-guard" },
-        signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
+        timeoutMs: AUTH_FETCH_TIMEOUT_MS,
       }
     );
     if (response.ok) {
@@ -134,11 +137,11 @@ export async function getWxAuthUser(request: Request): Promise<{
   let isAdmin = false;
   let checkError = false;
   try {
-    const response = await fetch(
-      `${AUTH_API_BASE}/api/auth/userinfo?token=${encodeURIComponent(token)}`,
+    const response = await wxAuthFetch(
+      `/api/auth/userinfo?token=${encodeURIComponent(token)}`,
       {
         headers: { "user-agent": "parse.shenzjd.com/auth-guard" },
-        signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
+        timeoutMs: AUTH_FETCH_TIMEOUT_MS,
       }
     );
     if (response.ok) {
