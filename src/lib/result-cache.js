@@ -21,12 +21,27 @@ import { DELETED_CONTENT_MSG } from "@/lib/api-utils";
 
 /** 分享打开窗口按天计，直链时效由命中探测兜底，故 TTL 取一整天 */
 const TTL_SECONDS = 24 * 60 * 60;
-/** 内存兜底上限（非 Workers 环境），防本地长跑内存膨胀 */
-const MEMORY_MAX = 500;
+/**
+ * 内存兜底上限。线上解析站跑在 Docker/Node（无 `caches` 全局），**这条内存路径就是
+ * 生产实际使用的缓存**，原先 500 条 + FIFO 让热链接很快被冲掉（命中率被压低 →
+ * 更多全量解析）。这里放宽到 5000 条并改为 LRU 淘汰。
+ */
+const MEMORY_MAX = 5000;
+/** 命中探测结论 memo：同一 URL 在窗口内重复命中时不再重复外呼 */
+const PROBE_MEMO_TTL_MS = 60 * 1000;
+/** memo 上限（LRU），防长跑膨胀 */
+const PROBE_MEMO_MAX = 2000;
+/**
+ * 命中探测的单次预算。超时本就被判为「仍有效」，等满默认 4s 只会把一次本该
+ * 毫秒级返回的缓存命中拖住（线上日志实测：cache-hit 平均 752ms、最大 5077ms）。
+ */
+const PROBE_TIMEOUT_MS = 1200;
 // 合成缓存源：仅作 Cache API 的 key，从不真实请求
 const CACHE_KEY_BASE = "https://result-cache.parse.shenzjd.com/api/parse?url=";
 
-const memoryCache = new Map(); // url → { result, expiresAt }
+const memoryCache = new Map(); // url → { result, expiresAt }（Map 顺序 = 最近使用序）
+/** 只记「探测有效」结论：死链结论不缓存，避免把可能恢复的链接钉死 */
+const probeOkMemo = new Map(); // direct url → 上次确认有效的时刻
 
 function cacheRequest(url) {
   return new Request(CACHE_KEY_BASE + encodeURIComponent(url), { method: "GET" });
@@ -54,6 +69,9 @@ export async function getResultCache(url) {
     memoryCache.delete(url);
     return null;
   }
+  // LRU：命中即重排到队尾（Map 按插入序），让热链接不被新条目挤掉
+  memoryCache.delete(url);
+  memoryCache.set(url, entry);
   return entry.result;
 }
 
@@ -87,8 +105,13 @@ export async function putResultCache(url, result) {
     return;
   }
   if (memoryCache.size >= MEMORY_MAX) {
-    // FIFO 淘汰足够（兜底场景才有内存路径）
-    memoryCache.delete(memoryCache.keys().next().value);
+    // LRU：逐出最久未使用的一批（1/8），避免逐条淘汰带来的高频抖动
+    const batch = Math.ceil(MEMORY_MAX / 8);
+    let removed = 0;
+    for (const key of memoryCache.keys()) {
+      memoryCache.delete(key);
+      if (++removed >= batch) break;
+    }
   }
   memoryCache.set(url, { result, expiresAt: Date.now() + TTL_SECONDS * 1000 });
 }
@@ -97,6 +120,12 @@ export async function putResultCache(url, result) {
  * 缓存结果的主直链是否已失效（如抖音签名直链过期）。
  * 探测范围与解析时的直链验证对齐（主直链或主图 + 分P首段），最多 2 个 HEAD 请求；
  * 只有明确死链（404/410）才判失效，403/超时等不确定一律当有效（绝不误伤好链）。
+ *
+ * 性能（2026-09-23）：命中路径上的探测是线性的同步外呼，而热链接会被反复打开
+ * （线上日志：232 次命中仅对应 56 个 URL，最热的被探测 20 次），故
+ * ①「探测有效」结论按 URL 记 60s memo，窗口内不再重复外呼；
+ * ②单次探测预算压到 PROBE_TIMEOUT_MS（超时本就算有效，等满 4s 只会拖慢命中响应）。
+ * 死链结论刻意不 memo：重新解析会立刻用新直链覆盖缓存条目，不需要靠 memo 兜。
  */
 export async function resultStale(result) {
   const d = (result && result.data) || {};
@@ -112,10 +141,14 @@ export async function resultStale(result) {
   if (firstPart && typeof firstPart.url === "string" && firstPart.url.startsWith("http")) {
     candidates.push(firstPart.url);
   }
+  const now = Date.now();
   for (const direct of candidates) {
+    const probedAt = probeOkMemo.get(direct);
+    if (probedAt && now - probedAt < PROBE_MEMO_TTL_MS) continue;
     try {
-      const v = await verifyDirectUrl(direct);
+      const v = await verifyDirectUrl(direct, { timeout: PROBE_TIMEOUT_MS });
       if (v && v.ok === false) return true;
+      rememberProbeOk(direct, now);
     } catch {
       // 探测异常按有效处理
     }
@@ -123,7 +156,22 @@ export async function resultStale(result) {
   return false;
 }
 
+/** 记录「该直链探测有效」；超过上限按 LRU 逐出一批 */
+function rememberProbeOk(url, now) {
+  if (probeOkMemo.size >= PROBE_MEMO_MAX) {
+    const batch = Math.ceil(PROBE_MEMO_MAX / 8);
+    let removed = 0;
+    for (const key of probeOkMemo.keys()) {
+      probeOkMemo.delete(key);
+      if (++removed >= batch) break;
+    }
+  }
+  probeOkMemo.delete(url);
+  probeOkMemo.set(url, now);
+}
+
 /** 测试辅助：清空内存兜底缓存（Workers 的 Cache API 无须也无从手动清） */
 export function _resetForTests() {
   memoryCache.clear();
+  probeOkMemo.clear();
 }

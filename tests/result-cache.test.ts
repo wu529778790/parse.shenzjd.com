@@ -104,4 +104,73 @@ describe("result-cache", () => {
     expect(stale).toBe(true);
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
+
+  it("热链接命中探测有 60s memo：同一 URL 不重复外呼", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    global.fetch = fetchMock;
+    const result = {
+      code: 200,
+      data: { url: "https://cdn.example.com/hot.mp4" },
+    };
+
+    expect(await resultStale(result)).toBe(false);
+    expect(await resultStale(result)).toBe(false);
+    expect(await resultStale(result)).toBe(false);
+
+    // 三次命中只探测一次（线上日志：232 次命中仅 56 个 URL）
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("探测确认有效的 memo 过期后会重新探测", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    global.fetch = fetchMock;
+    const result = {
+      code: 200,
+      data: { url: "https://cdn.example.com/aging.mp4" },
+    };
+
+    await resultStale(result);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // 越过 60s memo 窗口后应重新探测（fake timers 只推进探测前的 now 取值）
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 61 * 1000);
+      await resultStale(result);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("内存缓存上限提升到 5000 且按 LRU 淘汰（不再 500 条 FIFO）", async () => {
+    const makeResult = (i) => ({
+      code: 200,
+      msg: "解析成功",
+      platform: "douyin",
+      data: { url: `https://cdn.example.com/v${i}.mp4` },
+    });
+
+    // 600 条：旧实现的 500 条 FIFO 会把最早那条挤掉
+    for (let i = 0; i < 600; i++) {
+      await putResultCache(`https://v.douyin.com/lru${i}/`, makeResult(i));
+    }
+    expect(await getResultCache("https://v.douyin.com/lru0/")).toMatchObject({
+      platform: "douyin",
+    });
+
+    // 超过上限后按批淘汰最久未使用的条目，而不是整体清空
+    const over = 5000 + 10;
+    for (let i = 0; i < over; i++) {
+      await putResultCache(`https://v.douyin.com/bulk${i}/`, makeResult(i));
+    }
+    // 最近写入的一批必然都还在（旧实现每次溢出会 clear()，只剩最后一条）
+    for (let i = over - 100; i < over; i++) {
+      expect(await getResultCache(`https://v.douyin.com/bulk${i}/`)).not.toBeNull();
+    }
+  });
 });
