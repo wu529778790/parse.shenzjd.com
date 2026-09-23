@@ -47,6 +47,65 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("xhs 请求头", () => {
+  it("使用移动端 UA（桌面 UA 会被强制跳登录页）", async () => {
+    const seen: RequestInit[] = [];
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      seen.push(init);
+      return pageResponse(url, NOTE_STATE);
+    });
+
+    const result = await xhs("https://www.xiaohongshu.com/explore/6aa816c2");
+    expect(result.code).toBe(200);
+
+    const ua = String((seen[0]?.headers as Record<string, string>)["User-Agent"]);
+    expect(ua).toMatch(/iPhone/);
+    expect(ua).not.toMatch(/Windows NT/);
+  });
+
+  it("配置 XHS_COOKIE 时两个请求阶段都带上 Cookie", async () => {
+    process.env.XHS_COOKIE = "web_session=abc; a1=def";
+    const seen: RequestInit[] = [];
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      seen.push(init);
+      if (url.startsWith("https://xhslink.cn/")) {
+        const resp = new Response(null, {
+          status: 302,
+          headers: { location: "https://www.xiaohongshu.com/explore/6aa816c2" },
+        });
+        Object.defineProperty(resp, "url", { value: url });
+        return resp;
+      }
+      return pageResponse(url, NOTE_STATE);
+    });
+
+    try {
+      await xhs("https://xhslink.cn/o/G84qDcu5X");
+    } finally {
+      delete process.env.XHS_COOKIE;
+    }
+
+    expect(seen.length).toBeGreaterThan(1);
+    for (const init of seen) {
+      expect((init.headers as Record<string, string>).Cookie).toBe(
+        "web_session=abc; a1=def"
+      );
+    }
+  });
+
+  it("未配置 XHS_COOKIE 时不发 Cookie 头", async () => {
+    delete process.env.XHS_COOKIE;
+    const seen: RequestInit[] = [];
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      seen.push(init);
+      return pageResponse(url, NOTE_STATE);
+    });
+
+    await xhs("https://www.xiaohongshu.com/explore/6aa816c2");
+    expect((seen[0]?.headers as Record<string, string>).Cookie).toBeUndefined();
+  });
+});
+
 describe("xhs 登录跳转兜底", () => {
   it("短链被 302 到登录页时，用 redirectPath 重试真实笔记页", async () => {
     global.fetch = vi.fn().mockImplementation(async (url: string) => {

@@ -7,9 +7,38 @@
 import { logger, DELETED_CONTENT_MSG } from "@/lib/api-utils";
 
 
-/** 小红书 H5：桌面 Chrome UA，短链统一走 https */
+/**
+ * 小红书 H5 UA：**必须用移动端**。
+ *
+ * 2026-09-23 实测：同一篇笔记，桌面 Chrome/Edge UA 请求笔记页会被强制 302 到
+ * /login?redirectPath=...（服务端出口 IP 无登录态一律如此），换了 redirectPath
+ * 重试仍是登录页 → 线上 4 次全部报 403「该笔记需要登录小红书后才能查看」；
+ * 同一 IP 换成 iPhone Safari UA 立刻拿到 200 + 完整 __INITIAL_STATE__
+ * （noteData.data.noteData，含 video.media.stream 的 h264 backupUrls/masterUrl）。
+ * xhslink 短链同理：移动 UA 下 302 直达笔记页而不是登录页。
+ *
+ * 移动端 UA 是「无需 Cookie 即可解析」的关键，不要为了「像浏览器」改回桌面 UA。
+ */
 const XHS_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0";
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+
+/** 网页端登录 Cookie（可选）：形如 `web_session=xxx; a1=xxx`，配了才带 */
+function xhsCookie() {
+  return (process.env.XHS_COOKIE || "").trim();
+}
+
+/** 统一构造请求头：移动 UA + 可选 Cookie（短链与重定向两处共用） */
+function xhsHeaders(extra = {}) {
+  const headers = {
+    "User-Agent": XHS_USER_AGENT,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    ...extra,
+  };
+  const cookie = xhsCookie();
+  if (cookie) headers.Cookie = cookie;
+  return headers;
+}
 
 function output(code, msg, data = []) {
   return {
@@ -84,12 +113,7 @@ function extractRedirectPath(loginUrl) {
 async function fetchWithRedirects(target) {
   // 第一步：请求短链，手动处理重定向
   let response = await fetch(target, {
-    headers: {
-      "User-Agent": XHS_USER_AGENT,
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    },
+    headers: xhsHeaders(),
     redirect: "manual",
   });
 
@@ -105,14 +129,8 @@ async function fetchWithRedirects(target) {
     const nextUrl = new URL(location, response.url).toString();
     redirectCount++;
     response = await fetch(nextUrl, {
-      headers: {
-        "User-Agent": XHS_USER_AGENT,
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        // 带上 Referer 避免被拦截
-        Referer: response.url,
-      },
+      // 带上 Referer 避免被拦截
+      headers: xhsHeaders({ Referer: response.url }),
       redirect: "manual",
     });
   }

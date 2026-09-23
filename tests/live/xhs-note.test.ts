@@ -45,6 +45,18 @@ const CASES = [
     url: "https://xhslink.cn/o/8L6yyJlYIBm",
     type: "image",
   },
+  {
+    // 2026-09-22 线上失败案例（桌面 UA 被 302 到 /login → 403 需登录）
+    name: "水滴钻（线上失败案例 1）",
+    url: "https://xhslink.cn/o/47rHijtSCBa",
+    type: "video",
+  },
+  {
+    // 2026-09-22 线上失败案例（同上）
+    name: "心动一万次的项链（线上失败案例 2）",
+    url: "https://xhslink.cn/o/97i1URr5sJP",
+    type: "video",
+  },
 ];
 
 describe.skipIf(!RUN)("小红书链接真机解析", () => {
