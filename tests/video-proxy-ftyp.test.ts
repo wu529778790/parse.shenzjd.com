@@ -49,6 +49,51 @@ describe("video-proxy：抖音 ftyp 头混淆修复", () => {
     expect(buf.subarray(12).toString()).toBe("mdat-content-chunk");
   });
 
+  it("代理 aweme.snssdk.com（抖音老版直链域名）也修复 ftyp 混淆", async () => {
+    const obfuscated = makeObfuscatedMp4();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(obfuscated, {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        })
+      )
+    );
+
+    const req = new Request(
+      "http://localhost/api/video-proxy?url=" +
+        encodeURIComponent(
+          "https://aweme.snssdk.com/aweme/v1/play/?video_id=v0300fg10000abc"
+        ),
+      { headers: { "x-forwarded-for": "203.0.113.42" } }
+    );
+    const res = await GET(req);
+    const buf = Buffer.from(await res.arrayBuffer());
+    expect(buf.subarray(0, 4).toString("hex")).toBe("00000020");
+  });
+
+  it("上游持续 fetch failed 时 502，且响应里带上 error.cause 真因", async () => {
+    const cause = Object.assign(new Error("other side closed"), {
+      code: "ECONNRESET",
+    });
+    const err = new TypeError("fetch failed");
+    err.cause = cause;
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(err));
+
+    const req = new Request(
+      "http://localhost/api/video-proxy?url=" +
+        encodeURIComponent("https://aweme.snssdk.com/aweme/v1/play/?video_id=x"),
+      { headers: { "x-forwarded-for": "203.0.113.42" } }
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(502);
+    const text = await res.text();
+    expect(text).toContain("fetch failed");
+    // 只有 "fetch failed" 无从排查，必须摊开 cause
+    expect(text).toContain("ECONNRESET");
+  });
+
   it("非抖音域名不修复 ftyp（原样透传）", async () => {
     const data = makeObfuscatedMp4();
     vi.stubGlobal(

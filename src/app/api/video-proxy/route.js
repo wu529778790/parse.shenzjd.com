@@ -23,6 +23,9 @@ function isXhsHost(hostname) {
 
 // 抖音视频 CDN：会随机返回 ftyp box size 被混淆的 MP4（首字节 00→01），
 // 导致播放器无法解析。需在代理中检测并修复该混淆（见 fixDouyinFtyp）。
+// aweme.snssdk.com：抖音老版直链域名（/aweme/v1/play/?video_id=...，会 302 到
+// 真实 CDN）。2026-09-23 线上 4 次 fetch failed 都是它，此前既不在修复名单里
+// （混淆头不会被修），日志里也只有 "fetch failed" 看不出真因（见下方 e.cause）。
 function isDouyinVideoHost(hostname) {
   return (
     hostname === "365yg.com" ||
@@ -30,8 +33,25 @@ function isDouyinVideoHost(hostname) {
     hostname === "douyinvod.com" ||
     hostname.endsWith(".douyinvod.com") ||
     hostname === "douyinstatic.com" ||
-    hostname.endsWith(".douyinstatic.com")
+    hostname.endsWith(".douyinstatic.com") ||
+    hostname === "snssdk.com" ||
+    hostname.endsWith(".snssdk.com")
   );
+}
+
+/**
+ * 把 undici fetch 的错误摊开成可诊断的一行：
+ * undici 统一抛 `TypeError: fetch failed`，真正的 ECONNRESET / ETIMEDOUT /
+ * ENOTFOUND 藏在 error.cause 里。不打印 cause 就只能看到"fetch failed"，
+ * 线上无法判断是上游抽风、DNS 坏还是出口不通。
+ */
+function describeFetchError(error) {
+  const cause = error?.cause;
+  const causeMsg =
+    cause && (cause.message || cause.code)
+      ? `${cause.code ? `${cause.code}:` : ""}${cause.message || ""}`
+      : "";
+  return causeMsg ? `${error.message} (${causeMsg})` : String(error?.message);
 }
 
 export async function GET(request) {
@@ -119,7 +139,7 @@ export async function GET(request) {
       if (request.signal.aborted) break;
       const backoffMs = 500 * Math.pow(3, attempt - 1); // 500, 1500
       logger.warn(
-        `video-proxy 重试第 ${attempt} 次: host=${target.hostname} backoff=${backoffMs}ms err=${lastErr?.message}`
+        `video-proxy 重试第 ${attempt} 次: host=${target.hostname} backoff=${backoffMs}ms err=${describeFetchError(lastErr)}`
       );
       await new Promise((r) => setTimeout(r, backoffMs));
       if (request.signal.aborted) break;
@@ -147,10 +167,13 @@ export async function GET(request) {
       }
       // 其他错误（fetch failed / ECONNRESET 等）：继续重试循环
       if (attempt === MAX_RETRIES) {
+        // 必须打印 cause（ECONNRESET / ETIMEDOUT / ENOTFOUND 等），
+        // 否则线上只能看到统一的 "fetch failed"，无从判断是哪一层坏了
+        const detail = describeFetchError(e);
         logger.error(
-          `video-proxy upstream fetch failed (重试 ${MAX_RETRIES} 次后放弃): ${e.message}`
+          `video-proxy upstream fetch failed (重试 ${MAX_RETRIES} 次后放弃): host=${target.hostname} ${detail}`
         );
-        return new Response(`Upstream fetch failed: ${e.message}`, {
+        return new Response(`Upstream fetch failed: ${detail}`, {
           status: 502,
         });
       }
