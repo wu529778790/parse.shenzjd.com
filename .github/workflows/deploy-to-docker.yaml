@@ -141,11 +141,27 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           password: ${{ secrets.DEPLOY_PASSWORD }}
+          # drone-ssh 默认命令超时 10m。2026-09-23 的部署正是死在这里：GHCR 拉取
+          # 抖动（3 个层 Download complete 后迟迟不落地），10 分钟到点被掐断
+          # 「Run Command Timeout」，镜像没换成、容器没重启（旧容器继续服务）。
+          # 放宽到 30m，让「慢但在推进」的拉取能跑完，而不是被判成失败。
+          command_timeout: 30m
           script: |
             IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest"
             CONTAINER="${{ github.event.repository.name }}"
             ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/parse.shenzjd.com/index/.env"
-            sudo docker pull "$IMAGE"
+            # 先清一次悬空镜像腾出磁盘/IO，再带重试拉取（拉取失败不碰旧容器）
+            sudo docker image prune -f
+            pulled=0
+            for i in 1 2 3; do
+              if sudo docker pull "$IMAGE"; then pulled=1; break; fi
+              echo "镜像拉取失败，重试 $i/3"
+              sleep 5
+            done
+            if [ "$pulled" != "1" ]; then
+              echo "镜像拉取失败，放弃本次部署（旧容器未动，站点仍在服务）"
+              exit 1
+            fi
             sudo docker stop "$CONTAINER" || true
             sudo docker rm "$CONTAINER" || true
             ENV_FLAGS=""
@@ -173,3 +189,21 @@ jobs:
               -p 5269:3000 \
               "$IMAGE"
             sudo docker image prune -f
+            # 就绪校验：容器起来但应用没起来（配置写错/依赖缺失）时，
+            # 原先的部署仍会判成功。用容器自带 node 探活，最多等 30s；
+            # 失败则打出日志并让 job 失败，避免「部署绿了、站点挂了」。
+            healthy=0
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if sudo docker exec "$CONTAINER" node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+                healthy=1
+                break
+              fi
+              echo "等待容器就绪 ($i/10)"
+              sleep 3
+            done
+            if [ "$healthy" != "1" ]; then
+              echo "容器健康检查失败，最近日志如下："
+              sudo docker logs --tail 50 "$CONTAINER" || true
+              exit 1
+            fi
+            echo "部署完成，容器健康"
