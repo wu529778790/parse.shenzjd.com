@@ -9,14 +9,14 @@
  * 校验：远程调 wx-auth 的 /api/auth/check?token=xxx —— 权威校验（查用户表
  *       active 状态，取关/封禁即失效），不共享密钥。地址与重试见
  *       lib/wx-auth-endpoint.ts（内网优先，瞬时失败自愈一次）。
- * 缓存：校验结果按 token 缓存 5 分钟（策略经确认：长缓存减少外部请求，代价是取关后
- *       最长 5 分钟内仍可解析）；「明确未认证」也缓存（防刷），「认证服务异常」不缓存
+ * 缓存：校验结果按 token 缓存 10 分钟（策略经确认：长缓存减少外部请求，代价是取关后
+ *       最长 10 分钟内仍可解析）；「明确未认证」也缓存（防刷），「认证服务异常」不缓存
  *       （fail closed 拒绝本次，服务恢复后立即生效）。
  */
 
 import { wxAuthFetch } from "@/lib/wx-auth-endpoint";
 
-const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
+const AUTH_CACHE_TTL_MS = 10 * 60 * 1000;
 const AUTH_CACHE_MAX = 500;
 // 单次尝试超时。原来 5s 是「一次定生死」，现在允许重试一次（见 wx-auth-endpoint），
 // 故单次收到 2.5s：最坏 2×2.5s+退避 ≈ 原最坏 5s，但单次抖动可自愈。
@@ -35,7 +35,7 @@ interface UserInfoCacheEntry {
   expiresAt: number;
 }
 
-// 用户详情缓存（isAdmin 变化频率极低，与 check 同款 5 分钟策略）
+// 用户详情缓存（isAdmin 变化频率极低，与 check 同款 10 分钟策略）
 const userInfoCache = new Map<string, UserInfoCacheEntry>();
 
 /**
@@ -69,7 +69,7 @@ function getBearerToken(request: Request): string | null {
 
 /**
  * 校验认证 token 是否有效（是否已关注公众号并完成认证）
- * - 缓存命中（5 分钟内）直接返回缓存结果
+ * - 缓存命中（10 分钟内）直接返回缓存结果
  * - 远程 check：authenticated=true → 缓存并放行
  * - 明确未认证 → 缓存 false（防刷）
  * - 认证服务异常 → fail closed 拒绝本次，但不缓存（服务恢复后立即生效）
@@ -104,7 +104,7 @@ export async function checkWxAuthToken(token: string): Promise<boolean> {
     );
   }
 
-  // 认证服务异常不缓存（fail closed 拒绝本次，避免把错误状态缓存 5 分钟）
+  // 认证服务异常不缓存（fail closed 拒绝本次，避免把错误状态缓存 10 分钟）
   if (!checkError) {
     if (authCache.size >= AUTH_CACHE_MAX) authCache.clear(); // 简单防膨胀
     authCache.set(token, {
@@ -118,7 +118,7 @@ export async function checkWxAuthToken(token: string): Promise<boolean> {
 /**
  * 查询认证用户详情（含管理员标记），供管理类接口做放权判断。
  * 走 wx-auth 的 /api/auth/userinfo（签名 token 校验后返回 role/isAdmin 等）。
- * 缓存策略与 checkWxAuthToken 一致：命中 5 分钟内直接返回；
+ * 缓存策略与 checkWxAuthToken 一致：命中 10 分钟内直接返回；
  * 服务异常 fail closed（authenticated=false）且不缓存。
  */
 export async function getWxAuthUser(request: Request): Promise<{
