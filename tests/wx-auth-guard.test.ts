@@ -2,6 +2,7 @@
 // @ts-nocheck
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createApiHandler } from "@/lib/api-middleware";
+import { checkWxAuthToken } from "@/lib/wx-auth-guard";
 import * as apiUtils from "@/lib/api-utils";
 
 describe("wx-auth guard (解析接口强制认证)", () => {
@@ -186,6 +187,30 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(parseSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("认证缓存超过上限时按批淘汰，而不是整体清空（回归：旧实现是 clear()）", async () => {
+    // AUTH_CACHE_MAX 为 2000：灌到略微溢出，验证最近写入的 token 仍命中缓存。
+    // 旧实现的 `if (size >= MAX) clear()` 会在溢出瞬间清空全表，导致在线用户
+    // 集体重新回源 check。
+    // 每次调用返回全新的 Response：Response 的 body 只能读一次，复用会让
+    // 第二次及以后的 .json() 抛错（被守卫按「服务异常」处理）
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        new Response(JSON.stringify({ authenticated: true }), { status: 200 })
+      );
+    global.fetch = fetchMock;
+
+    const total = 2100;
+    for (let i = 0; i < total; i++) {
+      await checkWxAuthToken(`lru-token-${i}`);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(total);
+
+    const callsBefore = fetchMock.mock.calls.length;
+    expect(await checkWxAuthToken(`lru-token-${total - 1}`)).toBe(true);
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
   });
 
   it("x-parse-internal 头不再绕过认证（回归：伪造内部标记应 401）", async () => {

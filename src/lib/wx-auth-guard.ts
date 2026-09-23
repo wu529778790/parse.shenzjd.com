@@ -17,7 +17,7 @@
 import { wxAuthFetch } from "@/lib/wx-auth-endpoint";
 
 const AUTH_CACHE_TTL_MS = 10 * 60 * 1000;
-const AUTH_CACHE_MAX = 500;
+const AUTH_CACHE_MAX = 2000;
 // 单次尝试超时。原来 5s 是「一次定生死」，现在允许重试一次（见 wx-auth-endpoint），
 // 故单次收到 2.5s：最坏 2×2.5s+退避 ≈ 原最坏 5s，但单次抖动可自愈。
 const AUTH_FETCH_TIMEOUT_MS = 2500;
@@ -37,6 +37,24 @@ interface UserInfoCacheEntry {
 
 // 用户详情缓存（isAdmin 变化频率极低，与 check 同款 10 分钟策略）
 const userInfoCache = new Map<string, UserInfoCacheEntry>();
+
+/**
+ * 写缓存（LRU）：超过上限时逐出最旧的一批，而不是整体 clear()。
+ * 原实现「满了就 clear」会造成一次集中的全量回源（所有在线 token 同时重新 check），
+ * 在 10 分钟 TTL 下更容易被触发。
+ */
+function cacheSet<K, V>(map: Map<K, V>, key: K, value: V): void {
+  if (map.size >= AUTH_CACHE_MAX) {
+    const batch = Math.ceil(AUTH_CACHE_MAX / 8);
+    let removed = 0;
+    for (const oldest of map.keys()) {
+      map.delete(oldest);
+      if (++removed >= batch) break;
+    }
+  }
+  map.delete(key);
+  map.set(key, value);
+}
 
 /**
  * 从请求中提取认证 token：
@@ -77,6 +95,9 @@ function getBearerToken(request: Request): string | null {
 export async function checkWxAuthToken(token: string): Promise<boolean> {
   const cached = authCache.get(token);
   if (cached && cached.expiresAt > Date.now()) {
+    // LRU：命中重排到队尾，避免高频 token 被冷条目挤掉
+    authCache.delete(token);
+    authCache.set(token, cached);
     return cached.authenticated;
   }
 
@@ -106,8 +127,7 @@ export async function checkWxAuthToken(token: string): Promise<boolean> {
 
   // 认证服务异常不缓存（fail closed 拒绝本次，避免把错误状态缓存 10 分钟）
   if (!checkError) {
-    if (authCache.size >= AUTH_CACHE_MAX) authCache.clear(); // 简单防膨胀
-    authCache.set(token, {
+    cacheSet(authCache, token, {
       authenticated,
       expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
     });
@@ -160,8 +180,7 @@ export async function getWxAuthUser(request: Request): Promise<{
   }
 
   if (!checkError) {
-    if (userInfoCache.size >= AUTH_CACHE_MAX) userInfoCache.clear();
-    userInfoCache.set(token, {
+    cacheSet(userInfoCache, token, {
       authenticated,
       isAdmin,
       expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
