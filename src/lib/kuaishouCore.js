@@ -1,8 +1,36 @@
 // 共享的快手解析核心逻辑（供 Next 路由与 Cloudflare Workers 复用）
+//
+// 关键结论（2026-09-23 线上日志 + 实测）：
+// 快手站点对「移动 UA 访问 PC 页面」会直接返回 63 字节反爬 JSON
+// （{"result":2,"error_msg":null,...}），页面里没有任何媒体数据——这正是
+// www.kuaishou.com/f/<token> 长链反复「解析失败（无返回结果）」的根因：
+//   短链 v.kuaishou.com/x → 302 → m.chenzhongtech.com/fw/photo/<id>（移动分享页）
+//   长链 www.kuaishou.com/f/x → 302 → www.kuaishou.com/short-video/<id>（PC 页，被反爬）
+// 而原来的 urlPatterns 会把「/fw/photo/<id>」也重写成 www.kuaishou.com/short-video/<id>，
+// 等于把唯一能解析的移动页主动换成被反爬的 PC 页——实测 4 个线上链接全部命中该坑。
+// 现在统一只请求移动端分享页（m.gifshow.com/fw/photo/<id>，实测 160KB 完整数据），
+// 并把重定向拿到的原移动页作为备用候选。
+//
+// 兜底链路（lib/douyinFallback.js public17Parse）对 /f/ 与 /short-video/ 一律返回
+// 5001「快手可能触发风控」，只认 v.kuaishou.com 短链，所以主解析必须自己修好。
+
+// 移动端分享页：快手 H5 分享落地页，含 mainMvUrls（无水印 mp4 直链）
+const MOBILE_SHARE_BASE = "https://m.gifshow.com/fw/photo/";
 
 // Edge/Workers 环境不启用 DOM 解析，直接使用字符串/正则方案
 async function initDOMParser() {
   return null;
+}
+
+/**
+ * 从任意快手链接里抠出 photoId。
+ * 覆盖短链展开后的 /short-video/<id>、移动分享页 /fw/photo/<id>、
+ * 以及历史形态 /photo/<id>（注意 /photo/ 不能误匹配 /fw/photo/ 之外的东西）。
+ */
+export function extractKuaishouPhotoId(url) {
+  if (!url || typeof url !== "string") return "";
+  const match = url.match(/(?:short-video|fw\/photo|photo)\/([^?/#]+)/);
+  return match ? match[1] : "";
 }
 
 export function formatResponse(code = 200, msg = "解析成功", data = []) {
@@ -26,86 +54,76 @@ class KuaishouParser {
       Connection: "keep-alive",
       "Upgrade-Insecure-Requests": "1",
     };
-
-    this.urlPatterns = [
-      {
-        name: "short-video",
-        regex: /short-video\/([^?]+)/,
-        template: (videoId) =>
-          `https://www.kuaishou.com/short-video/${videoId}`,
-      },
-      {
-        name: "photo",
-        regex: /photo\/([^?]+)/,
-        template: (videoId) =>
-          `https://www.kuaishou.com/short-video/${videoId}`,
-      },
-      {
-        name: "f-format",
-        regex: /\/f\/([^?]+)/,
-        template: (videoId, redirectUrl) => redirectUrl,
-      },
-      {
-        name: "profile",
-        regex: /profile\/([^?]+)/,
-        template: (videoId, redirectUrl) => redirectUrl,
-      },
-      {
-        name: "video",
-        regex: /video\/([^?]+)/,
-        template: (videoId, redirectUrl) => redirectUrl,
-      },
-    ];
   }
 
+  /**
+   * 移动端分享页把媒体数据塞在 JS 字符串里（形如 `\"caption\":\"...\"`、
+   * `mainMvUrls\":[{\"url\":\"https://...mp4\"`），字段名带反斜杠转义，
+   * 直接跑原有的正则一律匹配不到（不是没有数据，是转义挡住了）。
+   * 这里做一份「解除 JSON 字符串转义」的副本参与解析，让既有正则分支重新生效
+   * （顺带把标题/封面也捞出来）。
+   */
+  unescapeEmbeddedJson(html) {
+    return html
+      .replace(/\\u002F/gi, "/")
+      .replace(/\\\//g, "/")
+      .replace(/\\"/g, '"');
+  }
+
+  /**
+   * 依次请求候选页，返回第一个能解析出结果的：
+   * 移动分享页（主）→ 重定向拿到的原移动页（备）→ 兜底 URL。
+   * 注意候选必须逐一「请求 + 解析」，不能像旧实现那样「只请求第一个、
+   * 解析失败就算了」——反爬页能返回 200 但内容里没有数据。
+   */
   async parse(url) {
     try {
       const redirectedUrl = await this.getRedirectedUrl(url);
-      const { requestUrl } = this.parseUrl(url, redirectedUrl);
-      const htmlContent = await this.fetchPageContent(requestUrl, url);
-      if (!htmlContent) return null;
-
-      const videoInfo = await this.parseVideoInfo(htmlContent);
-      return videoInfo;
+      const { candidates } = this.parseUrl(url, redirectedUrl);
+      for (const candidate of candidates) {
+        const htmlContent = await this.makeRequest(candidate);
+        if (!htmlContent) continue;
+        const videoInfo = await this.parseVideoInfo(htmlContent);
+        if (videoInfo) return videoInfo;
+      }
+      return null;
     } catch {
       return null;
     }
   }
 
+  /**
+   * 计算请求候选列表：photoId 能抠出来就请求移动分享页（唯一稳定可解析的形态），
+   * 抠不出来（如 profile 主页链接）才退回重定向后的原地址。
+   */
   parseUrl(originalUrl, redirectedUrl) {
-    let videoId = "";
-    let requestUrl = redirectedUrl;
-    for (const pattern of this.urlPatterns) {
-      const match =
-        originalUrl.match(pattern.regex) || redirectedUrl.match(pattern.regex);
-      if (match) {
-        videoId = match[1];
-        requestUrl = pattern.template(videoId, redirectedUrl);
-        break;
-      }
+    const photoId =
+      extractKuaishouPhotoId(redirectedUrl) ||
+      extractKuaishouPhotoId(originalUrl);
+    if (!photoId) {
+      return { videoId: "", candidates: [redirectedUrl].filter(Boolean) };
     }
-    return { requestUrl };
+
+    const viaMobile = `${MOBILE_SHARE_BASE}${photoId}`;
+    // 重定向本身已经落在移动分享页（v.kuaishou.com 短链的常见形态）时优先原样用
+    const direct = /\/fw\/photo\//.test(redirectedUrl) ? redirectedUrl : "";
+    const candidates = [direct || viaMobile, viaMobile, redirectedUrl].filter(
+      Boolean
+    );
+    return { videoId: photoId, candidates: [...new Set(candidates)] };
   }
 
   async getRedirectedUrl(url) {
     try {
       const response = await fetch(url, {
         redirect: "follow",
-        headers: { "User-Agent": this.headers["User-Agent"] },
+        headers: this.headers,
         signal: AbortSignal.timeout(10000),
       });
       return response.url || url;
     } catch {
       return url;
     }
-  }
-
-  async fetchPageContent(primaryUrl, fallbackUrl) {
-    let content = await this.makeRequest(primaryUrl);
-    if (!content && fallbackUrl !== primaryUrl) {
-      content = await this.makeRequest(fallbackUrl);
-    }
-    return content;
   }
 
   async makeRequest(url) {
@@ -122,21 +140,72 @@ class KuaishouParser {
     }
   }
 
+  /**
+   * 移动端分享页的媒体数据是「转义过的 JSON 片段」，字段名固定：
+   *   mainMvUrls":[{"cdn":"...","url":"https://....mp4..."}]   主视频（mp4）
+   *   coverUrls / webpCoverUrls":[{"url":"https://....jpg"}]   封面
+   *   caption":"..." / name":"..."                             文案 / 作者
+   * 按字段精确取值，比宽正则准：宽正则会先撞上页面更靠前的 HLS(m3u8)，
+   * 并把作者头像（/uhead/）当成封面。
+   */
+  extractArrayFieldUrl(text, fieldName) {
+    const idx = text.indexOf(`"${fieldName}":`);
+    if (idx < 0) return "";
+    const match = text
+      .slice(idx, idx + 2000)
+      .match(/"url"\s*:\s*"([^"]+)"/);
+    if (!match) return "";
+    return this.cleanUrl(match[1]).replace(/^http:/i, "https:");
+  }
+
+  parseMobileSharePayload(htmlContent) {
+    try {
+      const text = this.unescapeEmbeddedJson(htmlContent);
+      if (!text.includes('"mainMvUrls":')) return null;
+      const videoUrl = this.extractArrayFieldUrl(text, "mainMvUrls");
+      if (!videoUrl) return null;
+
+      const data = { photoUrl: videoUrl, source: "mobile-share-json" };
+      const cover =
+        this.extractArrayFieldUrl(text, "webpCoverUrls") ||
+        this.extractArrayFieldUrl(text, "coverUrls");
+      if (cover) data.coverUrl = cover;
+
+      const caption = (text.match(/"caption"\s*:\s*"([^"]*)"/) || [])[1];
+      if (caption && !caption.includes("原声")) data.caption = caption;
+      const author = (text.match(/"name"\s*:\s*"([^"]*)"/) || [])[1];
+      if (author && !author.includes("原声")) data.authorName = author;
+
+      return formatResponse(200, "解析成功", data);
+    } catch {
+      return null;
+    }
+  }
+
   async parseVideoInfo(htmlContent) {
     try {
-      const domParser = await initDOMParser();
-      if (domParser) {
-        const result = await this.parseWithDOM(htmlContent, domParser);
+      // 先用原样 HTML 跑一遍，再用「解除转义」的副本跑一遍：
+      // 移动端分享页的数据是转义过的，只有副本能让既有正则分支命中。
+      const variants = [htmlContent, this.unescapeEmbeddedJson(htmlContent)];
+      for (const html of variants) {
+        // 快手自有字段优先（最准），命中即返回
+        const mobile = this.parseMobileSharePayload(html);
+        if (mobile) return mobile;
+
+        const domParser = await initDOMParser();
+        if (domParser) {
+          const result = await this.parseWithDOM(html, domParser);
+          if (result) return result;
+        }
+        let result = this.parseApolloStateRegex(html);
+        if (result) return result;
+        result = this.parseInlineJsonData(html);
+        if (result) return result;
+        result = this.parseWithRegexFallback(html);
+        if (result) return result;
+        result = this.parseWithBroadSearch(html);
         if (result) return result;
       }
-      let result = this.parseApolloStateRegex(htmlContent);
-      if (result) return result;
-      result = this.parseInlineJsonData(htmlContent);
-      if (result) return result;
-      result = this.parseWithRegexFallback(htmlContent);
-      if (result) return result;
-      result = this.parseWithBroadSearch(htmlContent);
-      if (result) return result;
       return null;
     } catch {
       return null;
@@ -575,14 +644,23 @@ class KuaishouParser {
       ];
       for (const pattern of broadPatterns) {
         const matches = htmlContent.match(pattern);
-        if (matches) {
-          for (const url of matches.slice(0, 10)) {
-            if (this.isValidVideoUrl(url)) {
-              const videoData = { photoUrl: url, source: "broad-search" };
-              this.extractAdditionalInfo(htmlContent, videoData);
-              return formatResponse(200, "解析成功", videoData);
-            }
-          }
+        if (!matches) continue;
+        // 必须过 cleanUrl：转义过的页面里 URL 后面紧跟 `\"`，
+        // 宽正则会把结尾的反斜杠一起吃进来，直接当直链用会让播放器 404
+        const urls = matches
+          .slice(0, 20)
+          .map((raw) => this.cleanUrl(raw))
+          .filter((url) => this.isValidVideoUrl(url));
+        // mp4 优先于 HLS(m3u8)：桌面 Chrome 的 <video> 播不了 m3u8，
+        // 而页面里 HLS 地址通常排在 mp4 前面，不挑就会拿到不可播的那个
+        const url =
+          urls.find((u) => /\.mp4(\?|$)/i.test(u)) ||
+          urls.find((u) => !/\.m3u8/i.test(u)) ||
+          urls[0];
+        if (url) {
+          const videoData = { photoUrl: url, source: "broad-search" };
+          this.extractAdditionalInfo(htmlContent, videoData);
+          return formatResponse(200, "解析成功", videoData);
         }
       }
       return this.extractFromJsonFragments(htmlContent);
