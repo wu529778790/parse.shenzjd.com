@@ -1,5 +1,4 @@
 // 通用 API 中间件函数
-import { randomUUID } from "node:crypto";
 import {
   getCachedResponse,
   setCacheResponse,
@@ -18,11 +17,6 @@ import {
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
 import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
-import {
-  ensureParseQuota,
-  settleParsePoints,
-  pointsEnabled,
-} from "@/lib/wx-auth-points";
 import { honeypotResponse } from "@/lib/honeypot";
 import { getResultCache, putResultCache, resultStale } from "@/lib/result-cache";
 
@@ -93,16 +87,14 @@ export interface ParseAccessResult {
   /** allowed=false 时的 HTTP 状态与提示文案（调用方负责写响应与日志） */
   status: number;
   message: string;
-  /** 认证通过时的用户凭证（后续积分预检/扣分复用），未通过为 null */
+  /** 认证通过时的用户凭证（调用方如需按用户维度处理可复用），未通过为 null */
   token: string | null;
 }
 
 /**
  * 解析接口的访问门禁（微信认证）。
  * 抽成导出函数是为了让 `/api/parse?source=&id=` 那条旁路也能复用同一口径——
- * 该分支此前完全没有鉴权，既是「登录才能解析」的漏洞，也是绕过积分计费的旁路。
- * 注意不含积分判断：积分预检要放在结果缓存之后（缓存命中不收费），
- * 而认证必须在缓存之前（未认证用户不消费缓存）。
+ * 该分支历史上完全没有鉴权，既是「登录才能解析」的漏洞，也是各类门禁的旁路。
  */
 export async function enforceParseAccess(
   request: Request
@@ -309,11 +301,9 @@ export const createApiHandler = (
     }
 
     // 解析类接口强制微信认证（登录才能解析）：
-    // 读取 SDK 写入的 wxauth-token Cookie → 远程校验（5 分钟缓存）→ 未认证 401。
+    // 读取 SDK 写入的 wxauth-token Cookie → 远程校验（10 分钟缓存）→ 未认证 401。
     // 豁免：非解析类接口（health/stats/image/engines 等原生路由不经本中间件）、
     // VITEST 测试环境。
-    // 认证通过的 token 记录到外层变量，供下方免费配额门禁与成功计数复用。
-    let wxAuthToken: string | null = null;
     if (process.env.VITEST !== "true" && AUTH_REQUIRED_ROUTES.has(routeName)) {
       const access = await enforceParseAccess(request);
       if (!access.allowed) {
@@ -329,7 +319,6 @@ export const createApiHandler = (
           }
         );
       }
-      wxAuthToken = access.token;
     }
 
     // 统一入口的共享结果缓存：放在认证之后（未认证用户不消费缓存）。
@@ -365,34 +354,9 @@ export const createApiHandler = (
       }
     }
 
-    // ===== 积分门禁（2026-09-18 接入 wx-auth 账本）=====
-    // 产品口径：**没有免费额度**，每次「真实解析」扣 1 积分，余额不足直接提示。
-    // 位置刻意放在两级缓存之后：缓存命中没有真实解析成本，不该收费
-    //（刷新页面、好友再打开同一分享链接都属于这一类）。
-    // 三段式：预检额度（余额不足时自动补领当日签到）→ 解析 → 成功后 best-effort 扣分。
-    // 应急开关：WXAUTH_POINTS_ENABLED=false 整体回退为免费不限次（见 lib/wx-auth-points.ts）。
-    let pointsToken: string | null = null;
-    let pointsActionId: string | null = null;
-    if (wxAuthToken && pointsEnabled()) {
-      const quota = await ensureParseQuota(wxAuthToken);
-      if (!quota.allowed) {
-        logParse("failed", 402, Date.now() - startTime, "积分不足");
-        logger.warn(
-          `积分不足被拒绝: route=${routeName} ip=${clientIP} url=${sanitizedUrl.substring(0, 100)}`
-        );
-        return Response.json(
-          errorResponse(quota.message, 402),
-          {
-            status: safeStatus(402),
-            headers
-          }
-        );
-      }
-      pointsToken = wxAuthToken;
-      // 幂等键：本次用户动作的随机 ID（网络超时重试复用同一个，才不会被扣两次）
-      pointsActionId = randomUUID();
-    }
-
+    // 计费/配额门禁已全部下线（2026-09-23 移除积分计费）：认证之后直接解析，
+    // 不做任何次数或余额校验。历史上这里先后有过「登录免费配额 + 广告解锁」与
+    // 「每次解析扣 1 积分」两版门禁，均已移除；缓存命中与真实解析一视同仁。
     try {
       logger.log(`Parsing URL: ${sanitizedUrl.substring(0, 80)}...`);
       const rawResult = await parseFunction(sanitizedUrl);
@@ -446,13 +410,6 @@ export const createApiHandler = (
           Date.now() - startTime,
           String(result?.msg || "")
         );
-      }
-
-      // 解析成功 → 结算 1 积分（best-effort：账本抖动只记日志，不影响结果返回）。
-      // 只在 code=200 时收费：解析失败（平台风控 / 链接失效 / 内容已删除）不扣分——
-      // 否则用户输入一条失效链接也要付费，体验与话术都说不通。
-      if (result?.code === 200 && pointsToken && pointsActionId) {
-        await settleParsePoints(pointsToken, pointsActionId);
       }
 
       if (shouldCache) {

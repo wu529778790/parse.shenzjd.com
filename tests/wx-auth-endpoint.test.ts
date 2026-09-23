@@ -149,12 +149,14 @@ describe("wxAuthFetch 多出口回退", () => {
       return new Response("nope", { status: 500 });
     });
 
-    const res = await wxAuthFetch("/api/points/balance", { timeoutMs: 1000 });
+    const res = await wxAuthFetch("/api/auth/userinfo?token=t", {
+      timeoutMs: 1000,
+    });
     expect(res.status).toBe(500);
     expect(calls).toHaveLength(1);
   });
 
-  it("所有出口都连不上时抛出错误（调用方 fail-closed/fail-open 自决）", async () => {
+  it("所有出口都连不上时抛出错误（由调用方按语义处理）", async () => {
     global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     await expect(
       wxAuthFetch("/api/auth/check?token=t", { timeoutMs: 1000 })

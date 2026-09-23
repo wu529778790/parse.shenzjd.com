@@ -165,7 +165,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
     expect(parseSpy).not.toHaveBeenCalled();
   });
 
-  it("校验结果按 token 缓存 5 分钟：同一 token 只调一次 check", async () => {
+  it("校验结果按 token 缓存 10 分钟：同一 token 只调一次 check", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ authenticated: true }), { status: 200 })
     );
@@ -184,12 +184,7 @@ describe("wx-auth guard (解析接口强制认证)", () => {
         headers: cookie,
       })
     );
-    // 只统计 check 调用：认证之后还有积分门禁（balance/spend）会走同一个 fetch，
-    // 但「认证结果按 token 缓存」只由 check 调用次数体现
-    const checkCalls = fetchMock.mock.calls.filter((c) =>
-      String(c[0]).includes("/api/auth/check")
-    );
-    expect(checkCalls).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(parseSpy).toHaveBeenCalledTimes(2);
   });
 

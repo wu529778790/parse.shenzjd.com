@@ -7,10 +7,8 @@
  * 参考: https://github.com/wujunwei928/parse-video
  */
 
-import { randomUUID } from "node:crypto";
 import { createApiHandler, safeStatus, enforceParseAccess } from "@/lib/api-middleware";
 import { logger, rateLimit, getClientIP, getCorsHeaders, isBlockedIP, errorResponse } from "@/lib/api-utils";
-import { ensureParseQuota, settleParsePoints, pointsEnabled } from "@/lib/wx-auth-points";
 import { normalizeResult } from "@/lib/normalize-result";
 import {
   identifyPlatform,
@@ -252,12 +250,10 @@ export async function GET(request) {
       );
     }
 
-    // 与统一入口同口径：微信认证 + 积分计费。
+    // 与统一入口同口径：微信认证（无任何计费/配额校验）。
     // 此前本分支没有任何鉴权（历史上是给小程序预留的），既是「登录才能解析」的旁路，
-    // 也是绕过扣分的口子；2026-09-18 收口到与 /api/parse?url= 一致的准入链路
+    // 也是绕过门禁的口子；2026-09-18 收口到与 /api/parse?url= 一致的认证链路
     //（小程序带 Bearer token 同样能过，无需身份特判）。
-    let pointsToken = null;
-    let pointsActionId = null;
     if (process.env.VITEST !== "true") {
       const access = await enforceParseAccess(request);
       if (!access.allowed) {
@@ -267,25 +263,9 @@ export async function GET(request) {
           headers: corsHeaders,
         });
       }
-      if (access.token && pointsEnabled()) {
-        const quota = await ensureParseQuota(access.token);
-        if (!quota.allowed) {
-          logger.warn(`积分不足被拒绝(source+id): ip=${clientIP}`);
-          return Response.json(errorResponse(quota.message, 402), {
-            status: safeStatus(402),
-            headers: corsHeaders,
-          });
-        }
-        pointsToken = access.token;
-        pointsActionId = randomUUID();
-      }
     }
 
     const result = normalizeResult(await unifiedParser("", { source, id }));
-    // 结算口径与统一入口一致：只在解析成功时扣 1 分
-    if (result?.code === 200 && pointsToken && pointsActionId) {
-      await settleParsePoints(pointsToken, pointsActionId);
-    }
     return Response.json(result, {
       status: safeStatus(result?.code || 200),
       headers: corsHeaders,
