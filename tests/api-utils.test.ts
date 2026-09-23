@@ -9,6 +9,7 @@ import {
   parseErrorResponse,
   logger,
   isBlockedIP,
+  beijingNow,
 } from "@/lib/api-utils";
 
 describe("api-utils", () => {
@@ -147,6 +148,29 @@ describe("api-utils", () => {
     it("error should always log", () => {
       logger.error("test error");
       expect(console.error).toHaveBeenCalledWith("test error");
+    });
+  });
+
+  describe("beijingNow", () => {
+    it("按北京时间输出 YYYY-MM-DD HH:mm:ss（模块级 formatter 复用后格式不漂移）", () => {
+      vi.useFakeTimers();
+      try {
+        // UTC 08:36:02 → 北京 16:36:02
+        vi.setSystemTime(new Date("2026-09-23T08:36:02Z"));
+        expect(beijingNow()).toBe("2026-09-23 16:36:02");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("跨日边界取北京日期（UTC 仍在前一天）", () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-09-22T16:00:00Z"));
+        expect(beijingNow()).toBe("2026-09-23 00:00:00");
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

@@ -8,19 +8,22 @@ export const DELETED_CONTENT_MSG = "该内容已被删除";
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 // 北京时间格式化（日志用）：YYYY-MM-DD HH:mm:ss
-// 各路由的流水日志统一用北京时间，避免看日志时手动 +8 换算
+// 各路由的流水日志统一用北京时间，避免看日志时手动 +8 换算。
+// formatter 提到模块级复用：本函数每个请求至少调一次，而 Intl.DateTimeFormat
+// 的构造开销远大于 format() 本身。
+const beijingFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
 export function beijingNow() {
-  const fmt = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  return fmt.format(new Date()).replace(/\//g, "-");
+  return beijingFormatter.format(new Date()).replace(/\//g, "-");
 }
 
 // 条件日志工具
@@ -102,6 +105,17 @@ export const rateLimit = (() => {
   const requests = new Map();
   const WINDOW_SIZE = 60000; // 1分钟
   const MAX_REQUESTS = 60; // 每分钟最多60次请求（视频播放+图片代理会产生大量请求）
+  // 追踪的 IP 上限：扫描/爬虫会带来大量一次性 IP，无上限则 Map 只增不减
+  const MAX_TRACKED_IPS = 5000;
+
+  /** 规模兜底：按「最久未活跃」顺序逐出一批（Map 顺序由下方重排维护） */
+  const evictOldest = (count) => {
+    let removed = 0;
+    for (const key of requests.keys()) {
+      requests.delete(key);
+      if (++removed >= count) break;
+    }
+  };
 
   return (ip) => {
     // Vitest 单测会短时间触发大量解析请求，避免误触生产限流逻辑
@@ -122,6 +136,11 @@ export const rateLimit = (() => {
     }
 
     recentRequests.push(now);
+    if (requests.size >= MAX_TRACKED_IPS) {
+      evictOldest(Math.ceil(MAX_TRACKED_IPS / 8));
+    }
+    // 先删后写：Map 顺序保持为「最近活跃」，供规模兜底按序淘汰
+    requests.delete(realIp);
     requests.set(realIp, recentRequests);
     logger.log(`Request allowed for IP: ${realIp}, count: ${recentRequests.length}/${MAX_REQUESTS}`);
     return true; // 允许请求

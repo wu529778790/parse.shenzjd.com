@@ -139,14 +139,17 @@ export const createApiHandler = (
     // 平台使用统计：生产环境 logger.log 不输出，这里用 console.log 确保线上可观测。
     // 从 URL 路径推断平台（如 /api/bilibili -> bilibili），用于排查各平台是否有人使用。
     // routeMatch 提升到函数级，供成功分支的行为分析记录复用。
-    // 分平台路由（ROUTE_DOMAIN_MAP 命中）不计入：它们在下方一律 403，
-    // 不存在真实解析——线上日志里这类直连/扫描流量曾占 usage 六成，污染统计。
+    // 两类不计入：
+    // - 分平台路由（ROUTE_DOMAIN_MAP 命中）：它们在下方一律 403，不存在真实解析
+    //   ——线上日志里这类直连/扫描流量曾占 usage 六成，污染统计；
+    // - route=parse：本函数内每个请求都已写一条 [parse] 流水（字段完全覆盖 usage），
+    //   再写一行等于每请求两次同步 stdout 写，纯重复开销（2026-09-23 削减日志 I/O）。
     let routeMatch: RegExpMatchArray | null = null;
     try {
       const pathname = new URL(request.url).pathname;
       routeMatch = pathname.match(/\/api\/([a-z0-9]+)/i);
       const usageRoute = String(routeMatch?.[1] || "");
-      if (routeMatch && !ROUTE_DOMAIN_MAP[usageRoute]) {
+      if (routeMatch && usageRoute !== "parse" && !ROUTE_DOMAIN_MAP[usageRoute]) {
         console.log(
           `[usage] route=${usageRoute} time=${beijingNow()}`
         );
