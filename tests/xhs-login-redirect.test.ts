@@ -107,6 +107,25 @@ describe("xhs 请求头", () => {
   });
 });
 
+describe("xhs 已删除笔记", () => {
+  // 真机样本（xhslink.cn/o/3Gyr8qtncG6）已被作者恢复，改用 mock 锁定该分支，
+  // 确定性覆盖「重定向带 undertake_note_error → 404 该内容已被删除」
+  it("最终 URL 带 undertake_note_error 时返回 404 已删除", async () => {
+    const url =
+      "https://www.xiaohongshu.com/explore?undertake_note_error=" +
+      encodeURIComponent("该内容暂时无法查看");
+    global.fetch = vi.fn().mockImplementation(async (u: string) => {
+      const resp = new Response("<html></html>", { status: 200 });
+      Object.defineProperty(resp, "url", { value: u.startsWith("http") && u.includes("xhslink") ? url : u });
+      return resp;
+    });
+
+    const result = await xhs("https://xhslink.cn/o/3Gyr8qtncG6");
+    expect(result.code).toBe(404);
+    expect(result.msg).toBe("该内容已被删除");
+  });
+});
+
 describe("xhs 登录跳转兜底", () => {
   it("短链被 302 到登录页时，用 redirectPath 重试真实笔记页", async () => {
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
