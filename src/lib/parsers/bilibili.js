@@ -182,6 +182,142 @@ async function bilibiliRequest(url, headers, retries = 2) {
   return null;
 }
 
+/**
+ * 番剧（PGC）解析：/bangumi/play/ep<id>（单集）或 /bangumi/play/ss<id>（整季）
+ *
+ * 不能复用 UP 主稿件那套接口：番剧的 bvid 在 /x/web-interface/view 下能查到
+ * （会被当成普通稿件返回 pages），但 /x/player/playurl 对它一律回 -404「啥都木有」
+ * （2026-09-23 实测），必须走 PGC 专用接口：
+ *   /pgc/view/web/season?ep_id=|season_id=   取剧集列表（含 cid / ep_id）
+ *   /pgc/player/web/playurl                   取播放地址
+ * 匿名 Cookie 下正常剧集可达 1080P；会员专享集会返回 -10403 / is_preview=1，
+ * 此时仍返回剧集信息 + 明确提示，而不是笼统的「解析失败」。
+ *
+ * @param {"ep"|"ss"} kind ep=单集，ss=整季（取第一集）
+ * @param {string} id 数字 ID
+ */
+async function getBilibiliBangumiInfo(kind, id) {
+  try {
+    const headers = { "Content-Type": "application/json;charset=UTF-8" };
+    const seasonQuery =
+      kind === "ep" ? `ep_id=${id}` : `season_id=${id}`;
+
+    const season = await bilibiliRequest(
+      `https://api.bilibili.com/pgc/view/web/season?${seasonQuery}`,
+      headers
+    );
+
+    if (!season || season.code !== 0 || !season.result) {
+      logger.warn("Failed to fetch bangumi season:", kind, id, season?.code);
+      if (season && RISK_CODES.has(season.code)) {
+        return { code: 0, msg: "B站风控拦截，请稍后重试" };
+      }
+      if (season && (season.code === -404 || season.code === 600404)) {
+        return { code: 0, msg: DELETED_CONTENT_MSG };
+      }
+      return { code: 0, msg: "解析失败！" };
+    }
+
+    const info = season.result;
+    const episodes = Array.isArray(info.episodes) ? info.episodes : [];
+    // ep 链接按 ep_id 精确匹配；ss 链接取第一集（与网页端默认打开的行为一致）
+    const episode =
+      (kind === "ep" &&
+        episodes.find((e) => String(e.ep_id) === String(id))) ||
+      episodes[0];
+    if (!episode) {
+      logger.warn("bangumi season has no episode:", kind, id);
+      return { code: 0, msg: DELETED_CONTENT_MSG };
+    }
+
+    const episodeLabel = episode.title ? `第${episode.title}集` : "";
+    const title =
+      [info.title, episodeLabel, episode.long_title]
+        .filter(Boolean)
+        .join(" ") || info.title || "番剧";
+    const cover = proxyBiliImage(episode.cover || info.cover);
+    const upInfo = info.up_info || (info.staff && info.staff[0]) || {};
+    const user = {
+      name: upInfo.uname || upInfo.name || info.title || "",
+      user_img: proxyBiliImage(upInfo.avatar || upInfo.face || ""),
+    };
+    const durationSec = Math.max(
+      1,
+      Math.round(Number(episode.duration || info.duration || 0) / 1000)
+    );
+
+    // WBI 签名同样适用于 PGC 接口（算法一致），拿不到密钥时降级裸请求
+    const playParams = {
+      ep_id: episode.ep_id,
+      cid: episode.cid,
+      qn: 112,
+      fnval: 1,
+      fnver: 0,
+      otype: "json",
+      platform: "html5",
+      high_quality: 1,
+    };
+    const signedPlayQuery = await signWbiParams(playParams);
+    const plainPlayQuery = Object.entries(playParams)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&");
+    const playUrl = await bilibiliRequest(
+      `https://api.bilibili.com/pgc/player/web/playurl?${signedPlayQuery ?? plainPlayQuery}`,
+      headers
+    );
+
+    // PGC 与普通稿件响应层级不同：结果是 result（老接口用 data），这里两者都兜
+    const playData = playUrl?.result || playUrl?.data;
+    const durl = playData?.durl?.[0];
+
+    if (!durl?.url) {
+      const vipOnly = playUrl?.code === -10403 || playData?.is_preview === 1;
+      logger.warn(
+        "bilibili bangumi playurl failed:",
+        kind,
+        id,
+        playUrl?.code,
+        playData?.is_preview
+      );
+      return {
+        code: 0,
+        msg: vipOnly
+          ? "该剧集为大会员专享，匿名无法获取播放地址"
+          : "获取播放地址失败，请稍后重试",
+        title,
+        imgurl: cover,
+        desc: info.evaluate || "",
+        user,
+      };
+    }
+
+    logger.log("Successfully parsed bilibili bangumi:", kind, id);
+
+    return {
+      code: 1,
+      msg: "解析成功！",
+      title,
+      imgurl: cover,
+      desc: info.evaluate || "",
+      data: [
+        {
+          title,
+          duration: durationSec,
+          durationFormat: new Date((durationSec - 1) * 1000)
+            .toISOString()
+            .substr(11, 8),
+          accept: playData.accept_description,
+          video_url: normalizeCdnHost(durl.url),
+        },
+      ],
+      user,
+    };
+  } catch (error) {
+    logger.error("Error parsing bilibili bangumi:", error.message);
+    return { code: 0, msg: "解析失败！" };
+  }
+}
+
 async function getBilibiliVideoInfo(url) {
   try {
     // 首次进入时从 Turso 加载持久化的匿名 Cookie 到模块缓存（仅加载一次，
@@ -218,6 +354,13 @@ async function getBilibiliVideoInfo(url) {
     }
     
     if (!bvid.includes("/video/")) {
+      // 番剧（PGC）：b23.tv/ep675522 → /bangumi/play/ep675522，
+      // www.bilibili.com/bangumi/play/ss42916 → /bangumi/play/ss42916。
+      // 这条分支原来直接被判「好像不是视频链接」（2026-09-22 线上 3 次连续失败）。
+      const bangumiMatch = bvid.match(/\/bangumi\/play\/(ep|ss)(\d+)/);
+      if (bangumiMatch) {
+        return await getBilibiliBangumiInfo(bangumiMatch[1], bangumiMatch[2]);
+      }
       return { code: -1, msg: "好像不是视频链接" };
     }
     

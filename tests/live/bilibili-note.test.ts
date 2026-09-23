@@ -36,6 +36,17 @@ const CASES = [
     name: "年轻人口加速集中！这届年轻人正在悄悄换战场？",
     url: "https://b23.tv/xlg2vP0",
   },
+  {
+    // 2026-09-22 线上失败案例：b23.tv 番剧短链 → /bangumi/play/ep675522
+    // 原来被 /video/ 判定拦下（code=-1「好像不是视频链接」），现已走 PGC 接口
+    name: "番剧 ep 短链（盟卡车神之魔幻元珠 第01集）",
+    url: "https://b23.tv/ep675522",
+  },
+  {
+    // 整季链接（ss）→ 取第一集
+    name: "番剧 ss 整季链接",
+    url: "https://www.bilibili.com/bangumi/play/ss42916",
+  },
 ];
 
 describe.skipIf(!RUN)("B站视频链接真机解析", () => {
