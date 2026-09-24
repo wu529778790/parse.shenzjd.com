@@ -94,6 +94,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # README 同时宣传 GHCR 与 Docker Hub 两个拉取渠道，双仓库都推
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Read version from package.json
         id: ver
         run: |
@@ -113,7 +121,19 @@ jobs:
             type=raw,value=${{ steps.ver.outputs.version }}
             type=raw,value=latest
 
-      - name: Build and push to GHCR
+      - name: Extract metadata for Docker Hub
+        id: meta_dh
+        uses: docker/metadata-action@v5
+        with:
+          images: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/parse.shenzjd.com
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
+            type=raw,value=${{ steps.ver.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push to GHCR + Docker Hub
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -127,7 +147,10 @@ jobs:
           # 传入 git sha 作为稳定 buildId，避免滚动部署前后端 build 不一致
           build-args: |
             BUILD_ID=${{ github.sha }}
-          tags: ${{ steps.meta.outputs.tags }}
+          # 同一次构建同时推双仓库（各自带 main/sha/version/latest 全套 tag）
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.meta_dh.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
   deploy:
