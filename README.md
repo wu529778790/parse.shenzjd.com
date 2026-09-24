@@ -66,13 +66,8 @@ npm test         # 单元测试
 ### Docker
 
 ```bash
-# GHCR
 docker pull ghcr.io/wu529778790/parse.shenzjd.com:latest
 docker run --name parse -p 3000:3000 -d ghcr.io/wu529778790/parse.shenzjd.com:latest
-
-# Docker Hub
-docker pull docker.io/wu529778790/parse.shenzjd.com:latest
-docker run --name parse -p 3000:3000 -d docker.io/wu529778790/parse.shenzjd.com:latest
 ```
 
 ## 测试
