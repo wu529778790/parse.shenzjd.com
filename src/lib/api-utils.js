@@ -153,7 +153,9 @@ export const isValidUrl = (string) => {
     new URL(string);
     return true;
   } catch (error) {
-    logger.warn('Invalid URL provided:', error.message);
+    // 截断原始输入进日志，便于定位用户实际提交了什么
+    const preview = String(string ?? '').slice(0, 200);
+    logger.warn(`Invalid URL provided: ${error.message} (input: "${preview}")`);
     return false;
   }
 };
