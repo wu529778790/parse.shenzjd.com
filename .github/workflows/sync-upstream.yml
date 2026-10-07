@@ -91,7 +91,9 @@ jobs:
       - name: Setup Node.js for verification
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # undici 8 / wrangler 4 要求 Node >= 22（util.markAsUncloneable 在
+          # Node 22.10 才有），与 deploy-to-docker.yaml 的 Node 24 保持一致
+          node-version: 24
           cache: "npm"
 
       - name: Verify (test + build) before pushing
