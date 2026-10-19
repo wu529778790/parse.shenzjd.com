@@ -8,16 +8,51 @@ import { logger } from "@/lib/api-utils";
 import { getRedirectLocation } from "@/lib/redirect-location";
 
 
-const PAGE_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36",
-  Cookie:
-    "MONITOR_WEB_ID=7892c49b-296e-4499-8704-e47c1b150c18; ixigua-a-s=1; ttcid=af99669b6304453480454f150701d5c226; BD_REF=1",
-};
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36";
+const BASE_COOKIE =
+  "MONITOR_WEB_ID=7892c49b-296e-4499-8704-e47c1b150c18; ixigua-a-s=1; ttcid=af99669b6304453480454f150701d5c226; BD_REF=1";
+
+// 2026-10-19 线上验证：西瓜改版后，分享页 SSR 只在请求带 ttwid Cookie 时
+// 才在 _ROUTER_DATA 里下发 videoInfoRes（否则仅有 itemId，播放地址缺失）。
+// ttwid 通过任意 m.ixigua.com 页面的 Set-Cookie 获取，进程内缓存即可
+//（服务端签发，有效期极长）。
+let cachedTtwid = "";
+
+async function ensureTtwid(bootstrapUrl) {
+  if (cachedTtwid) return cachedTtwid;
+  try {
+    const res = await fetch(bootstrapUrl, {
+      headers: { "User-Agent": UA },
+      redirect: "manual",
+    });
+    for (const c of res.headers.getSetCookie?.() || []) {
+      const m = c.match(/ttwid=([^;]+)/);
+      if (m?.[1]) {
+        cachedTtwid = m[1];
+        break;
+      }
+    }
+  } catch (e) {
+    logger.warn("xigua ttwid", e.message);
+  }
+  return cachedTtwid;
+}
+
+function buildHeaders(ttwid) {
+  return {
+    "User-Agent": UA,
+    Cookie: ttwid ? `${BASE_COOKIE}; ttwid=${ttwid}` : BASE_COOKIE,
+  };
+}
 
 async function parseVideoId(videoId) {
   const reqUrl = `https://m.ixigua.com/douyin/share/video/${videoId}?aweme_type=107&schema_type=1&utm_source=copy&utm_campaign=client_share&utm_medium=android&app=aweme`;
-  const res = await fetch(reqUrl, { headers: PAGE_HEADERS });
+  const res = await fetch(reqUrl, {
+    headers: buildHeaders(
+      await ensureTtwid(`https://m.ixigua.com/video/${videoId}`),
+    ),
+  });
   const html = await res.text();
   const re = /window\._ROUTER_DATA\s*=\s*(.*?)<\/script>/is;
   const m = html.match(re);
@@ -51,7 +86,28 @@ async function parseVideoId(videoId) {
 }
 
 async function xiguaParse(shareUrl) {
-  const loc = await getRedirectLocation(shareUrl, PAGE_HEADERS);
+  // m.ixigua.com/video/<id> 与 www.ixigua.com/<id> 是最终页（200 直出），
+  // 不是短链、不会 302，先按已含视频 ID 的链接直接提取（2026-10-19 线上日志：
+  // 该形态链接一律误报「无法获取西瓜短链重定向」）。
+  try {
+    const u = new URL(shareUrl);
+    const path = u.pathname.replace(/^\/+|\/+$/g, "");
+    let directId = "";
+    if (/^m\.ixigua\.com$/.test(u.hostname)) {
+      const m = path.match(/^video\/(\d+)$/);
+      if (m) directId = m[1];
+    } else if (/^(www\.)?ixigua\.com$/.test(u.hostname)) {
+      if (/^\d+$/.test(path)) directId = path;
+    }
+    if (directId) {
+      return parseVideoId(directId);
+    }
+  } catch {
+    // URL 解析失败则继续走短链流程
+  }
+
+  // 短链 302 本身无需 ttwid，视频信息获取在 parseVideoId 内引导
+  const loc = await getRedirectLocation(shareUrl, buildHeaders(""));
   if (!loc) {
     return { code: 400, msg: "无法获取西瓜短链重定向" };
   }
