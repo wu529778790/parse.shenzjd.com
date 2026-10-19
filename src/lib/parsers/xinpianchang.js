@@ -38,6 +38,12 @@ async function xinpianchangParse(shareUrl) {
   const extracted = extractFromHtml(html);
 
   if (!extracted.nextData) {
+    // 2026-10-19 实测：新片场已上线 JS 挑战类反爬（403 + 「Embed Iframe」
+    // 渐变挑战页，需真实浏览器执行 JS 才能通过），纯服务端请求一律 403。
+    // 区分报错，避免笼统的「无 __NEXT_DATA__」让人误以为是页面结构变化。
+    if (res.status === 403 || html.includes("Embed Iframe")) {
+      return { code: 400, msg: "新片场反爬拦截，暂时无法解析该链接" };
+    }
     return { code: 400, msg: "新片场页面无 __NEXT_DATA__" };
   }
 

@@ -84,6 +84,11 @@ class RelayResponse {
 
 /** 中继转发：请求经国内云函数访问 B站 */
 let relayLogged = false;
+// 客户端侧兜底超时：中继 timeout:12000 已传给云函数约束其上游请求，但
+// 云函数本身/到云函数的链路也可能卡死（2026-10-17 实测：SCF 瞬时挂起，
+// 客户端无超时一直等到 undici 默认 headers 超时 ~300s，叠加重试把单次
+// 解析拖到 355s）。15s = 12s 上游 + 冷启动/传输余量。
+const RELAY_CLIENT_TIMEOUT_MS = 15000;
 async function relayFetch(url, init = {}) {
   const relayUrl = process.env.BILIBILI_RELAY_URL;
   const token = process.env.BILIBILI_RELAY_TOKEN || "";
@@ -105,8 +110,8 @@ async function relayFetch(url, init = {}) {
       redirect: init.redirect || "follow",
       timeout: 12000,
     }),
-    // 客户端侧超时（如 nav 密钥获取的 3s）直接透传给中继请求
-    signal: init.signal,
+    // 调用方显式传入 signal（如 nav 密钥的 3s）则透传，否则挂兜底超时
+    signal: init.signal ?? AbortSignal.timeout(RELAY_CLIENT_TIMEOUT_MS),
   });
   const data = await response.json();
   if (data.error) throw new Error(`中继转发失败: ${data.error}`);
