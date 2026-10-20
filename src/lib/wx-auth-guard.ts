@@ -57,21 +57,47 @@ function cacheSet<K, V>(map: Map<K, V>, key: K, value: V): void {
 }
 
 /**
- * 从请求中提取认证 token：
+ * 从请求中提取认证凭证 + **来源通道**：
+ * 1. Cookie `wxauth-token`（网页端 SDK 写入，优先）→ viaBearer=false
+ * 2. 无 Cookie 凭证时取 Authorization: Bearer <token>（小程序端）→ viaBearer=true
+ *
+ * 通道必须保真传递给 wx-auth（2026-10-20 修复）：wx-auth 的网页清退闸门只作用
+ * query/Cookie 通道（3 段 mp: 网页 token 与小程序 token 格式相同，通道是唯一区分）。
+ * 此前本模块把 Bearer 里取出的 token 也改经 `check?token=` query 转发——闸门把
+ * 小程序老 token（10-15 前签发）当成网页 token 全部清退，小程序用户解析恒 401，
+ * 且小程序无法发版修复。现在 Bearer 来源的凭证继续走 Bearer 头转发（豁免闸门），
+ * Cookie 来源照走 query（闸门语义不变）。
+ */
+export interface WxAuthCredential {
+  token: string | null;
+  /** true = 凭证取自 Authorization: Bearer（小程序/服务端代理），转发时保持 Bearer 通道 */
+  viaBearer: boolean;
+}
+
+export function getWxAuthCredential(request: Request): WxAuthCredential {
+  const cookie = request.headers.get("cookie");
+  if (cookie) {
+    const match = cookie.match(/(?:^|;\s*)wxauth-token=([^;]+)/);
+    if (match) {
+      try {
+        return { token: decodeURIComponent(match[1]), viaBearer: false };
+      } catch {
+        return { token: null, viaBearer: false };
+      }
+    }
+  }
+  const bearer = getBearerToken(request);
+  return bearer ? { token: bearer, viaBearer: true } : { token: null, viaBearer: false };
+}
+
+/**
+ * 从请求中提取认证 token（兼容旧调用方）：
  * 1. Cookie `wxauth-token`（网页端 SDK 写入，优先）
  * 2. 无 Cookie 凭证时取 Authorization: Bearer <token>（小程序端）
  * @returns token 或 null（无凭证）
  */
 export function getWxAuthToken(request: Request): string | null {
-  const cookie = request.headers.get("cookie");
-  if (!cookie) return getBearerToken(request);
-  const match = cookie.match(/(?:^|;\s*)wxauth-token=([^;]+)/);
-  if (!match) return getBearerToken(request);
-  try {
-    return decodeURIComponent(match[1]);
-  } catch {
-    return null;
-  }
+  return getWxAuthCredential(request).token;
 }
 
 /**
@@ -91,8 +117,16 @@ function getBearerToken(request: Request): string | null {
  * - 远程 check：authenticated=true → 缓存并放行
  * - 明确未认证 → 缓存 false（防刷）
  * - 认证服务异常 → fail closed 拒绝本次，但不缓存（服务恢复后立即生效）
+ * @param token 认证 token（原文）
+ * @param viaBearer 凭证是否来自 Authorization: Bearer（小程序端）。
+ *                  true 时继续用 Bearer 头转发给 wx-auth（豁免网页清退闸门）；
+ *                  缺省 false 走 query（网页 Cookie 凭证的既有语义）
  */
-export async function checkWxAuthToken(token: string): Promise<boolean> {
+export async function checkWxAuthToken(
+  token: string,
+  opts?: { viaBearer?: boolean }
+): Promise<boolean> {
+  const viaBearer = opts?.viaBearer === true;
   const cached = authCache.get(token);
   if (cached && cached.expiresAt > Date.now()) {
     // LRU：命中重排到队尾，避免高频 token 被冷条目挤掉
@@ -105,9 +139,14 @@ export async function checkWxAuthToken(token: string): Promise<boolean> {
   let checkError = false;
   try {
     const response = await wxAuthFetch(
-      `/api/auth/check?token=${encodeURIComponent(token)}`,
+      viaBearer ? "/api/auth/check" : `/api/auth/check?token=${encodeURIComponent(token)}`,
       {
-        headers: { "user-agent": "parse.shenzjd.com/auth-guard" },
+        headers: {
+          "user-agent": "parse.shenzjd.com/auth-guard",
+          // 通道保真：Bearer 凭证经 Authorization 头转发（wx-auth 按小程序/代理通道
+          // 处理，豁免网页清退闸门）；经 query 转发会被闸门当成网页 token 清退
+          ...(viaBearer ? { authorization: `Bearer ${token}` } : {}),
+        },
         timeoutMs: AUTH_FETCH_TIMEOUT_MS,
       }
     );
@@ -145,8 +184,9 @@ export async function getWxAuthUser(request: Request): Promise<{
   authenticated: boolean;
   isAdmin: boolean;
 }> {
-  const token = getWxAuthToken(request);
-  if (!token) return { authenticated: false, isAdmin: false };
+  const cred = getWxAuthCredential(request);
+  if (!cred.token) return { authenticated: false, isAdmin: false };
+  const token = cred.token;
 
   const cached = userInfoCache.get(token);
   if (cached && cached.expiresAt > Date.now()) {
@@ -158,9 +198,14 @@ export async function getWxAuthUser(request: Request): Promise<{
   let checkError = false;
   try {
     const response = await wxAuthFetch(
-      `/api/auth/userinfo?token=${encodeURIComponent(token)}`,
+      cred.viaBearer
+        ? "/api/auth/userinfo"
+        : `/api/auth/userinfo?token=${encodeURIComponent(token)}`,
       {
-        headers: { "user-agent": "parse.shenzjd.com/auth-guard" },
+        headers: {
+          "user-agent": "parse.shenzjd.com/auth-guard",
+          ...(cred.viaBearer ? { authorization: `Bearer ${token}` } : {}),
+        },
         timeoutMs: AUTH_FETCH_TIMEOUT_MS,
       }
     );

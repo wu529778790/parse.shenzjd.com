@@ -16,7 +16,7 @@ import {
 } from "@/lib/api-utils";
 import { normalizeResult } from "@/lib/normalize-result";
 import { recordParse } from "@/lib/analytics";
-import { getWxAuthToken, checkWxAuthToken } from "@/lib/wx-auth-guard";
+import { getWxAuthCredential, checkWxAuthToken } from "@/lib/wx-auth-guard";
 import { honeypotResponse } from "@/lib/honeypot";
 import { getResultCache, putResultCache, resultStale } from "@/lib/result-cache";
 
@@ -99,17 +99,17 @@ export interface ParseAccessResult {
 export async function enforceParseAccess(
   request: Request
 ): Promise<ParseAccessResult> {
-  const token = getWxAuthToken(request);
-  const authenticated = token ? await checkWxAuthToken(token) : false;
+  const cred = getWxAuthCredential(request);
+  const authenticated = cred.token
+    ? await checkWxAuthToken(cred.token, { viaBearer: cred.viaBearer })
+    : false;
   if (!authenticated) {
     // 401 文案按凭证通道区分（2026-10-20 用户反馈：小程序用户被引导「关注公众号」）：
     // - Cookie 通道（网页端）：网页用户确实需要关注公众号+验证码认证，维持原文案；
     // - Bearer 通道（小程序原生 / 服务端代理）：mp-login 注册即认证、根本不存在
     //   「未完成认证」状态，401 只可能是 token 失效（重登可自愈）或 wx-auth 瞬时
     //   异常（fail-closed），引导关注公众号是完全错误的死胡同文案。
-    const isBearerChannel =
-      !request.headers.get("cookie")?.includes("wxauth-token=") &&
-      !!request.headers.get("authorization");
+    const isBearerChannel = cred.viaBearer;
     return {
       allowed: false,
       status: 401,
@@ -119,7 +119,7 @@ export async function enforceParseAccess(
       token: null,
     };
   }
-  return { allowed: true, status: 200, message: "", token };
+  return { allowed: true, status: 200, message: "", token: cred.token };
 }
 
 // 通用 API 处理函数

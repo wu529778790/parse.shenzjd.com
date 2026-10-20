@@ -105,9 +105,33 @@ describe("wx-auth guard (解析接口强制认证)", () => {
       )
     );
     expect(res.status).toBe(200);
-    // 取出的 token 已 trim，check URL 中不应有空格
-    const checkUrl = String(global.fetch.mock.calls[0][0]);
-    expect(checkUrl).toContain("token=mp.token.trim.me");
+    // 取出的 token 已 trim（经 Authorization 头转发，头内不应有空格残留）
+    const init = global.fetch.mock.calls[0][1];
+    expect(init.headers.authorization).toBe("Bearer mp.token.trim.me");
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("回归（2026-10-20）：Bearer 凭证必须经 Authorization 头转发，绝不改走 query", async () => {
+    // wx-auth 的网页清退闸门只作用 query/Cookie 通道；此前 Bearer 里取出的
+    // token 被改经 check?token= 转发，被闸门当成网页 token 清退——
+    // 10-15 前签发的小程序 token 用户解析恒 401（小程序无法发版修复）。
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: true }), { status: 200 })
+    );
+    global.fetch = fetchMock;
+    const parseSpy = vi.fn().mockResolvedValue({ code: 200, msg: "ok" });
+    const handler = createApiHandler(parseSpy);
+    const res = await handler(
+      new Request(
+        "http://127.0.0.1/api/parse?url=https://v.douyin.com/gnqPF7GJYkY/chanfix/",
+        { headers: { authorization: "Bearer mp.old.token.pre-w1" } }
+      )
+    );
+    expect(res.status).toBe(200);
+    const [checkUrl, init] = fetchMock.mock.calls[0];
+    expect(String(checkUrl)).not.toContain("token=");
+    expect(String(checkUrl).endsWith("/api/auth/check")).toBe(true);
+    expect(init.headers.authorization).toBe("Bearer mp.old.token.pre-w1");
     expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 
