@@ -102,10 +102,20 @@ export async function enforceParseAccess(
   const token = getWxAuthToken(request);
   const authenticated = token ? await checkWxAuthToken(token) : false;
   if (!authenticated) {
+    // 401 文案按凭证通道区分（2026-10-20 用户反馈：小程序用户被引导「关注公众号」）：
+    // - Cookie 通道（网页端）：网页用户确实需要关注公众号+验证码认证，维持原文案；
+    // - Bearer 通道（小程序原生 / 服务端代理）：mp-login 注册即认证、根本不存在
+    //   「未完成认证」状态，401 只可能是 token 失效（重登可自愈）或 wx-auth 瞬时
+    //   异常（fail-closed），引导关注公众号是完全错误的死胡同文案。
+    const isBearerChannel =
+      !request.headers.get("cookie")?.includes("wxauth-token=") &&
+      !!request.headers.get("authorization");
     return {
       allowed: false,
       status: 401,
-      message: "请先关注公众号「神族九帝」并完成认证后使用解析功能",
+      message: isBearerChannel
+        ? "登录状态已失效，请退出小程序重新进入后重试"
+        : "请先关注公众号「神族九帝」并完成认证后使用解析功能",
       token: null,
     };
   }
