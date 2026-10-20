@@ -220,6 +220,70 @@ function proxifyImage(url) {
 }
 
 /**
+ * 2026-10-20 实测：小红书给匿名移动 H5 通道的 1080p 详情图（!h5_1080jpg
+ * 变体）加了居中「小红书」服务端水印，同 fileId 的 sns-img-* 域名直链无水印。
+ * 算法参考 14790897/XHS-HD-RESOLVER（GitHub）：
+ *   imageList[i].fileId（含 notes_pre_post/ 等路径前缀）
+ *   → https://sns-img-hw.xhscdn.com/<fileId>?imageView2/2/w/1080/format/jpg
+ * 返回无水印 1080p JPG。签名直链的后缀绑定签名（换后缀 403）、裸 fileId 404，
+ * 必须带路径前缀 + imageView2 参数。
+ */
+function buildCleanImageUrl(img) {
+  const fileId = typeof img?.fileId === "string" ? img.fileId.trim() : "";
+  if (!fileId) return "";
+  return `https://sns-img-hw.xhscdn.com/${fileId}?imageView2/2/w/1080/format/jpg`;
+}
+
+/**
+ * 探活无水印直链（只探首图一次，避免逐张 HEAD 拖慢解析）。
+ * 探活失败（CDN 策略变动/节点不可用）返回 false，调用方回退原带水印链路。
+ */
+async function isCleanImageUrlAlive(url) {
+  try {
+    const head = await fetch(url, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(5000),
+    });
+    return head.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 为整个 imageList 生成图片 URL 列表：优先无水印直链（首图探活通过时），
+ * 否则回退 H5 带水印变体（保底可用）。
+ * 返回 { images: string[], cover: string }，均为站内代理路径。
+ */
+async function buildXhsImageUrls(imageList) {
+  const fallbackList = [];
+  for (const img of imageList) {
+    if (!img || typeof img !== "object") continue;
+    const imageUrl = (
+      img.urlDefault ||
+      img.url ||
+      safeGet(img, "infoList.0.url") ||
+      ""
+    ).replace(/^http:/i, "https:");
+    if (imageUrl) fallbackList.push(imageUrl);
+  }
+
+  const firstClean = buildCleanImageUrl(imageList.find((i) => i?.fileId));
+  if (firstClean && (await isCleanImageUrlAlive(firstClean))) {
+    const images = imageList
+      .map((img) => buildCleanImageUrl(img))
+      .filter(Boolean)
+      .map(proxifyImage);
+    if (images.length > 0) {
+      return { images, cover: images[0], clean: true };
+    }
+  }
+
+  const images = fallbackList.map(proxifyImage);
+  return { images, cover: images[0] || "", clean: false };
+}
+
+/**
  * 选取稳定可用的视频直链。
  * backupUrls 为裸直链（无短时效签名，长期有效），优先使用；
  * masterUrl 带约 30 分钟签名，仅作兜底。
@@ -372,14 +436,18 @@ async function xhs(url) {
       const imageList = noteData.imageList;
       if (Array.isArray(imageList) && imageList.length > 0 && imageList[0]) {
         const first = imageList[0];
-        data.cover = proxifyImage(
-          (
-            first.urlDefault ||
-            first.url ||
-            safeGet(first, "infoList.0.url") ||
-            ""
-          ).replace(/^http:/i, "https:")
-        );
+        const cleanCover = buildCleanImageUrl(first);
+        const fallbackCover = (
+          first.urlDefault ||
+          first.url ||
+          safeGet(first, "infoList.0.url") ||
+          ""
+        ).replace(/^http:/i, "https:");
+        if (cleanCover && (await isCleanImageUrlAlive(cleanCover))) {
+          data.cover = proxifyImage(cleanCover);
+        } else if (fallbackCover) {
+          data.cover = proxifyImage(fallbackCover);
+        }
       }
       data.url = videoUrl;
       data.type = "video";
@@ -389,29 +457,15 @@ async function xhs(url) {
     // 检查图片内容
     const imageList = noteData.imageList;
     if (Array.isArray(imageList) && imageList.length > 0) {
-      const images = [];
-      let cover = "";
-
-      for (let i = 0; i < imageList.length; i++) {
-        const img = imageList[i];
-        if (img && typeof img === "object") {
-          let imageUrl = (
-            img.urlDefault ||
-            img.url ||
-            safeGet(img, "infoList.0.url") ||
-            ""
-          ).replace(/^http:/i, "https:");
-          if (imageUrl) {
-            images.push(proxifyImage(imageUrl));
-            if (i === 0) cover = proxifyImage(imageUrl);
-          }
-        }
-      }
+      const { images, cover, clean } = await buildXhsImageUrls(imageList);
 
       if (images.length > 0) {
         data.cover = cover;
         data.images = images;
         data.type = "image";
+        if (!clean) {
+          console.log("[xhs] 无水印直链不可用，回退 H5 带水印变体");
+        }
         return output(200, "解析成功", data);
       }
     }
