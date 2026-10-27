@@ -149,7 +149,26 @@ jobs:
           script: |
             IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest"
             CONTAINER="${{ github.event.repository.name }}"
-            ENV_FILE="/opt/1panel/apps/openresty/openresty/www/sites/parse.shenzjd.com/index/.env"
+            # 站点目录定位（2026-10-27）：1Panel 升级后 OpenResty 站点根从
+            #   /opt/1panel/apps/openresty/openresty/www/sites
+            # 迁到 /opt/1panel/www/sites。写死旧路径时 `if [ -f ]` 会静默丢掉
+            # --env-file，容器空配置上线（本仓 .env 里是 B 站/抖音等全部解析凭据，
+            # 空配置等于全站解析挂）。新路径优先、旧路径兜底，找不到就地失败。
+            SITE_DIR=""
+            for candidate in \
+              /opt/1panel/www/sites/parse.shenzjd.com \
+              /opt/1panel/apps/openresty/openresty/www/sites/parse.shenzjd.com; do
+              if [ -d "$candidate" ]; then SITE_DIR="$candidate"; break; fi
+            done
+            if [ -z "$SITE_DIR" ]; then
+              echo "FATAL: 找不到站点目录（1Panel 站点根可能又变了），拒绝部署，旧容器未动" >&2
+              exit 1
+            fi
+            ENV_FILE="$SITE_DIR/index/.env"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "FATAL: $ENV_FILE 不存在，拒绝以空配置启动（解析会全挂），旧容器未动" >&2
+              exit 1
+            fi
             # 先清一次悬空镜像腾出磁盘/IO，再带重试拉取（拉取失败不碰旧容器）
             sudo docker image prune -f
             pulled=0
@@ -164,10 +183,7 @@ jobs:
             fi
             sudo docker stop "$CONTAINER" || true
             sudo docker rm "$CONTAINER" || true
-            ENV_FLAGS=""
-            if [ -f "$ENV_FILE" ]; then
-              ENV_FLAGS="--env-file $ENV_FILE"
-            fi
+            ENV_FLAGS="--env-file $ENV_FILE"
             # PO Token 提供方为独立工程自建的 bgutil-ytdlp-pot-provider 容器（宿主机端口），
             # 本部署不创建、不启停、不管理它。应用容器经 host-gateway 访问宿主机端口，
             # 具体地址在服务器 .env 的 POT_BASE_URL 配置（服务无鉴权，地址禁止写入本公开
