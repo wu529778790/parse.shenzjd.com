@@ -2,16 +2,25 @@
  * B 站请求统一出口（三档模式，按优先级自动选择）：
  *
  * 1. 中继模式（BILIBILI_RELAY_URL + BILIBILI_RELAY_TOKEN）：
- *    请求转发到部署在国内区的腾讯云函数（scf-bilibili-relay/），云函数以
- *    腾讯国内 IP 出口访问 B站，绕过 B站对海外数据中心 IP 的 -412 风控。
- *    2026-09-08 线上实证：新加坡出口带完整 WBI 签名 + Cookie 仍 100% 被
- *    IP 级风控拦截，唯有换国内出口有效。
+ *    请求转发到国内出口的自建中继，由国内 IP 访问 B站，绕过 B站对海外
+ *    数据中心 IP 的 -412 风控。2026-09-08 线上实证：新加坡出口带完整 WBI
+ *    签名 + Cookie 仍 100% 被 IP 级风控拦截，唯有换国内出口有效。
+ *
+ *    中继有两种协议，用 BILIBILI_RELAY_PROTOCOL 选择：
+ *      - "target"（默认，2026-10-30 起）：自建 Docker 中继（广州轻量云，
+ *        代码见 panhub 仓库 scripts/quark-relay-scf/app.cjs）。
+ *        协议：GET/POST {RELAY_URL}/?target=<urlencoded 目标地址>，
+ *        鉴权头 x-relay-token，请求/响应体原样直通，中继故障带
+ *        x-relay-error: timeout|upstream，跟随重定向后的最终地址回在
+ *        x-relay-final-url。
+ *      - "scf"（回滚用）：旧腾讯云 SCF Web 函数信封协议（见 scf-bilibili-relay/）。
+ *        换掉它的原因：信封把响应体 base64 塞进 JSON，撑大约 33%，在
+ *        ~750KB 处被网关截断——B站 /x/web-interface/view 的大响应
+ *        （长简介/多分P）稳定解析失败（线上实证 2026-10-29/30：
+ *        `Unterminated string in JSON at position 757575`，同一视频
+ *        BV1DjJm6vEUW 连续 22 次失败）。直通协议没有这层体积放大。
  * 2. 代理模式（BILIBILI_PROXY）：http://[user:pass@]host:port，undici ProxyAgent。
  * 3. 直连（默认）：与原生 fetch 行为完全一致。
- *
- * 协议（中继模式，与 scf-bilibili-relay/server.js 对应）：
- *   POST { url, method, headers, body(b64), redirect, timeout }
- *   ->   { status, url, headers, setCookie: string[], body: base64 } 或 { error }
  */
 
 import { fetch as undiciFetch, ProxyAgent } from "undici";
@@ -47,7 +56,7 @@ function getDispatcher() {
   return dispatcher;
 }
 
-/** 中继响应：把云函数返回的 JSON 包装成 Response 兼容对象 */
+/** SCF 信封协议专用：把云函数返回的 JSON 包装成 Response 兼容对象 */
 class RelayResponse {
   constructor(data) {
     this.status = data.status;
@@ -82,19 +91,79 @@ class RelayResponse {
   }
 }
 
-/** 中继转发：请求经国内云函数访问 B站 */
-let relayLogged = false;
-// 客户端侧兜底超时：中继 timeout:12000 已传给云函数约束其上游请求，但
-// 云函数本身/到云函数的链路也可能卡死（2026-10-17 实测：SCF 瞬时挂起，
-// 客户端无超时一直等到 undici 默认 headers 超时 ~300s，叠加重试把单次
-// 解析拖到 355s）。15s = 12s 上游 + 冷启动/传输余量。
+/**
+ * 直通协议（自建 Docker 中继）的 Response 包装。
+ *
+ * 只为一件事而存在：中继是「替我们 fetch 一次再原样透传」，重定向由中继
+ * 侧跟随，主服务拿到的 Response.url 是「中继地址」而非 B站最终地址。
+ * b23.tv 短链解析依赖最终地址，故顶层 url 优先取中继回传的
+ * x-relay-final-url（中继 URL 编码过，防 header 非法字符）。
+ */
+class PassthroughResponse {
+  constructor(response) {
+    this._res = response;
+  }
+
+  get status() {
+    return this._res.status;
+  }
+
+  get ok() {
+    return this._res.ok;
+  }
+
+  get headers() {
+    return this._res.headers;
+  }
+
+  get url() {
+    const finalUrl = this._res.headers.get("x-relay-final-url");
+    if (finalUrl) {
+      try {
+        return decodeURIComponent(finalUrl);
+      } catch {
+        // 解码失败（中继版本不匹配等）时退回中继地址，不影响正文解析
+      }
+    }
+    return this._res.url;
+  }
+
+  text() {
+    return this._res.text();
+  }
+
+  json() {
+    return this._res.json();
+  }
+}
+
+/** 中继转发：请求经国内出口访问 B站 */
+let relayLogged = "";
+// 客户端侧兜底超时：
+// - SCF 信封协议 15s（云函数侧上游 12s，留冷启动/传输余量；2026-10-17 实测
+//   SCF 瞬时挂起，客户端无超时曾一路等到 undici 默认 headers 超时 ~300s）；
+// - 直通协议 20s（中继自身上游上限 RELAY_TIMEOUT_MS 默认 25s，客户端要更早
+//   放弃，免得一个没人要的慢请求把整条解析链路拖长）。
 const RELAY_CLIENT_TIMEOUT_MS = 15000;
-async function relayFetch(url, init = {}) {
-  const relayUrl = process.env.BILIBILI_RELAY_URL;
+const PASSTHROUGH_CLIENT_TIMEOUT_MS = 20000;
+
+/** 中继协议：target（默认，自建 Docker 中继）| scf（旧云函数，回滚用） */
+function relayProtocol() {
+  const raw = (process.env.BILIBILI_RELAY_PROTOCOL || "target").trim().toLowerCase();
+  return raw === "scf" ? "scf" : "target";
+}
+
+function relayEndpoint() {
+  const base = (process.env.BILIBILI_RELAY_URL || "").trim().replace(/\/+$/, "");
+  return base;
+}
+
+/** SCF 信封协议转发（保留作回滚路径，勿删） */
+async function scfRelayFetch(relayUrl, url, init = {}) {
   const token = process.env.BILIBILI_RELAY_TOKEN || "";
-  if (!relayLogged) {
-    relayLogged = true;
-    logger.log("[bilibili-relay] B站请求启用云函数中继出口");
+  if (relayLogged !== "scf") {
+    relayLogged = "scf";
+    logger.log("[bilibili-relay] B站请求启用云函数中继出口（SCF 信封协议）");
   }
   const response = await undiciFetch(relayUrl, {
     method: "POST",
@@ -118,14 +187,48 @@ async function relayFetch(url, init = {}) {
   return new RelayResponse(data);
 }
 
+/** 直通协议转发（自建 Docker 中继）：?target= + 原样透传 */
+async function passthroughRelayFetch(relayUrl, url, init = {}) {
+  const token = process.env.BILIBILI_RELAY_TOKEN || "";
+  if (relayLogged !== "target") {
+    relayLogged = "target";
+    logger.log("[bilibili-relay] B站请求启用自建中继出口（直通协议）");
+  }
+  const headers = {
+    ...(init.headers || {}),
+    // 中继用它鉴权，转发前会剔除，不会泄给 B站
+    "x-relay-token": token,
+  };
+  const response = await undiciFetch(
+    `${relayUrl}/?target=${encodeURIComponent(url)}`,
+    {
+      method: init.method || "GET",
+      headers,
+      body: init.body,
+      redirect: init.redirect || "follow",
+      signal: init.signal ?? AbortSignal.timeout(PASSTHROUGH_CLIENT_TIMEOUT_MS),
+    }
+  );
+  // 中继自身故障（自己超时掐断 / 上游 fetch 抛错）显式标记，别和 B站
+  // 自己的 5xx 混为一谈：前者重试往往能好，后者基本是内容问题。
+  const relayError = response.headers.get("x-relay-error");
+  if (relayError) {
+    throw new Error(`中继故障(${relayError}) HTTP ${response.status}`);
+  }
+  return new PassthroughResponse(response);
+}
+
 /**
  * B站专用 fetch：优先中继，其次代理，均未配置时等同原生 fetch。
  * @param {string} url
  * @param {object} [init] 同 fetch init
  */
 export function biliFetch(url, init = {}) {
-  if (process.env.BILIBILI_RELAY_URL) {
-    return relayFetch(url, init);
+  const relayUrl = relayEndpoint();
+  if (relayUrl) {
+    return relayProtocol() === "scf"
+      ? scfRelayFetch(relayUrl, url, init)
+      : passthroughRelayFetch(relayUrl, url, init);
   }
   const d = getDispatcher();
   if (d) {
