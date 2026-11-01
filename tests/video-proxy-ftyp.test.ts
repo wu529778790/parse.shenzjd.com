@@ -1,6 +1,11 @@
 // @ts-nocheck
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { GET } from "@/app/api/video-proxy/route.js";
+
+// 路由会做目标地址 DNS 复查（防 SSRF），单测里固定解析到公网地址，
+// 避免用例依赖真实网络。
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 // 模拟抖音混淆的 MP4 数据：ftyp size 首字节 00→01
 function makeObfuscatedMp4() {
@@ -12,6 +17,11 @@ function makeObfuscatedMp4() {
 }
 
 describe("video-proxy：抖音 ftyp 头混淆修复", () => {
+  beforeEach(() => {
+    lookupMock.mockReset();
+    lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });

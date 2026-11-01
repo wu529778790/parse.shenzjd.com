@@ -11,9 +11,12 @@
  * - 透传 Content-Type / Content-Length / Accept-Ranges
  * - 超时策略：首字节 30s 快速失败；传输中不设总时长上限（大视频弱网可能传很久），
  *   仅在持续 30s 无新数据时判定上游挂起并中止；客户端断开时同步中止上游
+ * - 目标地址加固：拒绝内网/环回/链路本地等私有地址（本路由无登录态，否则等同公开 SSRF）
  */
 export const runtime = "nodejs";
 
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { isBlockedIP, getClientIP, logger } from "@/lib/api-utils";
 import { fixDouyinFtyp } from "@/lib/douyin-extract";
 
@@ -54,6 +57,110 @@ function describeFetchError(error) {
   return causeMsg ? `${error.message} (${causeMsg})` : String(error?.message);
 }
 
+/* ---------------- 目标地址加固（防 SSRF） ----------------
+ * 本路由没有任何登录态，只校了协议就等于开放了一个服务器侧代理：任何人都能借它
+ * 访问 169.254.169.254 云元数据、127.0.0.1 上的管理端口、10.x/172.16-31.x/192.168.x
+ * 内网服务，而且响应体会被原样回吐。这里按「字面量直判 + 域名 DNS 复查」拦截。
+ * 注：校验与 fetch 各自解析一次 DNS 存在 TOCTOU 窗口，属尽力而为的防护。
+ */
+const BLOCKED_HOST_SUFFIXES = [
+  ".localhost",
+  ".local",
+  ".internal",
+  ".localdomain",
+  ".home.arpa",
+];
+
+function ipv4ToInt(ip) {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const v = Number(p);
+    if (v > 255) return null;
+    n = n * 256 + v;
+  }
+  return n;
+}
+
+function inCidr(n, base, bits) {
+  const size = 2 ** (32 - bits);
+  return n >= base && n < base + size;
+}
+
+function isPrivateIPv4(ip) {
+  const n = ipv4ToInt(ip);
+  if (n === null) return true; // 解析不出来按不安全处理
+  return (
+    inCidr(n, ipv4ToInt("0.0.0.0"), 8) || // 本网络
+    inCidr(n, ipv4ToInt("10.0.0.0"), 8) ||
+    inCidr(n, ipv4ToInt("100.64.0.0"), 10) || // CGNAT
+    inCidr(n, ipv4ToInt("127.0.0.0"), 8) ||
+    inCidr(n, ipv4ToInt("169.254.0.0"), 16) || // 链路本地（云元数据）
+    inCidr(n, ipv4ToInt("172.16.0.0"), 12) ||
+    inCidr(n, ipv4ToInt("192.0.0.0"), 24) ||
+    inCidr(n, ipv4ToInt("192.0.2.0"), 24) ||
+    inCidr(n, ipv4ToInt("192.168.0.0"), 16) ||
+    inCidr(n, ipv4ToInt("198.18.0.0"), 15) ||
+    inCidr(n, ipv4ToInt("198.51.100.0"), 24) ||
+    inCidr(n, ipv4ToInt("203.0.113.0"), 24) ||
+    inCidr(n, ipv4ToInt("224.0.0.0"), 4) || // 组播
+    inCidr(n, ipv4ToInt("240.0.0.0"), 4) // 保留 + 广播
+  );
+}
+
+function isPrivateIPv6(ip) {
+  const addr = ip.toLowerCase().split("%")[0];
+  if (addr === "::1" || addr === "::") return true;
+  // IPv4-mapped：::ffff:127.0.0.1 与 ::ffff:7f00:1 两种写法
+  const mappedDotted = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mappedDotted) return isPrivateIPv4(mappedDotted[1]);
+  const mappedHex = addr.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16);
+    const lo = parseInt(mappedHex[2], 16);
+    return isPrivateIPv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
+  if (/^f[cd][0-9a-f]{2}:/.test(addr)) return true; // fc00::/7 唯一本地
+  if (/^fe[89ab][0-9a-f]:/.test(addr)) return true; // fe80::/10 链路本地
+  if (/^ff[0-9a-f]{2}:/.test(addr)) return true; // ff00::/8 组播
+  return false;
+}
+
+async function resolvesToPrivateAddress(hostname) {
+  try {
+    const records = await lookup(hostname, { all: true, verbatim: true });
+    if (!records.length) return true;
+    return records.some((r) =>
+      r.family === 6 ? isPrivateIPv6(r.address) : isPrivateIPv4(r.address)
+    );
+  } catch (e) {
+    // 解析失败不拦：紧接着的 fetch 用同一个解析器，同样会失败，不存在绕过收益。
+    logger.warn(
+      `video-proxy 目标域名解析失败（交给 fetch 兜底）: host=${hostname} err=${e.code || e.message}`
+    );
+    return false;
+  }
+}
+
+async function isUnsafeTarget(hostname) {
+  const host = String(hostname || "")
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  if (!host) return true;
+  if (
+    host === "localhost" ||
+    BLOCKED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))
+  ) {
+    return true;
+  }
+  const family = isIP(host);
+  if (family === 4) return isPrivateIPv4(host);
+  if (family === 6) return isPrivateIPv6(host);
+  return resolvesToPrivateAddress(host);
+}
+
 export async function GET(request) {
   // IP 黑名单：视频代理返回二进制流，无法套用解析接口的 JSON 蜜罐，
   // 此处对黑名单 IP 保持 403（视频代理只是前端加载资源的通道，不承载解析宣传）。
@@ -75,6 +182,13 @@ export async function GET(request) {
   }
   if (!/^https?:$/.test(target.protocol)) {
     return new Response("Only http(s) allowed", { status: 400 });
+  }
+  // 只允许代理公网地址，避免被当作内网探测/元数据读取的跳板
+  if (await isUnsafeTarget(target.hostname)) {
+    logger.warn(
+      `video-proxy 拒绝内网/非法目标: host=${target.hostname} ip=${clientIP}`
+    );
+    return new Response("Forbidden target", { status: 403 });
   }
 
   const headers = {
@@ -181,7 +295,36 @@ export async function GET(request) {
   }
   // 响应头已到，首字节超时完成使命，传输阶段改用空闲超时
   clearTimeout(timer);
-  if (!upstream.ok && upstream.status !== 206) {
+
+  // upstream 仍为空 = 重试退避期间客户端断开（上面两处 break），不能继续读 upstream.ok
+  if (!upstream) {
+    logger.warn(
+      `video-proxy 客户端在重试退避期间中断: host=${target.hostname}`
+    );
+    return new Response("Client aborted", { status: 499 });
+  }
+
+  // 重定向后复查目标：undici 默认跟随跳转，跳转目标不经入口校验，
+  // 用响应上的最终 URL 再兜一道（请求已发出，此处只能阻断回吐数据）。
+  if (upstream.url) {
+    let finalHost = "";
+    try {
+      finalHost = new URL(upstream.url).hostname;
+    } catch {
+      finalHost = "";
+    }
+    if (finalHost && finalHost !== target.hostname) {
+      if (await isUnsafeTarget(finalHost)) {
+        upstream.body?.cancel().catch(() => {});
+        logger.warn(
+          `video-proxy 拒绝重定向到内网目标: from=${target.hostname} to=${finalHost}`
+        );
+        return new Response("Forbidden target", { status: 403 });
+      }
+    }
+  }
+
+  if (!upstream.ok) {
     logger.warn(`video-proxy upstream error: ${upstream.status} url=${target.hostname}`);
     return new Response(`Upstream error: ${upstream.status}`, {
       status: 502,
@@ -220,9 +363,14 @@ export async function GET(request) {
   const contentLength = upstream.headers.get("content-length");
   const acceptRanges = upstream.headers.get("accept-ranges");
 
+  // 206 分片响应不能进共享缓存：本路由没有 Vary: Range，缓存会把某个 bytes=0-1023
+  // 的分片当成完整资源回给下一个播放器。所以分片走 private，只有完整 200 才 public。
   const responseHeaders = {
     "Content-Type": contentType,
-    "Cache-Control": "public, max-age=3600",
+    "Cache-Control":
+      upstream.status === 206
+        ? "private, max-age=3600"
+        : "public, max-age=3600",
     "Accept-Ranges": acceptRanges || "bytes",
   };
   if (contentLength) {
@@ -232,6 +380,11 @@ export async function GET(request) {
   const contentRange = upstream.headers.get("content-range");
   if (contentRange) {
     responseHeaders["Content-Range"] = contentRange;
+  }
+
+  if (!upstream.body) {
+    logger.warn(`video-proxy upstream 无响应体: ${upstream.status} host=${target.hostname}`);
+    return new Response(`Upstream error: ${upstream.status}`, { status: 502 });
   }
 
   return new Response(upstream.body.pipeThrough(bodyGuard), {
