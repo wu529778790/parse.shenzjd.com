@@ -251,12 +251,18 @@ export async function GET(request) {
    * - 退避：500ms → 1500ms
    */
   const MAX_RETRIES = 2;
+  // B站直链（playurlv3，oi 绑定签发方 IP）走专属路径：直连一次即回退中继，
+  // 不做直连重试——失败原因是「出口不对」（403）或「节点不可达」（mcdn 边缘
+  // 节点海外连不通 ETIMEDOUT），换重试不换出口没有意义
+  const isBili = isBilibiliVideoUrl(target.href);
   let upstream;
   let lastErr;
+  let directTimedOut = false;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // 非首次重试前等待（指数退避）
     if (attempt > 0) {
       if (request.signal.aborted) break;
+      if (isBili) break; // B站不重试直连，直接落到底部的中继回退
       const backoffMs = 500 * Math.pow(3, attempt - 1); // 500, 1500
       logger.warn(
         `video-proxy 重试第 ${attempt} 次: host=${target.hostname} backoff=${backoffMs}ms err=${describeFetchError(lastErr)}`
@@ -276,17 +282,23 @@ export async function GET(request) {
     } catch (e) {
       lastErr = e;
       clearTimeout(timer);
-      // 首字节超时 / 客户端中断：不重试，直接返回
-      if (upstreamController.signal.reason === FIRST_BYTE_TIMEOUT) {
-        logger.warn(`video-proxy 上游首字节超时: host=${target.hostname}`);
-        return new Response("Upstream timeout", { status: 504 });
-      }
+      // 客户端中断：谁都不救了
       if (request.signal.aborted) {
         logger.warn(`video-proxy 客户端中断: host=${target.hostname}`);
         return new Response("Client aborted", { status: 499 });
       }
-      // 其他错误（fetch failed / ECONNRESET 等）：继续重试循环
-      if (attempt === MAX_RETRIES) {
+      // 首字节超时（上游完全没响应头）
+      if (upstreamController.signal.reason === FIRST_BYTE_TIMEOUT) {
+        logger.warn(`video-proxy 上游首字节超时: host=${target.hostname}`);
+        if (!isBili) {
+          return new Response("Upstream timeout", { status: 504 });
+        }
+        directTimedOut = true;
+        break; // B站落中继回退
+      }
+      // 其他错误（fetch failed / ECONNRESET 等）：非 B站继续重试；
+      // B站直连失败一次即退出，落中继回退
+      if (attempt === MAX_RETRIES && !isBili) {
         // 必须打印 cause（ECONNRESET / ETIMEDOUT / ENOTFOUND 等），
         // 否则线上只能看到统一的 "fetch failed"，无从判断是哪一层坏了
         const detail = describeFetchError(e);
@@ -297,17 +309,56 @@ export async function GET(request) {
           status: 502,
         });
       }
+      if (isBili) break;
     }
   }
   // 响应头已到，首字节超时完成使命，传输阶段改用空闲超时
   clearTimeout(timer);
 
-  // upstream 仍为空 = 重试退避期间客户端断开（上面两处 break），不能继续读 upstream.ok
+  // B站 playurlv3 直链把签发方 IP（oi）绑进签名校验，取流 IP 必须等于签发方。
+  // playurl 由本机直连签发时直连即可取流；链接若经中继签发（番剧地区限制等
+  // 场景回退中继），本机直连会 403（bilivideo 正式节点）或 ETIMEDOUT（mcdn
+  // 边缘节点海外连不通）——任何直连失败都回退中继流式取流（与签发同出口）。
+  // 中继不可流式（SCF/未配置）或回退仍失败（链接过期）时，落到底部的 502。
+  if (
+    isBili &&
+    (!upstream || !upstream.ok) &&
+    !request.signal.aborted
+  ) {
+    upstream?.body?.cancel?.().catch?.(() => {});
+    try {
+      const viaRelay = await biliStreamFetch(target.href, {
+        headers,
+        signal: upstreamController.signal,
+      });
+      if (viaRelay) {
+        logger.log(
+          `video-proxy B站直链直连失败(${upstream ? `HTTP ${upstream.status}` : describeFetchError(lastErr)})，回退中继流式: host=${target.hostname}`
+        );
+        upstream = viaRelay;
+      }
+    } catch (e) {
+      logger.warn(
+        `video-proxy B站中继流式回退失败: host=${target.hostname} err=${e.message}`
+      );
+    }
+  }
+
+  // upstream 仍为空 = 直连失败且没有可用的中继回退（或客户端已断开）
   if (!upstream) {
-    logger.warn(
-      `video-proxy 客户端在重试退避期间中断: host=${target.hostname}`
+    if (request.signal.aborted) {
+      return new Response("Client aborted", { status: 499 });
+    }
+    if (directTimedOut) {
+      return new Response("Upstream timeout", { status: 504 });
+    }
+    const detail = describeFetchError(lastErr);
+    logger.error(
+      `video-proxy upstream fetch failed: host=${target.hostname} ${detail}`
     );
-    return new Response("Client aborted", { status: 499 });
+    return new Response(`Upstream fetch failed: ${detail}`, {
+      status: 502,
+    });
   }
 
   // 重定向后复查目标：undici 默认跟随跳转，跳转目标不经入口校验，
@@ -327,30 +378,6 @@ export async function GET(request) {
         );
         return new Response("Forbidden target", { status: 403 });
       }
-    }
-  }
-
-  // B站 playurlv3 直链把签发方 IP（oi）绑进签名校验，取流 IP 必须等于签发方。
-  // playurl 由本机直连签发时直连即可取流；链接若经中继签发（番剧地区限制等
-  // 场景回退中继），本机直连必 403——回退中继流式取流（与签发同出口）。
-  // 中继不可流式（SCF）或回退仍 403（链接已过期）时维持原 403 → 下方 502。
-  if (!upstream.ok && upstream.status === 403 && isBilibiliVideoUrl(target.href)) {
-    upstream.body?.cancel().catch(() => {});
-    try {
-      const viaRelay = await biliStreamFetch(target.href, {
-        headers,
-        signal: upstreamController.signal,
-      });
-      if (viaRelay) {
-        logger.log(
-          `video-proxy B站直链直连 403，回退中继流式: host=${target.hostname}`
-        );
-        upstream = viaRelay;
-      }
-    } catch (e) {
-      logger.warn(
-        `video-proxy B站中继流式回退失败: host=${target.hostname} err=${e.message}`
-      );
     }
   }
 
