@@ -171,12 +171,20 @@ jobs:
             fi
             # 先清一次悬空镜像腾出磁盘/IO，再带重试拉取（拉取失败不碰旧容器）
             sudo docker image prune -f
+            # GHCR 登录态（2026-11-01）：镜像包是 public，但**机器上残留过期凭据**
+            # 时 Docker 会带着坏 token 去请求、GHCR 不回退匿名而是直接
+            # `denied: denied`（1 秒返回，与网络无关）。本机历史上被别的部署脚本
+            # `docker login` 过（用 job 级 GITHUB_TOKEN，跑完即失效），就是这个坑。
+            # 这里每次用当前 token 重新登录覆盖；拉完立刻 logout，避免再把坏凭据
+            # 留给下一次/别的工具（1Panel 面板手动拉也会中招）。
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
             pulled=0
             for i in 1 2 3; do
               if sudo docker pull "$IMAGE"; then pulled=1; break; fi
               echo "镜像拉取失败，重试 $i/3"
               sleep 5
             done
+            sudo docker logout ghcr.io || true
             if [ "$pulled" != "1" ]; then
               echo "镜像拉取失败，放弃本次部署（旧容器未动，站点仍在服务）"
               exit 1
