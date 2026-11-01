@@ -147,10 +147,23 @@ let relayLogged = "";
 const RELAY_CLIENT_TIMEOUT_MS = 15000;
 const PASSTHROUGH_CLIENT_TIMEOUT_MS = 20000;
 
-/** 中继协议：target（默认，自建 Docker 中继）| scf（旧云函数，回滚用） */
-function relayProtocol() {
-  const raw = (process.env.BILIBILI_RELAY_PROTOCOL || "target").trim().toLowerCase();
-  return raw === "scf" ? "scf" : "target";
+/**
+ * 中继协议：target（自建 Docker 中继，直通）| scf（旧云函数，信封）
+ *
+ * 显式配置 BILIBILI_RELAY_PROTOCOL 时以配置为准；未配置时**按地址自动判断**
+ * ——地址是腾讯云函数（*.tencentscf.com）就走信封协议，否则走直通协议。
+ *
+ * 为什么要自动判断（2026-11-01 线上实况）：迁移是「换代码」和「换 .env 地址」
+ * 两件事，任何一件单独生效都会让 B 站全挂——只换代码时，直通协议去打 SCF
+ * 信封中继，对方回 `{"error":"invalid body: ..."}` 且 **HTTP 200**，
+ * 上层既没报错也解析不出内容：b23.tv 短链会退化成「好像不是视频链接」，
+ * 普通视频链接变成「解析失败！」。按地址判断后，先上代码或先改地址都不会坏，
+ * 运维顺序不再敏感。
+ */
+export function resolveRelayProtocol(relayUrl) {
+  const raw = (process.env.BILIBILI_RELAY_PROTOCOL || "").trim().toLowerCase();
+  if (raw === "scf" || raw === "target") return raw;
+  return /\.tencentscf\.com(?::\d+)?(?:\/|$)/i.test(relayUrl) ? "scf" : "target";
 }
 
 function relayEndpoint() {
@@ -226,7 +239,7 @@ async function passthroughRelayFetch(relayUrl, url, init = {}) {
 export function biliFetch(url, init = {}) {
   const relayUrl = relayEndpoint();
   if (relayUrl) {
-    return relayProtocol() === "scf"
+    return resolveRelayProtocol(relayUrl) === "scf"
       ? scfRelayFetch(relayUrl, url, init)
       : passthroughRelayFetch(relayUrl, url, init);
   }

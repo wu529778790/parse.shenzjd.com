@@ -10,7 +10,7 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import http from "node:http";
-import { biliFetch } from "@/lib/bilibili-fetch";
+import { biliFetch, resolveRelayProtocol } from "@/lib/bilibili-fetch";
 
 let server: http.Server;
 let baseUrl = "";
@@ -177,4 +177,34 @@ describe("bilibili 中继：SCF 信封协议（回滚路径）", () => {
       /中继转发失败/
     );
   });
+});
+
+describe("bilibili 中继：协议按地址自动判断（迁移期防呆）", () => {
+  // 迁移是「换代码」和「换 .env 地址」两件事，任何一件单独生效都不该让 B 站全挂：
+  // 直通协议去打 SCF 信封中继时，对方回 {"error":"invalid body: ..."} 且 HTTP 200，
+  // 表现为 b23.tv 短链「好像不是视频链接」、普通链接「解析失败！」（2026-11-01 线上）。
+  it("未配置协议时，腾讯云函数地址自动走 SCF 信封协议", () => {
+    delete process.env.BILIBILI_RELAY_PROTOCOL;
+    expect(
+      resolveRelayProtocol("https://1256194003-1pp3pgcc9p.ap-guangzhou.tencentscf.com")
+    ).toBe("scf");
+  });
+
+  it("未配置协议时，自建中继地址自动走直通协议", () => {
+    delete process.env.BILIBILI_RELAY_PROTOCOL;
+    expect(resolveRelayProtocol("http://123.207.66.24:9443")).toBe("target");
+    expect(resolveRelayProtocol("https://relay.example.com")).toBe("target");
+  });
+
+  it("显式配置优先于自动判断（两个方向都生效）", () => {
+    process.env.BILIBILI_RELAY_PROTOCOL = "scf";
+    expect(resolveRelayProtocol("http://123.207.66.24:9443")).toBe("scf");
+    process.env.BILIBILI_RELAY_PROTOCOL = "target";
+    expect(
+      resolveRelayProtocol("https://1256194003-1pp3pgcc9p.ap-guangzhou.tencentscf.com")
+    ).toBe("target");
+    process.env.BILIBILI_RELAY_PROTOCOL = "TARGET";
+    expect(resolveRelayProtocol("http://123.207.66.24:9443")).toBe("target");
+  });
+
 });
