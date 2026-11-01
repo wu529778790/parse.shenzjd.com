@@ -1,15 +1,19 @@
 /**
  * 视频代理 URL 工具：判断视频直链是否需要走 /api/video-proxy 代理。
  *
- * 需要代理的场景：Referer 防盗链。小红书 xhscdn 视频 CDN 直链在新窗口
- * 打开/播放会 403，通过 /api/video-proxy 代理（带 Referer: xiaohongshu.com）
- * 即可正常播放和下载。
+ * 需要代理的场景：
+ * - Referer 防盗链：小红书 xhscdn 视频 CDN 直链在新窗口打开/播放会 403，
+ *   通过 /api/video-proxy 代理（带 Referer: xiaohongshu.com）即可正常播放和下载。
+ * - B站 playurlv3 直链（2026-11-01 起）：签名绑定签发方 IP（oi 参数），浏览器
+ *   直连必 403，必须由服务端 video-proxy 从签发同出口取流（直连 403 时代理
+ *   内部还会回退中继流式，见 api/video-proxy 与 lib/bilibili-fetch）。
  *
  * 抖音视频：默认用直链播放（省服务器流量）。抖音 CDN 会随机返回 ftyp box
  * size 被混淆的 MP4（首字节 00→01）导致播放器无法解析，此时由前端检测
  * 到混淆后回退到代理（见 detectDouyinFtypObfuscation），代理会修复该混淆。
- * 其他平台（B站/微博/快手等）直链通常可正常播放，无需代理。
  */
+
+import { isBilibiliVideoUrl } from "@/lib/bilibili-cdn";
 
 /** 需要走代理的 CDN 主机（Referer 防盗链） */
 const PROXY_HOST_SUFFIXES = [".xhscdn.com", "xhscdn.com"];
@@ -24,13 +28,14 @@ const DOUYIN_VIDEO_HOST_SUFFIXES = [
   "douyinstatic.com",
 ];
 
-/** 判断视频 URL 是否需要走代理（小红书等 Referer 防盗链） */
+/** 判断视频 URL 是否需要走代理（小红书 Referer 防盗链 / B站 oi 绑 IP） */
 export function needsVideoProxy(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    return PROXY_HOST_SUFFIXES.some(
+    const hostMatched = PROXY_HOST_SUFFIXES.some(
       (s) => hostname === s || hostname.endsWith(s)
     );
+    return hostMatched || isBilibiliVideoUrl(url);
   } catch {
     return false;
   }

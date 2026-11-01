@@ -116,11 +116,13 @@ function buildBilibiliHeaders(extra = {}) {
 
 // 带重试的 B 站 API 请求：网络错误、风控码、或 HTML 拦截页时重试（最多 2 次，
 // 间隔递增），规避海外出口被 B 站临时风控导致的偶发「解析失败」。
-async function bilibiliRequest(url, headers, retries = 2) {
+// opts 透传给 biliFetch（如 biliDirect=true：跳过中继用本机出口直连）。
+async function bilibiliRequest(url, headers, retries = 2, opts = {}) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await biliFetch(url, {
         headers: buildBilibiliHeaders(headers),
+        ...opts,
       });
       // 从响应头捕获 B 站下发的匿名 Cookie（首次访问会自动下发 buvid3 等），
       // 更新模块缓存并异步持久化，供后续请求稳定复用。
@@ -180,6 +182,30 @@ async function bilibiliRequest(url, headers, retries = 2) {
     }
   }
   return null;
+}
+
+/**
+ * playurl 统一签发出口：先本机直连（biliDirect），出口相关失败再回退中继。
+ *
+ * 背景（2026-11-01）：B站 playurlv3 直链把签发方 IP（oi 参数）绑进签名校验，
+ * 取流客户端 IP 必须等于签发方，否则 403。playurl 由本机直连签发时
+ * oi=本服务出口，video-proxy（同样走本机出口）取流即可播放；经中继签发的
+ * 链接只有中继取得出流。所以直连优先，只有直连被出口因素挡住才回退中继：
+ * - RISK_CODES（-412/-403/-400/-352 风控）：海外数据中心 IP 偶发；
+ * - -10403：番剧地区限制（CI 美国 IP 实测，大陆出口正常）。
+ * 回退签发的链接 oi=中继 IP，video-proxy 直连 403 后会回退中继流式取流。
+ */
+const PLAYURL_EGRESS_FAIL_CODES = new Set([...RISK_CODES, -10403]);
+
+async function requestPlayurl(playUrlUrl, headers) {
+  const direct = await bilibiliRequest(playUrlUrl, headers, 2, {
+    biliDirect: true,
+  });
+  if (direct && !PLAYURL_EGRESS_FAIL_CODES.has(direct.code)) return direct;
+  logger.warn(
+    `playurl 直连签发失败(code=${direct?.code ?? "null"})，回退中继出口: ${playUrlUrl.slice(0, 80)}`
+  );
+  return bilibiliRequest(playUrlUrl, headers, 2);
 }
 
 /**
@@ -261,7 +287,7 @@ async function getBilibiliBangumiInfo(kind, id) {
     const plainPlayQuery = Object.entries(playParams)
       .map(([k, v]) => `${k}=${v}`)
       .join("&");
-    const playUrl = await bilibiliRequest(
+    const playUrl = await requestPlayurl(
       `https://api.bilibili.com/pgc/player/web/playurl?${signedPlayQuery ?? plainPlayQuery}`,
       headers
     );
@@ -409,7 +435,7 @@ async function getBilibiliVideoInfo(url) {
         platform: "html5",
         high_quality: 1,
       });
-      const playUrl = await bilibiliRequest(
+      const playUrl = await requestPlayurl(
         `https://api.bilibili.com/x/player/playurl?${signedPlayQuery ?? `otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=${bvid}&cid=${page.cid}&platform=html5&high_quality=1`}`,
         headers
       );

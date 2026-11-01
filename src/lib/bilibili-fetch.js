@@ -116,6 +116,12 @@ class PassthroughResponse {
     return this._res.headers;
   }
 
+  // 视频流式转发（video-proxy）需要原始响应体流；API 调用方只用 text()/json()，
+  // 互不干扰。仅直通协议的中继响应是真流式（stream=1 模式）。
+  get body() {
+    return this._res.body;
+  }
+
   get url() {
     const finalUrl = this._res.headers.get("x-relay-final-url");
     if (finalUrl) {
@@ -201,7 +207,7 @@ async function scfRelayFetch(relayUrl, url, init = {}) {
 }
 
 /** 直通协议转发（自建 Docker 中继）：?target= + 原样透传 */
-async function passthroughRelayFetch(relayUrl, url, init = {}) {
+async function passthroughRelayFetch(relayUrl, url, init = {}, opts = {}) {
   const token = process.env.BILIBILI_RELAY_TOKEN || "";
   if (relayLogged !== "target") {
     relayLogged = "target";
@@ -212,16 +218,18 @@ async function passthroughRelayFetch(relayUrl, url, init = {}) {
     // 中继用它鉴权，转发前会剔除，不会泄给 B站
     "x-relay-token": token,
   };
-  const response = await undiciFetch(
-    `${relayUrl}/?target=${encodeURIComponent(url)}`,
-    {
-      method: init.method || "GET",
-      headers,
-      body: init.body,
-      redirect: init.redirect || "follow",
-      signal: init.signal ?? AbortSignal.timeout(PASSTHROUGH_CLIENT_TIMEOUT_MS),
-    }
-  );
+  // stream=1：中继流式透传响应体（不整包缓冲）。只有视频流转发用得到——
+  // 旧中继版本不认识该参数时会按缓冲模式返回，功能不坏，只是大响应慢。
+  const targetQuery = opts.relayStream
+    ? `?target=${encodeURIComponent(url)}&stream=1`
+    : `?target=${encodeURIComponent(url)}`;
+  const response = await undiciFetch(`${relayUrl}/${targetQuery}`, {
+    method: init.method || "GET",
+    headers,
+    body: init.body,
+    redirect: init.redirect || "follow",
+    signal: init.signal ?? AbortSignal.timeout(PASSTHROUGH_CLIENT_TIMEOUT_MS),
+  });
   // 中继自身故障（自己超时掐断 / 上游 fetch 抛错）显式标记，别和 B站
   // 自己的 5xx 混为一谈：前者重试往往能好，后者基本是内容问题。
   const relayError = response.headers.get("x-relay-error");
@@ -248,20 +256,48 @@ async function passthroughRelayFetch(relayUrl, url, init = {}) {
 
 /**
  * B站专用 fetch：优先中继，其次代理，均未配置时等同原生 fetch。
+ *
+ * init.biliDirect=true：跳过中继与代理出口，用本机默认出口直连。专供
+ * playurl 签发——B站 playurlv3 直链把签发方 IP（oi）绑进校验，视频流必须
+ * 从同一出口取（video-proxy 走本机默认出口），经中继签发的链接本机取不了流。
+ * 也因此 direct 模式不挂 BILIBILI_PROXY dispatcher：那是另一条出口，取流方
+ * （video-proxy）不带 dispatcher，签发与取流会绑到不同 IP。
+ *
+ * init.relayStream=true：中继转发加 stream=1（流式透传），仅 video-proxy 用。
  * @param {string} url
  * @param {object} [init] 同 fetch init
  */
 export function biliFetch(url, init = {}) {
-  const relayUrl = relayEndpoint();
-  if (relayUrl) {
-    return resolveRelayProtocol(relayUrl) === "scf"
-      ? scfRelayFetch(relayUrl, url, init)
-      : passthroughRelayFetch(relayUrl, url, init);
-  }
-  const d = getDispatcher();
-  if (d) {
-    init.dispatcher = d;
+  const { biliDirect, relayStream, ...rest } = init;
+  if (!biliDirect) {
+    const relayUrl = relayEndpoint();
+    if (relayUrl) {
+      return resolveRelayProtocol(relayUrl) === "scf"
+        ? scfRelayFetch(relayUrl, url, rest)
+        : passthroughRelayFetch(relayUrl, url, rest, { relayStream });
+    }
+    // 代理模式（BILIBILI_PROXY）：与中继一样是「另一条出口」，direct 模式
+    // 同样不走——oi 绑定要求签发方与 video-proxy 取流方（本机默认出口）一致
+    const d = getDispatcher();
+    if (d) {
+      rest.dispatcher = d;
+    }
   }
   // undici fetch 与标准 fetch 行为兼容（redirect/headers/AbortSignal 均支持）
-  return undiciFetch(url, init);
+  return undiciFetch(url, rest);
+}
+
+/**
+ * B站视频流式取流（video-proxy 专用）：经中继 stream=1 拉流，出口与中继签发的
+ * playurl 一致（oi 匹配）。
+ *
+ * 返回 null 表示「此环境无法经中继流式取流」，调用方维持直连行为：
+ * - 未配置中继：直连（直连能通的前提是链接由本机出口签发，直连本来就是对的）；
+ * - 中继是 SCF 信封协议：响应体 base64 塞 JSON、无流式且网关 ~750KB 截断，
+ *   传视频必然失败，绝不能走。
+ */
+export function biliStreamFetch(url, init = {}) {
+  const relayUrl = relayEndpoint();
+  if (!relayUrl || resolveRelayProtocol(relayUrl) === "scf") return null;
+  return passthroughRelayFetch(relayUrl, url, init, { relayStream: true });
 }

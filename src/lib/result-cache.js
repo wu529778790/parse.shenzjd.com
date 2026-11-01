@@ -18,6 +18,7 @@
  */
 import { verifyDirectUrl } from "@/lib/verifyUrl";
 import { DELETED_CONTENT_MSG } from "@/lib/api-utils";
+import { isBilibiliVideoUrl } from "@/lib/bilibili-cdn";
 
 /** 分享打开窗口按天计，直链时效由命中探测兜底，故 TTL 取一整天 */
 const TTL_SECONDS = 24 * 60 * 60;
@@ -148,6 +149,12 @@ export async function resultStale(result) {
     try {
       const v = await verifyDirectUrl(direct, { timeout: PROBE_TIMEOUT_MS });
       if (v && v.ok === false) return true;
+      // B站 playurlv3 直链过期时返回 403（活链在本服务出口探测下是 2xx/206，
+      // 见 lib/bilibili-fetch 的 oi 绑定说明），对 B站 403 判死链触发重新解析，
+      // 否则 24h TTL 内命中缓存只会拿到过期死链（2026-11-01 线上日志实证）。
+      if (v && v.uncertain && v.status === 403 && isBilibiliVideoUrl(direct)) {
+        return true;
+      }
       rememberProbeOk(direct, now);
     } catch {
       // 探测异常按有效处理

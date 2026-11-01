@@ -19,6 +19,8 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isBlockedIP, getClientIP, logger } from "@/lib/api-utils";
 import { fixDouyinFtyp } from "@/lib/douyin-extract";
+import { isBilibiliVideoUrl } from "@/lib/bilibili-cdn";
+import { biliStreamFetch } from "@/lib/bilibili-fetch";
 
 function isXhsHost(hostname) {
   return hostname === "xhscdn.com" || hostname.endsWith(".xhscdn.com");
@@ -200,6 +202,10 @@ export async function GET(request) {
   if (isXhsHost(target.hostname)) {
     headers.Referer = "https://www.xiaohongshu.com/";
   }
+  // B站视频 CDN：带 bilibili Referer（防盗链口径与官方播放器一致）
+  if (isBilibiliVideoUrl(target.href)) {
+    headers.Referer = "https://www.bilibili.com/";
+  }
 
   // 透传客户端的 Range 头（浏览器播放/拖动进度条必需）
   const range = request.headers.get("range");
@@ -321,6 +327,30 @@ export async function GET(request) {
         );
         return new Response("Forbidden target", { status: 403 });
       }
+    }
+  }
+
+  // B站 playurlv3 直链把签发方 IP（oi）绑进签名校验，取流 IP 必须等于签发方。
+  // playurl 由本机直连签发时直连即可取流；链接若经中继签发（番剧地区限制等
+  // 场景回退中继），本机直连必 403——回退中继流式取流（与签发同出口）。
+  // 中继不可流式（SCF）或回退仍 403（链接已过期）时维持原 403 → 下方 502。
+  if (!upstream.ok && upstream.status === 403 && isBilibiliVideoUrl(target.href)) {
+    upstream.body?.cancel().catch(() => {});
+    try {
+      const viaRelay = await biliStreamFetch(target.href, {
+        headers,
+        signal: upstreamController.signal,
+      });
+      if (viaRelay) {
+        logger.log(
+          `video-proxy B站直链直连 403，回退中继流式: host=${target.hostname}`
+        );
+        upstream = viaRelay;
+      }
+    } catch (e) {
+      logger.warn(
+        `video-proxy B站中继流式回退失败: host=${target.hostname} err=${e.message}`
+      );
     }
   }
 
