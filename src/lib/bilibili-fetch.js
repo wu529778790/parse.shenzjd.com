@@ -228,6 +228,21 @@ async function passthroughRelayFetch(relayUrl, url, init = {}) {
   if (relayError) {
     throw new Error(`中继故障(${relayError}) HTTP ${response.status}`);
   }
+  // 中继「自己的拒绝」不带 x-relay-error，是 text/plain 小响应：
+  //   403 forbidden（token 不符）/ 400 bad target（target 不在白名单）/
+  //   503 relay not configured（容器没拿到 RELAY_TOKEN）。
+  // 以前这类响应被当成「B站返回的正文」继续往下走，结果 b23 短链拿不到跳转
+  // 后的地址，用户只看到「好像不是视频链接」，线上完全无法归因（2026-11-01）。
+  // 这里统一转成带状态码与正文片段的中继错误。
+  if (!response.ok) {
+    let detail = "";
+    try {
+      detail = (await response.text()).slice(0, 200);
+    } catch {
+      /* 读不到正文就只报状态码 */
+    }
+    throw new Error(`中继 HTTP ${response.status}: ${detail}`);
+  }
   return new PassthroughResponse(response);
 }
 

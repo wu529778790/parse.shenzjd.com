@@ -128,6 +128,22 @@ describe("bilibili 中继：直通协议（自建 Docker 中继）", () => {
       /中继故障\(timeout\)/
     );
   });
+
+  it("中继自己的拒绝（403 token 不符 / 400 bad target）也抛错，不冒充 B站正文", async () => {
+    handler = (_req, res) => {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      res.end("forbidden");
+    };
+    await expect(biliFetch("https://api.bilibili.com/x/web-interface/view?bvid=BV1xx")).rejects.toThrow(
+      /中继 HTTP 403: forbidden/
+    );
+
+    handler = (_req, res) => {
+      res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+      res.end("bad target");
+    };
+    await expect(biliFetch("https://b23.tv/ep4567049")).rejects.toThrow(/中继 HTTP 400: bad target/);
+  });
 });
 
 describe("bilibili 中继：SCF 信封协议（回滚路径）", () => {
