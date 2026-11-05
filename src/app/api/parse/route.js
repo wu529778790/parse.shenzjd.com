@@ -114,8 +114,16 @@ async function unifiedParser(input, options = {}) {
           try {
             const v = await verifyDirectUrl(direct);
             if (v.ok === false) {
+              // host 一起打出来：区分「真死链」与「CDN 防盗链误判」（2026-11 日志
+              // 复盘发现只有状态码无法归因，douyinvod 类 host 若反复出现即误判未除）
+              let vHost = "";
+              try {
+                vHost = new URL(direct).hostname;
+              } catch {
+                /* 理论上不会发生（direct 已过 startsWith("http")） */
+              }
               logger.warn(
-                `[verify] 平台 ${platform} 直链失效 (HTTP ${v.status})，已置空 URL`
+                `[verify] 平台 ${platform} 直链失效 (HTTP ${v.status}) host=${vHost}，已置空 URL`
               );
               result.data[urlKey] = undefined;
               result.msg = result.msg || "解析成功";
