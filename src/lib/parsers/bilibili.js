@@ -117,12 +117,18 @@ function buildBilibiliHeaders(extra = {}) {
 // 带重试的 B 站 API 请求：网络错误、风控码、或 HTML 拦截页时重试（最多 2 次，
 // 间隔递增），规避海外出口被 B 站临时风控导致的偶发「解析失败」。
 // opts 透传给 biliFetch（如 biliDirect=true：跳过中继用本机出口直连）。
+// opts.timeout：单次尝试的硬超时（毫秒），每次重试各自新建 AbortSignal。
+// 中继模式下覆盖 biliFetch 的兜底 20s，直连模式下同样生效——B站个别接口
+// 会整段挂起（pgc/view/web/season 2026-11-05 线上实证），没有它 3 次重试
+// × 20s 就是 60s+ 的用户等待。
 async function bilibiliRequest(url, headers, retries = 2, opts = {}) {
+  const { timeout, ...requestOpts } = opts;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await biliFetch(url, {
         headers: buildBilibiliHeaders(headers),
-        ...opts,
+        ...requestOpts,
+        ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
       });
       // 从响应头捕获 B 站下发的匿名 Cookie（首次访问会自动下发 buvid3 等），
       // 更新模块缓存并异步持久化，供后续请求稳定复用。
@@ -209,6 +215,96 @@ async function requestPlayurl(playUrlUrl, headers) {
 }
 
 /**
+ * 番剧 playurl 统一签发：WBI 签名拿不到密钥时降级裸请求，直连/中继出口
+ * 由 requestPlayurl 决定（oi 绑定逻辑见其注释）。
+ * @returns {{ playUrl: object|null, playData: object|null, durl: object|null }}
+ *   番剧与普通稿件的响应层级不同（result vs data），这里两者都兜；
+ *   playUrl 是整个响应信封（业务码在顶层），durl 为 null 表示没拿到地址
+ */
+async function issueBangumiPlayurl(playParams, headers) {
+  const signedPlayQuery = await signWbiParams(playParams);
+  const plainPlayQuery = Object.entries(playParams)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("&");
+  const playUrl = await requestPlayurl(
+    `https://api.bilibili.com/pgc/player/web/playurl?${signedPlayQuery ?? plainPlayQuery}`,
+    headers
+  );
+  const playData = playUrl?.result || playUrl?.data;
+  return { playUrl, playData, durl: playData?.durl?.[0] };
+}
+
+/**
+ * season 接口网络级失败（超时/不可达）时的降级：仅凭 ep_id 直取 playurl。
+ * 背景：pgc/view/web/season 会整段挂起（2026-11-05 线上实证：4 次请求
+ * × 中继超时全失败，同期普通稿件接口正常），而 playurl 是另一条服务路径，
+ * ep_id 单参即可签发（2026-11-06 实测 code=0 返回 durl）。代价是拿不到
+ * 剧集元信息，标题/封面只能占位——有播放地址总好过整个解析失败。
+ * 仅 kind="ep" 可降级（ss 链接没有 ep_id，连第一集号都拿不到）。
+ * @returns {object|null} 与正常路径同构的成功结果；降级也失败返回 null
+ */
+async function bangumiPlayurlOnlyFallback(epId, headers) {
+  const { playUrl, playData, durl } = await issueBangumiPlayurl(
+    {
+      ep_id: epId,
+      qn: 112,
+      fnval: 1,
+      fnver: 0,
+      otype: "json",
+      platform: "html5",
+      high_quality: 1,
+    },
+    headers
+  );
+  if (!durl?.url) {
+    const vipOnly = playUrl?.code === -10403 || playData?.is_preview === 1;
+    logger.warn(
+      "bilibili bangumi playurl-only 降级失败:",
+      epId,
+      playUrl?.code,
+      playData?.is_preview
+    );
+    // 大会员专享是 B站的明确答复，给出与正常路径一致的文案；
+    // 其余（网络错/风控）返回 null，调用方回落原有错误文案
+    return vipOnly
+      ? {
+          code: 0,
+          msg: "该剧集为大会员专享，匿名无法获取播放地址",
+          title: `哔哩哔哩番剧 ep${epId}`,
+          imgurl: "",
+          desc: "",
+          user: { name: "", user_img: "" },
+        }
+      : null;
+  }
+  const title = `哔哩哔哩番剧 ep${epId}`;
+  const durationSec = Math.max(
+    1,
+    Math.round(Number(playData?.timelength || 0) / 1000)
+  );
+  logger.log("Successfully parsed bilibili bangumi (season 降级):", epId);
+  return {
+    code: 1,
+    msg: "解析成功！",
+    title,
+    imgurl: "",
+    desc: "",
+    data: [
+      {
+        title,
+        duration: durationSec,
+        durationFormat: new Date((durationSec - 1) * 1000)
+          .toISOString()
+          .substr(11, 8),
+        accept: playData.accept_description,
+        video_url: normalizeCdnHost(durl.url),
+      },
+    ],
+    user: { name: "", user_img: "" },
+  };
+}
+
+/**
  * 番剧（PGC）解析：/bangumi/play/ep<id>（单集）或 /bangumi/play/ss<id>（整季）
  *
  * 不能复用 UP 主稿件那套接口：番剧的 bvid 在 /x/web-interface/view 下能查到
@@ -228,9 +324,14 @@ async function getBilibiliBangumiInfo(kind, id) {
     const seasonQuery =
       kind === "ep" ? `ep_id=${id}` : `season_id=${id}`;
 
+    // season 接口单次 10s 硬超时：3 次尝试最坏 ~31s（原先依赖中继兜底 20s
+    // × 3 + 退避 ≈ 61s，2026-11-05 线上 ep3854822 挂起时用户干等一分钟）。
+    // 接口响应本身是剧集列表 JSON，正常远小于 10s。
     const season = await bilibiliRequest(
       `https://api.bilibili.com/pgc/view/web/season?${seasonQuery}`,
-      headers
+      headers,
+      2,
+      { timeout: 10000 }
     );
 
     if (!season || season.code !== 0 || !season.result) {
@@ -240,6 +341,12 @@ async function getBilibiliBangumiInfo(kind, id) {
       }
       if (season && (season.code === -404 || season.code === 600404)) {
         return { code: 0, msg: DELETED_CONTENT_MSG };
+      }
+      // season 网络级失败（null）：playurl 是另一条服务路径，ep_id 单参可签发，
+      // 降级直取播放地址而非直接报「解析失败！」（见 bangumiPlayurlOnlyFallback）
+      if (!season && kind === "ep") {
+        const degraded = await bangumiPlayurlOnlyFallback(id, headers);
+        if (degraded) return degraded;
       }
       return { code: 0, msg: "解析失败！" };
     }
@@ -283,18 +390,10 @@ async function getBilibiliBangumiInfo(kind, id) {
       platform: "html5",
       high_quality: 1,
     };
-    const signedPlayQuery = await signWbiParams(playParams);
-    const plainPlayQuery = Object.entries(playParams)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("&");
-    const playUrl = await requestPlayurl(
-      `https://api.bilibili.com/pgc/player/web/playurl?${signedPlayQuery ?? plainPlayQuery}`,
+    const { playUrl, playData, durl } = await issueBangumiPlayurl(
+      playParams,
       headers
     );
-
-    // PGC 与普通稿件响应层级不同：结果是 result（老接口用 data），这里两者都兜
-    const playData = playUrl?.result || playUrl?.data;
-    const durl = playData?.durl?.[0];
 
     if (!durl?.url) {
       const vipOnly = playUrl?.code === -10403 || playData?.is_preview === 1;
