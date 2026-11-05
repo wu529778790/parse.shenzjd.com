@@ -221,10 +221,15 @@ export async function GET(request) {
   let upstreamController = new AbortController();
   let timer = null;
 
-  // 客户端断开（关页面 / 播放器换 Range 重新请求）时中止上游，避免后台白拉流量
+  // 客户端断开（关页面 / 播放器换 Range 重新请求）时中止上游，避免后台白拉流量。
+  // abort 原因必须是 AbortError 命名的错误：流式传输中断开时，该原因会沿
+  // bodyGuard 流冒泡成 pipeTo 的失败，而 Next 的 pipeToNodeResponse 只对
+  // AbortError 静默返回（server/pipe-readable.js 的 isAbortError），
+  // 普通 Error 会被包装成「failed to pipe response」连 cause 全栈打进日志——
+  // 播放器 seek/关页面的高频断流曾以此刷屏（2026-11 日志：5 天 80 次）。
   request.signal.addEventListener(
     "abort",
-    () => upstreamController.abort(new Error("client aborted")),
+    () => upstreamController.abort(new DOMException("client aborted", "AbortError")),
     { once: true }
   );
 
