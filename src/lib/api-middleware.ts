@@ -336,7 +336,6 @@ export const createApiHandler = (
 
     // 统一入口的共享结果缓存：放在认证之后（未认证用户不消费缓存）。
     // 命中先探测主直链，明确死链（签名过期）视为未命中走重新解析，
-    // 命中先探测主直链，明确死链（签名过期）视为未命中走重新解析，
     // 避免把过期直链发给前端黑屏
     if (sharedCache) {
       const cachedResult = await getResultCache(sanitizedUrl);
