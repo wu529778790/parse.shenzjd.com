@@ -164,9 +164,17 @@ jobs:
               echo "FATAL: 找不到站点目录（1Panel 站点根可能又变了），拒绝部署，旧容器未动" >&2
               exit 1
             fi
-            ENV_FILE="$SITE_DIR/index/.env"
+            # 2026-11-11：.env 迁到站点同级 data/（index 是 OpenResty Web 根，
+            # .env 曾可被爬虫直读）。优先 <站点>/data/.env，缺失回退 index/.env
+            # 兼容旧布局；都没有就地失败（解析凭据全在这，空配置等于全站解析挂）。
+            DATA_ENV="$SITE_DIR/data/.env"
+            if sudo test -f "$DATA_ENV"; then
+              ENV_FILE="$DATA_ENV"
+            else
+              ENV_FILE="$SITE_DIR/index/.env"
+            fi
             if [ ! -f "$ENV_FILE" ]; then
-              echo "FATAL: $ENV_FILE 不存在，拒绝以空配置启动（解析会全挂），旧容器未动" >&2
+              echo "FATAL: $ENV_FILE 不存在（已查 $DATA_ENV 和 $SITE_DIR/index/.env），拒绝以空配置启动（解析会全挂），旧容器未动" >&2
               exit 1
             fi
             # 先清一次悬空镜像腾出磁盘/IO，再带重试拉取（拉取失败不碰旧容器）
