@@ -24,6 +24,7 @@ const REFERER_BY_CDN_HOST = [
   { suffix: "zjcdn.com", referer: "https://www.douyin.com/" },
   { suffix: "douyin.com", referer: "https://www.douyin.com/" },
   { suffix: "iesdouyin.com", referer: "https://www.douyin.com/" },
+  { suffix: "snssdk.com", referer: "https://www.douyin.com/" },
   { suffix: "xhscdn.com", referer: "https://www.xiaohongshu.com/" },
   { suffix: "xiaohongshu.com", referer: "https://www.xiaohongshu.com/" },
   { suffix: "bilivideo.com", referer: "https://www.bilibili.com/" },

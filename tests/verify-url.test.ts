@@ -98,6 +98,7 @@ describe("refererForDirectUrl", () => {
     ["https://v3-web.douyinvod.com/a.mp4", "https://www.douyin.com/"],
     ["https://www.douyin.com/aweme/v1/play/x", "https://www.douyin.com/"],
     ["https://v9.awsnackvideo.com/v.mp4", "https://www.douyin.com/"],
+    ["https://aweme.snssdk.com/aweme/v1/play/x", "https://www.douyin.com/"],
     ["https://sns-video-qd.xhscdn.com/v.mp4", "https://www.xiaohongshu.com/"],
     ["https://upos-sz-mirrorbd.bilivideo.com/v.mp4", "https://www.bilibili.com/"],
     ["https://upos-hz-mirrorakam.akamaized.net/v.mp4", "https://www.bilibili.com/"],
