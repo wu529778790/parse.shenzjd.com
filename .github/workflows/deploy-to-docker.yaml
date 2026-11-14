@@ -216,6 +216,8 @@ jobs:
               --name "$CONTAINER" \
               --restart unless-stopped \
               --init \
+              --log-opt max-size=10m \
+              --log-opt max-file=3 \
               --add-host=host.docker.internal:host-gateway \
               $ENV_FLAGS \
               -p 5269:3000 \
