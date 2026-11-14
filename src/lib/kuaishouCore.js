@@ -78,7 +78,12 @@ class KuaishouParser {
    */
   async parse(url) {
     try {
-      const redirectedUrl = await this.getRedirectedUrl(url);
+      // photoId 已在原始 URL 里（/short-video/、/fw/photo/、/photo/ 直链形态）时
+      // 跳过重定向探测：www.kuaishou.com 对数据中心出口反爬，重定向请求常吃满
+      // 10s 超时，是线上直链解析 11–18s 的根因（2026-11-14 日志实证）。
+      const redirectedUrl = extractKuaishouPhotoId(url)
+        ? url
+        : await this.getRedirectedUrl(url);
       const { candidates } = this.parseUrl(url, redirectedUrl);
       for (const candidate of candidates) {
         const htmlContent = await this.makeRequest(candidate);
