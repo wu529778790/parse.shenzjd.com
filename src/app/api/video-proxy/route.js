@@ -26,6 +26,14 @@ function isXhsHost(hostname) {
   return hostname === "xhscdn.com" || hostname.endsWith(".xhscdn.com");
 }
 
+// 微博视频 CDN（f.video.weibocdn.com 等）：Referer 防盗链。
+// 2026-11-17 本地实测：裸 UA GET 403（与线上 11 次播放 403 吻合），带微博域
+// Referer 200；HEAD 则一律 403（verifyUrl 的 HEAD 探测走 uncertain 不阻断，
+// 不会误判，无需改动）。
+function isWeiboVideoHost(hostname) {
+  return hostname === "weibocdn.com" || hostname.endsWith(".weibocdn.com");
+}
+
 // 抖音视频 CDN：会随机返回 ftyp box size 被混淆的 MP4（首字节 00→01），
 // 导致播放器无法解析。需在代理中检测并修复该混淆（见 fixDouyinFtyp）。
 // aweme.snssdk.com：抖音老版直链域名（/aweme/v1/play/?video_id=...，会 302 到
@@ -205,6 +213,10 @@ export async function GET(request) {
   // B站视频 CDN：带 bilibili Referer（防盗链口径与官方播放器一致）
   if (isBilibiliVideoUrl(target.href)) {
     headers.Referer = "https://www.bilibili.com/";
+  }
+  // 微博视频 CDN：带 weibo.com Referer，缺头 403（2026-11-15 线上 11 次播放失败）
+  if (isWeiboVideoHost(target.hostname)) {
+    headers.Referer = "https://weibo.com/";
   }
 
   // 透传客户端的 Range 头（浏览器播放/拖动进度条必需）
