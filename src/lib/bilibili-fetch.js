@@ -255,6 +255,41 @@ async function passthroughRelayFetch(relayUrl, url, init = {}, opts = {}) {
 }
 
 /**
+ * 中继 412 退避重试：B站对中继出口 IP 的风控是间歇性的（2026-11-14/15 线上：
+ * 两个时段各连续 7/10 次 412，窗口外自愈；412 响应本身很快）。窗口内的长
+ * 封锁重试救不了，但单次/短时误伤可靠重试兜住，失败路径只多等 ~3.6s。
+ * 只认 412：中继自身故障（x-relay-error）与 B站其他 4xx（内容问题）语义
+ * 不同，均不重试。
+ */
+const RELAY_412_MAX_RETRIES = 2;
+const RELAY_412_BACKOFF_MS = [1200, 2400];
+
+function isRelay412Error(error) {
+  return error instanceof Error && error.message.startsWith("中继 HTTP 412");
+}
+
+async function relayFetchWith412Retry(doFetch, signal) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await doFetch();
+    } catch (error) {
+      if (
+        attempt >= RELAY_412_MAX_RETRIES ||
+        !isRelay412Error(error) ||
+        signal?.aborted
+      ) {
+        throw error;
+      }
+      const backoff = RELAY_412_BACKOFF_MS[attempt];
+      logger.warn(
+        `[bilibili-relay] 中继出口被 B站风控(412)，${backoff}ms 后重试 ${attempt + 1}/${RELAY_412_MAX_RETRIES}`
+      );
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
+  }
+}
+
+/**
  * B站专用 fetch：优先中继，其次代理，均未配置时等同原生 fetch。
  *
  * init.biliDirect=true：跳过中继与代理出口，用本机默认出口直连。专供
@@ -267,14 +302,18 @@ async function passthroughRelayFetch(relayUrl, url, init = {}, opts = {}) {
  * @param {string} url
  * @param {object} [init] 同 fetch init
  */
-export function biliFetch(url, init = {}) {
+export async function biliFetch(url, init = {}) {
   const { biliDirect, relayStream, ...rest } = init;
   if (!biliDirect) {
     const relayUrl = relayEndpoint();
     if (relayUrl) {
-      return resolveRelayProtocol(relayUrl) === "scf"
-        ? scfRelayFetch(relayUrl, url, rest)
-        : passthroughRelayFetch(relayUrl, url, rest, { relayStream });
+      return relayFetchWith412Retry(
+        () =>
+          resolveRelayProtocol(relayUrl) === "scf"
+            ? scfRelayFetch(relayUrl, url, rest)
+            : passthroughRelayFetch(relayUrl, url, rest, { relayStream }),
+        rest.signal
+      );
     }
     // 代理模式（BILIBILI_PROXY）：与中继一样是「另一条出口」，direct 模式
     // 同样不走——oi 绑定要求签发方与 video-proxy 取流方（本机默认出口）一致

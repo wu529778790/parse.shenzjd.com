@@ -8,7 +8,7 @@
  *   在 ~750KB 处被网关截断（线上 B站大响应稳定解析失败）。
  * - BILIBILI_RELAY_PROTOCOL=scf 时仍走旧协议（回滚路径，不能坏）。
  */
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import http from "node:http";
 import { biliFetch, resolveRelayProtocol } from "@/lib/bilibili-fetch";
 
@@ -221,6 +221,57 @@ describe("bilibili 中继：协议按地址自动判断（迁移期防呆）", (
     ).toBe("target");
     process.env.BILIBILI_RELAY_PROTOCOL = "TARGET";
     expect(resolveRelayProtocol("http://123.207.66.24:9443")).toBe("target");
+  });
+
+});
+
+describe("bilibili 中继：412 风控退避重试", () => {
+  // 2026-11-14/15 线上：B站对中继出口 IP 间歇性 412（两波各连续 7/10 次），
+  // biliFetch 对 412 做 2 次退避重试（1.2s → 2.4s）。
+  // 用真实定时器：假钟（vi.useFakeTimers）与 undici 对本地 socket 的真实 I/O
+  // 混用会出现调用计数错乱/挂起。两次退避合计 3.6s，testTimeout 放宽到 10s。
+  const TARGET = "https://api.bilibili.com/x/web-interface/view?bvid=BV1xx";
+
+  it("前两次 412、第三次成功：重试后拿到 200", async () => {
+    let calls = 0;
+    handler = (_req, res) => {
+      calls += 1;
+      if (calls <= 2) {
+        res.writeHead(412, { "content-type": "text/html" });
+        res.end("<!DOCTYPE html>");
+      } else {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{}");
+      }
+    };
+
+    const response = await biliFetch(TARGET);
+    expect(calls).toBe(3);
+    expect(response.status).toBe(200);
+  }, 10000);
+
+  it("持续 412：重试 2 次后抛出 412 错误（共请求 3 次）", async () => {
+    let calls = 0;
+    handler = (_req, res) => {
+      calls += 1;
+      res.writeHead(412, { "content-type": "text/html" });
+      res.end("<!DOCTYPE html>");
+    };
+
+    await expect(biliFetch(TARGET)).rejects.toThrow(/中继 HTTP 412/);
+    expect(calls).toBe(3);
+  }, 10000);
+
+  it("非 412 不重试：中继自身拒绝（HTTP 500）只请求一次", async () => {
+    let calls = 0;
+    handler = (_req, res) => {
+      calls += 1;
+      res.writeHead(500, { "content-type": "text/plain" });
+      res.end("relay internal error");
+    };
+
+    await expect(biliFetch(TARGET)).rejects.toThrow(/中继 HTTP 500/);
+    expect(calls).toBe(1);
   });
 
 });
