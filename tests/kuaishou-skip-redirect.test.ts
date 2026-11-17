@@ -61,3 +61,40 @@ describe("kuaishou 直链跳过重定向", () => {
     expect(fetchMock.mock.calls[1][0]).toContain("fw/photo/xyz789");
   });
 });
+
+describe("kuaishou makeRequest 快速失败重试", () => {
+  function timeoutError() {
+    // AbortSignal.timeout 掐断时抛的 DOMException，name 固定 TimeoutError
+    const e = new Error("The operation was aborted due to timeout");
+    e.name = "TimeoutError";
+    return e;
+  }
+
+  it("网络错快速失败：退避后重试一次，第二次成功", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new TypeError("fetch failed")))
+      .mockResolvedValue(gifshowResponse());
+    global.fetch = fetchMock;
+
+    const result = await parseKuaishou(
+      "https://www.kuaishou.com/short-video/abc123"
+    );
+
+    expect(result.code).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // 两次都是 gifshow 页，没有其他探测请求
+    expect(fetchMock.mock.calls[1][0]).toBe(fetchMock.mock.calls[0][0]);
+  });
+
+  it("超时不重试：15s 已耗尽预算，只请求一次即放弃", async () => {
+    // 用 gifshow 原生 URL（候选去重后只有 1 个），隔离候选循环的干扰
+    const fetchMock = vi.fn().mockRejectedValue(timeoutError());
+    global.fetch = fetchMock;
+
+    const result = await parseKuaishou("https://m.gifshow.com/fw/photo/abc123");
+
+    expect(result).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

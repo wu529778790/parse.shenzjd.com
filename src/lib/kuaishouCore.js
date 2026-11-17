@@ -131,16 +131,35 @@ class KuaishouParser {
     }
   }
 
-  async makeRequest(url) {
+  /** 单次请求：超时以 TimeoutError 上抛（调用方据此不重试），其余失败返回 null */
+  async fetchPage(url) {
     try {
       const response = await fetch(url, {
         headers: this.headers,
         signal: AbortSignal.timeout(15000),
       });
       if (!response.ok) return null;
-      const text = await response.text();
-      return text;
+      return await response.text();
+    } catch (e) {
+      if (e?.name === "TimeoutError") throw e;
+      return null;
+    }
+  }
+
+  /**
+   * 请求候选页：失败重试一次。
+   * - 非 2xx / 网络错（快速失败）：退避 500ms 重试，换 gifshow 边缘节点的机会
+   * - 超时：不重试。慢响应（2026-11-17 线上实测单次 6–15s）已吃掉大半预算，
+   *   再等一轮只会放大用户等待
+   */
+  async makeRequest(url) {
+    try {
+      const html = await this.fetchPage(url);
+      if (html) return html;
+      await new Promise((r) => setTimeout(r, 500));
+      return await this.fetchPage(url);
     } catch {
+      // fetchPage 只会抛 TimeoutError：超时不重试
       return null;
     }
   }
