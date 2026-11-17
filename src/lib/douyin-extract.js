@@ -309,6 +309,15 @@ export function isUserProfileUrl(urlStr) {
 }
 
 /**
+ * 判断 URL 是否为抖音「搜索结果页」链接（/jingxuan/search/<query>、/search/<query>）。
+ * 搜索页是结果列表而非单个视频，无视频 ID 可提取——用于在提取失败时给出
+ * 明确提示，而非笼统的「无法解析视频 ID」（2026-11 线上 4 次均为用户直贴搜索页）。
+ */
+export function isSearchPageUrl(urlStr) {
+  return /douyin\.com\/(jingxuan\/)?search([/?#]|$)/.test(urlStr);
+}
+
+/**
  * 从 URL 中提取视频 ID 和类型
  * 支持：/video|note|story/ID 路径、/share/(video|note|note)/ID、纯长数字、
  * 以及跳转域名的 target 参数（如 link.wtturl.cn/?target=https%3A%2F%2Fwww.iesdouyin.com%2Fshare%2Fvideo%2F<id>）。

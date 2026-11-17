@@ -15,6 +15,7 @@ import {
   isChallengeHtml,
   extractIdFromUrl,
   isUserProfileUrl,
+  isSearchPageUrl,
   parseMixDetail,
   parseMixAwemeList,
 } from "@/lib/douyin-extract";
@@ -81,6 +82,15 @@ async function douyin(url) {
       return {
         code: 400,
         msg: "该链接是抖音用户主页，不是视频链接：请打开具体视频或图文，点「分享」复制链接后再解析",
+      };
+    }
+    if (extractResult?.type === "search") {
+      logger.warn(
+        `[${beijingNow()}] 解析抖音链接失败：搜索结果页链接（${url.slice(0, 60)}）`
+      );
+      return {
+        code: 400,
+        msg: "该链接是抖音搜索页，不是单个视频：请打开具体视频或图文，点「分享」复制链接后再解析",
       };
     }
     if (!extractResult) {
@@ -515,6 +525,12 @@ async function extractIdAndRedirectUrl(url) {
       return { type: "user" };
     }
 
+    // 搜索结果页（/jingxuan/search/、/search/）：同为主页类链接，
+    // 无单个视频 ID，返回标记供调用方给出明确报错
+    if (isSearchPageUrl(finalUrl)) {
+      return { type: "search" };
+    }
+
     // 从响应头收集匿名 ttwid（首次访问抖音会自动下发，无需登录）
     const ttwid = extractDouyinTtwid(response);
 
@@ -555,6 +571,8 @@ async function extractIdAndRedirectUrl(url) {
     logger.warn(`[${beijingNow()}] 提取抖音链接重定向失败，尝试从原始 URL 提取: ${error.message}`);
     const fallback = extractIdFromUrl(url);
     if (fallback) return { ...fallback, redirectUrl: url, ttwid: "" };
+    // fetch 失败也识别搜索页（用户直贴搜索页且 www.douyin.com 反爬时走到这里）
+    if (isSearchPageUrl(url)) return { type: "search" };
     return null;
   }
 }

@@ -12,6 +12,7 @@ import {
   extractIdFromUrl,
   extractTtwid,
   isUserProfileUrl,
+  isSearchPageUrl,
   parseMixDetail,
   parseMixAwemeList,
   fixDouyinFtyp,
@@ -133,6 +134,18 @@ describe("douyin-extract：页面快照回归", () => {
     expect(
       isUserProfileUrl("https://www.iesdouyin.com/share/note/7389625411234567890")
     ).toBe(false);
+  });
+
+  it("识别搜索结果页链接（/jingxuan/search/ 与 /search/）", () => {
+    // 线上案例（2026-11）：用户直贴搜索页，此前报笼统的「无法解析视频 ID」
+    expect(isSearchPageUrl("https://www.douyin.com/jingxuan/search/Baby%20Don%20Go%20Baby")).toBe(true);
+    expect(isSearchPageUrl("https://www.douyin.com/search/%E7%BE%8E%E9%A3%9F")).toBe(true);
+    expect(isSearchPageUrl("https://www.douyin.com/search/旅行?from=tab")).toBe(true);
+    // 带搜索词的普通视频链接、主页链接不能被误判
+    expect(isSearchPageUrl("https://www.douyin.com/video/7389625411234567890")).toBe(false);
+    expect(isSearchPageUrl("https://www.douyin.com/user/MS4wLjABAAAA")).toBe(false);
+    // query 里出现 search 一词不算（必须出现在路径首位）
+    expect(isSearchPageUrl("https://www.douyin.com/video/7389625411234567890?search=x")).toBe(false);
   });
 
   it("从响应头提取 ttwid", () => {
