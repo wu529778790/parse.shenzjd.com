@@ -193,24 +193,42 @@ async function tryTenapi(url) {
 /**
  * 竞速所有公共解析 API，返回第一个成功的：
  * { ok: true, key, url, title, cover } | { ok: false, error }
+ *
+ * 真·竞速（2026-11-24 改）：任何一路成功立即返回。原实现用
+ * `Promise.allSettled` 等全部完成——某个源卡到 9s 超时，即使另一路 200ms
+ * 就命中了，用户也要多等 9s；而几路源里 douyin.wtf 常 404、tenapi 常 502，
+ * 等齐纯属白等。失败时仍把各源原因汇总进一行日志（保持可归因）。
  */
 export async function douyinPublicFallback(url) {
   const backends = [try17change, tryDouyinWtf, tryYujn, tryTenapi];
   const errors = [];
-  const results = await Promise.allSettled(
-    backends.map(async (fn) => {
-      // 每个 API 独立超时由 AbortSignal 控制；整体由 RACE_TIMEOUT 兜底
-      return await fn(url);
-    })
-  );
-  // allSettled 已等全部完成；若整体超预算则由调用方控制（fallback 整体有超时）。
-  for (const r of results) {
-    if (r.status === "fulfilled" && r.value && r.value.ok && r.value.url) {
-      logger.log(`[douyin] 公共解析兜底命中: ${r.value.key}`);
-      return r.value;
+
+  const winner = await new Promise((resolve) => {
+    let pending = backends.length;
+    const done = (value) => {
+      if (pending > 0) pending = 0; // 防重复 resolve
+      resolve(value);
+    };
+    for (const fn of backends) {
+      Promise.resolve()
+        .then(() => fn(url))
+        .then((value) => {
+          if (value && value.ok && value.url) done(value);
+          else if (value && value.error) errors.push(value.error);
+        })
+        .catch((error) =>
+          errors.push(String(error?.message || error).slice(0, 80))
+        )
+        .then(() => {
+          // 全部失败（没有任何一路命中）才认输
+          if (--pending === 0) done(null);
+        });
     }
-    if (r.status === "fulfilled" && r.value) errors.push(r.value.error);
-    else if (r.status === "rejected") errors.push(String(r.reason).slice(0, 80));
+  });
+
+  if (winner) {
+    logger.log(`[douyin] 公共解析兜底命中: ${winner.key}`);
+    return winner;
   }
   logger.warn(`[douyin] 公共解析兜底全部失败: ${errors.slice(0, 4).join("; ")}`);
   return { ok: false, error: errors.slice(0, 4).join("; ") || "公共解析全部失败" };

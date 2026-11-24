@@ -185,6 +185,12 @@ async function douyin(url) {
     // 绝不能因为页面含 argus-csp-token 就跳过 —— 那是此前解析全部失败的根因。
     for (let round = 0; round < 2 && !videoInfo; round++) {
       for (const ua of UA_SETS) {
+        // 本组 UA 的探测情况：passParsed 见到过任何数据块（含空壳），
+        // passChallenge 被反爬页命中的次数。整组 4 个候选 URL 全部被反爬
+        // 且没见到任何数据块时，换 UA 不会改变结果（拦截是按出口 IP 的），
+        // 直接跳过本轮剩下的 UA 组：最坏请求数从 24 收到 8，也少给风控送样本。
+        let passParsed = false;
+        let passChallenge = 0;
         for (const fetchUrl of tryUrls) {
           if (videoInfo) break;
           if (Date.now() - startTime > 20000) break;
@@ -213,6 +219,7 @@ async function douyin(url) {
             // 先解析内嵌数据（_ROUTER_DATA / RENDER_DATA / _SSR_DATA）
             const parsed = tryParseEmbedded(html);
             if (parsed) {
+              passParsed = true;
               if (hasValidData(parsed)) {
                 videoInfo = parsed;
                 break;
@@ -222,10 +229,16 @@ async function douyin(url) {
             } else if (isChallengeHtml(html)) {
               // 页面完全无数据块且带反爬特征：命中 challenge，计数供报错
               challengeCount++;
+              passChallenge++;
             }
           } catch {
             /* 网络异常跳过该 URL，尝试下一个 */
           }
+        }
+        // 整组 UA × 全部候选 URL 都被反爬命中：出口 IP 级拦截，换 UA 无用。
+        // 第二轮（带本轮捕获的 ttwid）仍会照常进行。
+        if (!videoInfo && !passParsed && passChallenge === tryUrls.length) {
+          break;
         }
       }
     }
