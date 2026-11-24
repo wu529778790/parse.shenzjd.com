@@ -459,9 +459,17 @@ async function getBilibiliVideoInfo(url) {
     let bvid;
     
     if (parsedUrl.hostname === "b23.tv") {
-      // b23.tv 短链重定向：带 UA + Referer，避免海外出口被 B站风控拦截
+      // b23.tv 短链重定向：带 UA + Referer，避免海外出口被 B站风控拦截。
+      //
+      // relayAllowErrorStatus：短链解析只需要「跳到哪」，不需要落地页正文。
+      // 2026-11-24 实测：中继出口（广州）打开 www.bilibili.com/video/* 恒定
+      // 412（补 buvid3/buvid4/Referer 全无效，bangumi/play/* 却正常 200），
+      // 而中继在 412 响应上依然回传 x-relay-final-url。旧实现把 412 当失败 +
+      // 退避重试 2 次，等于给每个 b23 视频短链白等 3.6s 后必失败
+      // （72h 线上 27 次，占 B站失败的 84%）。
       const response = await biliFetch(url, {
         redirect: "follow",
+        relayAllowErrorStatus: true,
         headers: {
           "User-Agent": BILIBILI_USER_AGENT,
           Referer: "https://www.bilibili.com/",

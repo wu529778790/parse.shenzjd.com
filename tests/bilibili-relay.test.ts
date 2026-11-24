@@ -275,3 +275,56 @@ describe("bilibili 中继：412 风控退避重试", () => {
   });
 
 });
+
+describe("b23 短链：412 也能拿到最终地址（relayAllowErrorStatus）", () => {
+  // 2026-11-24 线上：B站对中继出口的 www.bilibili.com/video/* 页面恒定 412，
+  // 而 b23.tv 短链解析只需要跳转后的地址。旧实现把 412 当失败 + 退避重试，
+  // 27 次 b23 视频短链 100% 失败且每次多等 3.6s。
+  const b23 = "https://b23.tv/27kOOvg";
+  const finalUrl = "https://www.bilibili.com/video/BV1Qy411i7xf?share_source=COPY";
+
+  it("412 + x-relay-final-url：不抛错、不重试，url 取最终地址", async () => {
+    let calls = 0;
+    handler = (_req, res) => {
+      calls += 1;
+      res.writeHead(412, {
+        "content-type": "text/html",
+        "x-relay-final-url": encodeURIComponent(finalUrl),
+      });
+      res.end("<!DOCTYPE html><html><body>risk control</body></html>");
+    };
+
+    const response = await biliFetch(b23, { relayAllowErrorStatus: true });
+    expect(calls).toBe(1);
+    expect(response.status).toBe(412);
+    expect(response.url).toBe(finalUrl);
+    // 正文已缓冲，调用方仍能正常读取（不会因为连接被丢弃而报错）
+    expect(await response.text()).toContain("risk control");
+  });
+
+  it("412 但没有 x-relay-final-url：仍按失败抛错（不吞掉真实故障）", async () => {
+    handler = (_req, res) => {
+      res.writeHead(412, { "content-type": "text/html" });
+      res.end("<!DOCTYPE html>");
+    };
+
+    await expect(biliFetch(b23, { relayAllowErrorStatus: true })).rejects.toThrow(
+      /中继 HTTP 412/
+    );
+  });
+
+  it("未开该选项时行为不变：412 仍然重试后抛错", async () => {
+    let calls = 0;
+    handler = (_req, res) => {
+      calls += 1;
+      res.writeHead(412, {
+        "content-type": "text/html",
+        "x-relay-final-url": encodeURIComponent(finalUrl),
+      });
+      res.end("<!DOCTYPE html>");
+    };
+
+    await expect(biliFetch(b23)).rejects.toThrow(/中继 HTTP 412/);
+    expect(calls).toBe(3);
+  }, 10000);
+});

@@ -25,6 +25,7 @@
 
 import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { logger } from "@/lib/api-utils";
+import { relayPassthrough } from "@/lib/passthrough-relay";
 
 // B站请求统一 UA（写死：模拟 Chrome 浏览器，基本不变，无需暴露为配置）
 export const BILIBILI_USER_AGENT =
@@ -91,58 +92,6 @@ class RelayResponse {
   }
 }
 
-/**
- * 直通协议（自建 Docker 中继）的 Response 包装。
- *
- * 只为一件事而存在：中继是「替我们 fetch 一次再原样透传」，重定向由中继
- * 侧跟随，主服务拿到的 Response.url 是「中继地址」而非 B站最终地址。
- * b23.tv 短链解析依赖最终地址，故顶层 url 优先取中继回传的
- * x-relay-final-url（中继 URL 编码过，防 header 非法字符）。
- */
-class PassthroughResponse {
-  constructor(response) {
-    this._res = response;
-  }
-
-  get status() {
-    return this._res.status;
-  }
-
-  get ok() {
-    return this._res.ok;
-  }
-
-  get headers() {
-    return this._res.headers;
-  }
-
-  // 视频流式转发（video-proxy）需要原始响应体流；API 调用方只用 text()/json()，
-  // 互不干扰。仅直通协议的中继响应是真流式（stream=1 模式）。
-  get body() {
-    return this._res.body;
-  }
-
-  get url() {
-    const finalUrl = this._res.headers.get("x-relay-final-url");
-    if (finalUrl) {
-      try {
-        return decodeURIComponent(finalUrl);
-      } catch {
-        // 解码失败（中继版本不匹配等）时退回中继地址，不影响正文解析
-      }
-    }
-    return this._res.url;
-  }
-
-  text() {
-    return this._res.text();
-  }
-
-  json() {
-    return this._res.json();
-  }
-}
-
 /** 中继转发：请求经国内出口访问 B站 */
 let relayLogged = "";
 // 客户端侧兜底超时：
@@ -206,52 +155,23 @@ async function scfRelayFetch(relayUrl, url, init = {}) {
   return new RelayResponse(data);
 }
 
-/** 直通协议转发（自建 Docker 中继）：?target= + 原样透传 */
+/**
+ * 直通协议转发（自建 Docker 中继）：?target= + 原样透传。
+ *
+ * 实现已抽到 passthrough-relay.js（快手链路复用同一台中继），这里只负责
+ * B站侧的地址/令牌与首日志。
+ */
 async function passthroughRelayFetch(relayUrl, url, init = {}, opts = {}) {
-  const token = process.env.BILIBILI_RELAY_TOKEN || "";
   if (relayLogged !== "target") {
     relayLogged = "target";
     logger.log("[bilibili-relay] B站请求启用自建中继出口（直通协议）");
   }
-  const headers = {
-    ...(init.headers || {}),
-    // 中继用它鉴权，转发前会剔除，不会泄给 B站
-    "x-relay-token": token,
-  };
-  // stream=1：中继流式透传响应体（不整包缓冲）。只有视频流转发用得到——
-  // 旧中继版本不认识该参数时会按缓冲模式返回，功能不坏，只是大响应慢。
-  const targetQuery = opts.relayStream
-    ? `?target=${encodeURIComponent(url)}&stream=1`
-    : `?target=${encodeURIComponent(url)}`;
-  const response = await undiciFetch(`${relayUrl}/${targetQuery}`, {
-    method: init.method || "GET",
-    headers,
-    body: init.body,
-    redirect: init.redirect || "follow",
-    signal: init.signal ?? AbortSignal.timeout(PASSTHROUGH_CLIENT_TIMEOUT_MS),
+  return relayPassthrough(relayUrl, url, init, {
+    token: process.env.BILIBILI_RELAY_TOKEN || "",
+    stream: !!opts.relayStream,
+    allowErrorStatus: !!opts.allowErrorStatus,
+    timeoutMs: PASSTHROUGH_CLIENT_TIMEOUT_MS,
   });
-  // 中继自身故障（自己超时掐断 / 上游 fetch 抛错）显式标记，别和 B站
-  // 自己的 5xx 混为一谈：前者重试往往能好，后者基本是内容问题。
-  const relayError = response.headers.get("x-relay-error");
-  if (relayError) {
-    throw new Error(`中继故障(${relayError}) HTTP ${response.status}`);
-  }
-  // 中继「自己的拒绝」不带 x-relay-error，是 text/plain 小响应：
-  //   403 forbidden（token 不符）/ 400 bad target（target 不在白名单）/
-  //   503 relay not configured（容器没拿到 RELAY_TOKEN）。
-  // 以前这类响应被当成「B站返回的正文」继续往下走，结果 b23 短链拿不到跳转
-  // 后的地址，用户只看到「好像不是视频链接」，线上完全无法归因（2026-11-01）。
-  // 这里统一转成带状态码与正文片段的中继错误。
-  if (!response.ok) {
-    let detail = "";
-    try {
-      detail = (await response.text()).slice(0, 200);
-    } catch {
-      /* 读不到正文就只报状态码 */
-    }
-    throw new Error(`中继 HTTP ${response.status}: ${detail}`);
-  }
-  return new PassthroughResponse(response);
 }
 
 /**
@@ -299,21 +219,31 @@ async function relayFetchWith412Retry(doFetch, signal) {
  * （video-proxy）不带 dispatcher，签发与取流会绑到不同 IP。
  *
  * init.relayStream=true：中继转发加 stream=1（流式透传），仅 video-proxy 用。
+ *
+ * init.relayAllowErrorStatus=true：非 2xx 不抛错也不重试，直接返回响应，
+ * 调用方用 response.url 取跳转后的最终地址。专供 b23.tv 短链解析——B站对
+ * 机房出口的 www.bilibili.com/video/* 页面恒定 412（带 buvid3/buvid4/Referer
+ * 均无效，实测三个不同视频全 412），而短链解析只需跳转结果、根本不需要正文。
  * @param {string} url
  * @param {object} [init] 同 fetch init
  */
 export async function biliFetch(url, init = {}) {
-  const { biliDirect, relayStream, ...rest } = init;
+  const { biliDirect, relayStream, relayAllowErrorStatus, ...rest } = init;
   if (!biliDirect) {
     const relayUrl = relayEndpoint();
     if (relayUrl) {
-      return relayFetchWith412Retry(
-        () =>
-          resolveRelayProtocol(relayUrl) === "scf"
-            ? scfRelayFetch(relayUrl, url, rest)
-            : passthroughRelayFetch(relayUrl, url, rest, { relayStream }),
-        rest.signal
-      );
+      // 已经允许错误状态码时不再做 412 退避重试：这一层重试本来是为「间歇性
+      // 风控」准备的，而确定性 412 上重试只会白等 3.6s。
+      const doFetch = () =>
+        resolveRelayProtocol(relayUrl) === "scf"
+          ? scfRelayFetch(relayUrl, url, rest)
+          : passthroughRelayFetch(relayUrl, url, rest, {
+              relayStream,
+              allowErrorStatus: relayAllowErrorStatus,
+            });
+      return relayAllowErrorStatus
+        ? doFetch()
+        : relayFetchWith412Retry(doFetch, rest.signal);
     }
     // 代理模式（BILIBILI_PROXY）：与中继一样是「另一条出口」，direct 模式
     // 同样不走——oi 绑定要求签发方与 video-proxy 取流方（本机默认出口）一致
