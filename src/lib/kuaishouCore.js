@@ -136,10 +136,16 @@ class KuaishouParser {
   /** 单次请求：超时以 TimeoutError 上抛（调用方据此不重试），其余失败返回 null */
   async fetchPage(url) {
     try {
-      const response = await kuaishouFetch(url, {
-        headers: this.headers,
-        signal: AbortSignal.timeout(15000),
-      });
+      const response = await kuaishouFetch(
+        url,
+        {
+          headers: this.headers,
+          signal: AbortSignal.timeout(15000),
+        },
+        // 只有移动分享页值得代提取（160KB 页面跨境回传是主要成本，见
+        // kuaishou-fetch.js 头注释）；短链 302 没有正文可提取
+        { extract: url.includes("/fw/photo/") ? "kuaishou-min-html" : "" }
+      );
       if (!response.ok) return null;
       return await response.text();
     } catch (e) {

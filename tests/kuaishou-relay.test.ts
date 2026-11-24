@@ -65,9 +65,10 @@ afterEach(() => {
   }
 });
 
-/** 中继替身：短链目标回 x-relay-final-url，其余回分享页 */
+/** 中继替身：短链目标回 x-relay-final-url，其余回分享页（带 extract 时代提取） */
 function relayHandler(req, res) {
-  const target = new URL(req.url, "http://relay").searchParams.get("target");
+  const query = new URL(req.url, "http://relay").searchParams;
+  const target = query.get("target");
   if (target && target.includes("www.kuaishou.com")) {
     res.writeHead(200, {
       "content-type": "application/json",
@@ -76,6 +77,12 @@ function relayHandler(req, res) {
       ),
     });
     res.end('{"result":2}');
+    return;
+  }
+  // 代提取：中继把 160KB 页面压成约 1KB 的最小 HTML 再回
+  if (query.get("extract") === "kuaishou-min-html") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ html: GIFSHOW_PAGE, bytes: 160627, upstreamMs: 1028 }));
     return;
   }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -129,6 +136,44 @@ describe("快手经中继解析", () => {
     );
     expect(targets[0]).toBe("https://www.kuaishou.com/f/X-abc123");
     expect(targets[1]).toBe("https://m.gifshow.com/fw/photo/abc123");
+    // 分享页请求必须带代提取名（160KB 跨境回传是负优化，见 kuaishou-fetch.js）
+    const shareQuery = new URL(seen[1].url, "http://relay").searchParams;
+    expect(shareQuery.get("extract")).toBe("kuaishou-min-html");
+    // 短链 302 没有正文可提取，不该带 extract
+    const shortQuery = new URL(seen[0].url, "http://relay").searchParams;
+    expect(shortQuery.get("extract")).toBeNull();
+  });
+
+  it("代提取无结果（html 为空）时回退直连重取，功能不退化", async () => {
+    resetKuaishouRelayState();
+    process.env.KUAISHOU_RELAY_URL = baseUrl;
+    handler = (req, res) => {
+      const query = new URL(req.url, "http://relay").searchParams;
+      if (query.get("extract")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ html: "", bytes: 160627 }));
+        return;
+      }
+      res.writeHead(500, { "content-type": "text/plain" });
+      res.end("relay stub");
+    };
+
+    // 目标站用本地服务冒充，避免单测打外网
+    const target = http.createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(GIFSHOW_PAGE);
+    });
+    await new Promise((resolve) => target.listen(0, "127.0.0.1", resolve));
+    const targetUrl = `http://127.0.0.1:${target.address().port}`;
+
+    try {
+      const result = await parseKuaishou(`${targetUrl}/fw/photo/abc123`);
+      expect(result.code).toBe(200);
+      expect(result.data.photoUrl).toBe("https://v.kwaicdn.com/x.mp4");
+    } finally {
+      await new Promise((resolve) => target.close(resolve));
+      resetKuaishouRelayState();
+    }
   });
 
   it("中继未放行该域名（400 bad target）时退回直连，该次解析照常成功", async () => {

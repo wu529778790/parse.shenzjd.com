@@ -93,6 +93,9 @@ export const PASSTHROUGH_TIMEOUT_MS = 20000;
  * @param {boolean} [opts.allowErrorStatus] 非 2xx 不抛错，直接返回响应。
  *   专供「只关心跳转后最终地址」的场景：目标站对机房出口恒定 412，但中继
  *   依然回传了 x-relay-final-url，把 412 当失败纯属自找（见 b23.tv 短链）。
+ * @param {string} [opts.extract] 中继侧「代提取」名称（见 panhub 仓库
+ *   scripts/quark-relay-scf/app.cjs 的 EXTRACTORS）。命中时中继只回约 1KB
+ *   结构化 JSON，正文不再跨境回传——这是大响应体走中继的唯一正确姿势。
  * @param {number} [opts.timeoutMs]
  * @returns {Promise<PassthroughResponse>}
  */
@@ -101,6 +104,7 @@ export async function relayPassthrough(relayUrl, targetUrl, init = {}, opts = {}
     token = "",
     stream = false,
     allowErrorStatus = false,
+    extract = "",
     timeoutMs = PASSTHROUGH_TIMEOUT_MS,
   } = opts;
 
@@ -109,9 +113,12 @@ export async function relayPassthrough(relayUrl, targetUrl, init = {}, opts = {}
     // 中继用它鉴权，转发前会剔除，不会泄给目标站
     "x-relay-token": token,
   };
-  const targetQuery = stream
-    ? `?target=${encodeURIComponent(targetUrl)}&stream=1`
-    : `?target=${encodeURIComponent(targetUrl)}`;
+  const extraQuery = [stream ? "stream=1" : "", extract ? `extract=${encodeURIComponent(extract)}` : ""]
+    .filter(Boolean)
+    .join("&");
+  const targetQuery = `?target=${encodeURIComponent(targetUrl)}${
+    extraQuery ? `&${extraQuery}` : ""
+  }`;
 
   const response = await fetch(`${relayUrl}/${targetQuery}`, {
     method: init.method || "GET",

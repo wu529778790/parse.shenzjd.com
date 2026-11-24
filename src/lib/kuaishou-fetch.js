@@ -68,20 +68,37 @@ function relayToken() {
  * 快手专用 fetch：配置了国内中继就走中继，否则直连。
  * @param {string} url
  * @param {object} [init] 同 fetch init（headers / redirect / signal）
+ * @param {object} [opts]
+ * @param {string} [opts.extract] 中继代提取名（如 kuaishou-min-html）。命中时
+ *   中继只回约 1KB 的最小 HTML，避免 160KB 跨境回传——2026-11-24 实测：
+ *   原样透传 12.3/34.3/27.3s，直连 10.2/10.8/7.0s，就是回程带宽吃掉的。
+ *   提取失败（中继回的空 html）时退回直连重取一次，保证功能不退化。
+ * @returns {Promise<Response|import("./passthrough-relay").PassthroughResponse>}
  */
-export async function kuaishouFetch(url, init = {}) {
+export async function kuaishouFetch(url, init = {}, opts = {}) {
   const relayUrl =
     Date.now() < relayDisabledUntil ? "" : kuaishouRelayEndpoint();
   if (!relayUrl) return fetch(url, init);
   if (!relayLogged) {
     relayLogged = true;
-    logger.log("[kuaishou-relay] 快手请求启用自建中继出口（直通协议）");
+    logger.log(
+      `[kuaishou-relay] 快手请求启用自建中继出口${opts.extract ? `（代提取 ${opts.extract}）` : ""}`
+    );
   }
   try {
-    return await relayPassthrough(relayUrl, url, init, {
+    const response = await relayPassthrough(relayUrl, url, init, {
       token: relayToken(),
       timeoutMs: RELAY_TIMEOUT_MS,
+      extract: opts.extract || "",
     });
+    if (!opts.extract) return response;
+    // 代提取模式：中继回的是 { html, bytes, upstreamMs } 小 JSON
+    const payload = await response.json();
+    const html = typeof payload?.html === "string" ? payload.html : "";
+    if (html) return new Response(html, { status: 200 });
+    // 没提取到（页面改版 / 反爬页）：退回直连，别把这条请求变成失败
+    logger.warn(`[kuaishou-relay] 代提取无结果，回退直连: ${url.slice(0, 80)}`);
+    return fetch(url, init);
   } catch (error) {
     // 调用方已取消/超时：不再补一次直连（否则用户要多等一轮）
     if (init.signal?.aborted || !isRelayRejection(error)) throw error;
