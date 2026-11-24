@@ -66,6 +66,7 @@ Configure in `.env` for full functionality:
 - `DOUYIN_COOKIE`, `DOUYIN_USER_AGENT` — Douyin parsing
 - `WEIBO_COOKIE` — Weibo parsing
 - `TURSO_DB_URL`, `TURSO_AUTH_TOKEN` — Turso (libsql) database for parse analytics; when unset, analytics is silently disabled
+- `BILIBILI_RELAY_URL`, `BILIBILI_RELAY_TOKEN` — 国内中继（广州轻量云，直通协议），B站与快手共用；`KUAISHOU_RELAY_URL` / `KUAISHOU_RELAY_TOKEN` 可单独覆盖快手出口
 - `STATS_API_KEY` — Bearer key protecting `GET /api/stats`; when unset, the stats endpoint returns 403
 
 ## Conventions
