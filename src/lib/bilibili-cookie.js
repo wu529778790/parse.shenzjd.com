@@ -15,6 +15,7 @@
 
 import { createTursoClient } from "@/lib/turso-client";
 import { logger } from "@/lib/api-utils";
+import { biliFetch, BILIBILI_USER_AGENT } from "@/lib/bilibili-fetch";
 
 // 需要捕获并复用的匿名 Cookie 键（B 站设备指纹 / 游客标识）
 const ANON_COOKIE_KEYS = ["buvid3", "buvid4", "b_nut", "buvid", "b_lsid"];
@@ -88,6 +89,43 @@ export function extractBilibiliAnonCookie(response) {
     return parts.join("; ");
   } catch (e) {
     logger.warn(`[bilibili-cookie] 提取匿名 Cookie 失败: ${e.message}`);
+    return "";
+  }
+}
+
+/**
+ * 向 B站 spi 接口要一组真实匿名设备指纹（buvid3 / buvid4）。
+ *
+ * 为什么需要它（2026-11-24 线上核查）：`kv_store` 里**从来没有**过
+ * `bilibili_anon_cookie` 这条记录——本模块的捕获依赖响应头 Set-Cookie，而
+ * B站 API 在机房出口上基本不下发，被 412 拦时更不会下发，于是进程重启后
+ * 一直落到「本地伪造 buvid3」兜底。伪造的 buvid3 实测可用（api 带任一
+ * buvid3 即 200、裸请求必 412），但换成 spi 下发的真指纹更稳，且能落库让
+ * 所有实例复用同一台"设备"。
+ *
+ * spi 接口本身不受风控（实测 200），走与解析相同的中继出口。
+ * @returns {Promise<string>} 形如 "buvid3=xxx; buvid4=yyy"；拿不到返回 ""
+ */
+export async function fetchAnonCookieFromSpi() {
+  try {
+    const response = await biliFetch(
+      "https://api.bilibili.com/x/frontend/finger/spi",
+      {
+        headers: {
+          "User-Agent": BILIBILI_USER_AGENT,
+          Referer: "https://www.bilibili.com/",
+        },
+        // 冷启动才走一次，超时短一点，别把首屏解析拖住
+        signal: AbortSignal.timeout(4000),
+      }
+    );
+    const json = await response.json();
+    const buvid3 = json?.data?.b_3;
+    const buvid4 = json?.data?.b_4;
+    if (!buvid3) return "";
+    return buvid4 ? `buvid3=${buvid3}; buvid4=${buvid4}` : `buvid3=${buvid3}`;
+  } catch (e) {
+    logger.warn(`[bilibili-cookie] spi 获取匿名指纹失败: ${e.message}`);
     return "";
   }
 }

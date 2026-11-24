@@ -7,6 +7,7 @@
 import { logger, DELETED_CONTENT_MSG } from "@/lib/api-utils";
 import {
   extractBilibiliAnonCookie,
+  fetchAnonCookieFromSpi,
   getBiliAnonCookie,
   saveBiliAnonCookie,
 } from "@/lib/bilibili-cookie";
@@ -114,21 +115,51 @@ function buildBilibiliHeaders(extra = {}) {
   return headers;
 }
 
+/**
+ * 单次解析的总预算（毫秒）。
+ *
+ * 单接口最坏 20s 兜底 × 3 次重试 = 60s，线上实测解析耗时出现过 33s / 53s /
+ * 60.9s（2026-11-22 上线日志：3 次重试全被中继超时吃满）。用户早就走了，连接
+ * 还占着，同一用户点重试只会叠加负载。预算内拿不到就快速失败，把时间还给用户。
+ */
+const PARSE_BUDGET_MS = 25000;
+
+/** 解析总预算（可用 BILIBILI_PARSE_BUDGET_MS 覆盖，便于线上微调与单测） */
+function parseBudgetMs() {
+  const configured = Number(process.env.BILIBILI_PARSE_BUDGET_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : PARSE_BUDGET_MS;
+}
+
+/** 单次尝试的默认硬超时（与中继客户端 20s 对齐） */
+const DEFAULT_ATTEMPT_TIMEOUT_MS = 20000;
+
 // 带重试的 B 站 API 请求：网络错误、风控码、或 HTML 拦截页时重试（最多 2 次，
 // 间隔递增），规避海外出口被 B 站临时风控导致的偶发「解析失败」。
 // opts 透传给 biliFetch（如 biliDirect=true：跳过中继用本机出口直连）。
 // opts.timeout：单次尝试的硬超时（毫秒），每次重试各自新建 AbortSignal。
-// 中继模式下覆盖 biliFetch 的兜底 20s，直连模式下同样生效——B站个别接口
-// 会整段挂起（pgc/view/web/season 2026-11-05 线上实证），没有它 3 次重试
-// × 20s 就是 60s+ 的用户等待。
+// opts.deadline：整次解析的截止时间戳（Date.now() 基准）。每次尝试的超时会被
+//   收敛到剩余预算，预算耗尽后不再发起重试——见 PARSE_BUDGET_MS。
 async function bilibiliRequest(url, headers, retries = 2, opts = {}) {
-  const { timeout, ...requestOpts } = opts;
+  const {
+    timeout = DEFAULT_ATTEMPT_TIMEOUT_MS,
+    deadline,
+    ...requestOpts
+  } = opts;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const remain = deadline ? deadline - Date.now() : Infinity;
+    if (remain <= 500) {
+      logger.warn(
+        `B站解析已超出 ${parseBudgetMs()}ms 总预算，放弃请求: ${url.slice(0, 80)}`
+      );
+      return null;
+    }
     try {
       const response = await biliFetch(url, {
         headers: buildBilibiliHeaders(headers),
         ...requestOpts,
-        ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
+        signal: AbortSignal.timeout(Math.min(timeout, remain)),
       });
       // 从响应头捕获 B 站下发的匿名 Cookie（首次访问会自动下发 buvid3 等），
       // 更新模块缓存并异步持久化，供后续请求稳定复用。
@@ -203,15 +234,16 @@ async function bilibiliRequest(url, headers, retries = 2, opts = {}) {
  */
 const PLAYURL_EGRESS_FAIL_CODES = new Set([...RISK_CODES, -10403]);
 
-async function requestPlayurl(playUrlUrl, headers) {
+async function requestPlayurl(playUrlUrl, headers, deadline) {
   const direct = await bilibiliRequest(playUrlUrl, headers, 2, {
     biliDirect: true,
+    deadline,
   });
   if (direct && !PLAYURL_EGRESS_FAIL_CODES.has(direct.code)) return direct;
   logger.warn(
     `playurl 直连签发失败(code=${direct?.code ?? "null"})，回退中继出口: ${playUrlUrl.slice(0, 80)}`
   );
-  return bilibiliRequest(playUrlUrl, headers, 2);
+  return bilibiliRequest(playUrlUrl, headers, 2, { deadline });
 }
 
 /**
@@ -221,14 +253,15 @@ async function requestPlayurl(playUrlUrl, headers) {
  *   番剧与普通稿件的响应层级不同（result vs data），这里两者都兜；
  *   playUrl 是整个响应信封（业务码在顶层），durl 为 null 表示没拿到地址
  */
-async function issueBangumiPlayurl(playParams, headers) {
+async function issueBangumiPlayurl(playParams, headers, deadline) {
   const signedPlayQuery = await signWbiParams(playParams);
   const plainPlayQuery = Object.entries(playParams)
     .map(([k, v]) => `${k}=${v}`)
     .join("&");
   const playUrl = await requestPlayurl(
     `https://api.bilibili.com/pgc/player/web/playurl?${signedPlayQuery ?? plainPlayQuery}`,
-    headers
+    headers,
+    deadline
   );
   const playData = playUrl?.result || playUrl?.data;
   return { playUrl, playData, durl: playData?.durl?.[0] };
@@ -243,7 +276,7 @@ async function issueBangumiPlayurl(playParams, headers) {
  * 仅 kind="ep" 可降级（ss 链接没有 ep_id，连第一集号都拿不到）。
  * @returns {object|null} 与正常路径同构的成功结果；降级也失败返回 null
  */
-async function bangumiPlayurlOnlyFallback(epId, headers) {
+async function bangumiPlayurlOnlyFallback(epId, headers, deadline) {
   const { playUrl, playData, durl } = await issueBangumiPlayurl(
     {
       ep_id: epId,
@@ -254,7 +287,8 @@ async function bangumiPlayurlOnlyFallback(epId, headers) {
       platform: "html5",
       high_quality: 1,
     },
-    headers
+    headers,
+    deadline
   );
   if (!durl?.url) {
     const vipOnly = playUrl?.code === -10403 || playData?.is_preview === 1;
@@ -318,7 +352,7 @@ async function bangumiPlayurlOnlyFallback(epId, headers) {
  * @param {"ep"|"ss"} kind ep=单集，ss=整季（取第一集）
  * @param {string} id 数字 ID
  */
-async function getBilibiliBangumiInfo(kind, id) {
+async function getBilibiliBangumiInfo(kind, id, deadline) {
   try {
     const headers = { "Content-Type": "application/json;charset=UTF-8" };
     const seasonQuery =
@@ -331,7 +365,7 @@ async function getBilibiliBangumiInfo(kind, id) {
       `https://api.bilibili.com/pgc/view/web/season?${seasonQuery}`,
       headers,
       2,
-      { timeout: 10000 }
+      { timeout: 10000, deadline }
     );
 
     if (!season || season.code !== 0 || !season.result) {
@@ -345,7 +379,7 @@ async function getBilibiliBangumiInfo(kind, id) {
       // season 网络级失败（null）：playurl 是另一条服务路径，ep_id 单参可签发，
       // 降级直取播放地址而非直接报「解析失败！」（见 bangumiPlayurlOnlyFallback）
       if (!season && kind === "ep") {
-        const degraded = await bangumiPlayurlOnlyFallback(id, headers);
+        const degraded = await bangumiPlayurlOnlyFallback(id, headers, deadline);
         if (degraded) return degraded;
       }
       return { code: 0, msg: "解析失败！" };
@@ -392,7 +426,8 @@ async function getBilibiliBangumiInfo(kind, id) {
     };
     const { playUrl, playData, durl } = await issueBangumiPlayurl(
       playParams,
-      headers
+      headers,
+      deadline
     );
 
     if (!durl?.url) {
@@ -444,12 +479,24 @@ async function getBilibiliBangumiInfo(kind, id) {
 }
 
 async function getBilibiliVideoInfo(url) {
+  // 整次解析（含短链展开、view、所有分P playurl）共享一个截止时间，
+  // 避免单接口 20s × 3 次重试把用户拖到 60s。
+  const deadline = Date.now() + parseBudgetMs();
   try {
     // 首次进入时从 Turso 加载持久化的匿名 Cookie 到模块缓存（仅加载一次，
     // 后续请求内直接复用；未配置 Turso 时静默跳过）。仍无 Cookie（如 IP 被风控
     // 等不到 B站下发）时本地生成稳定 buvid3 兜底，避免裸请求。
     if (!anonCookieCache) {
       anonCookieCache = await getBiliAnonCookie();
+    }
+    if (!anonCookieCache) {
+      // 库里没有 → 主动向 spi 要一组真 buvid3/buvid4（接口不风控、实测 200），
+      // 比本地伪造更稳，顺带落库让所有实例复用同一台设备指纹。
+      const spiCookie = await fetchAnonCookieFromSpi();
+      if (spiCookie) {
+        anonCookieCache = spiCookie;
+        saveBiliAnonCookie(spiCookie); // fire-and-forget
+      }
     }
     if (!anonCookieCache) {
       anonCookieCache = `buvid3=${generateBuvid3()}`;
@@ -474,6 +521,8 @@ async function getBilibiliVideoInfo(url) {
           "User-Agent": BILIBILI_USER_AGENT,
           Referer: "https://www.bilibili.com/",
         },
+        // 短链展开本身是 302，正常几百毫秒；挂预算内的超时兜底
+        signal: AbortSignal.timeout(Math.min(10000, deadline - Date.now())),
       });
       const redirectUrl = new URL(response.url);
       bvid = redirectUrl.pathname;
@@ -492,7 +541,11 @@ async function getBilibiliVideoInfo(url) {
       // 这条分支原来直接被判「好像不是视频链接」（2026-09-22 线上 3 次连续失败）。
       const bangumiMatch = bvid.match(/\/bangumi\/play\/(ep|ss)(\d+)/);
       if (bangumiMatch) {
-        return await getBilibiliBangumiInfo(bangumiMatch[1], bangumiMatch[2]);
+        return await getBilibiliBangumiInfo(
+          bangumiMatch[1],
+          bangumiMatch[2],
+          deadline
+        );
       }
       return { code: -1, msg: "好像不是视频链接" };
     }
@@ -513,7 +566,9 @@ async function getBilibiliVideoInfo(url) {
     // 获取视频信息
     const videoInfo = await bilibiliRequest(
       `https://api.bilibili.com/x/web-interface/view?${signedViewQuery ?? `bvid=${bvid}`}`,
-      headers
+      headers,
+      2,
+      { deadline }
     );
     
     if (!videoInfo || videoInfo.code !== 0) {
@@ -544,7 +599,8 @@ async function getBilibiliVideoInfo(url) {
       });
       const playUrl = await requestPlayurl(
         `https://api.bilibili.com/x/player/playurl?${signedPlayQuery ?? `otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=${bvid}&cid=${page.cid}&platform=html5&high_quality=1`}`,
-        headers
+        headers,
+        deadline
       );
       
       if (playUrl && playUrl.data?.durl?.[0]?.url) {

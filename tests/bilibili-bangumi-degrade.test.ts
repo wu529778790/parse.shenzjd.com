@@ -19,6 +19,7 @@ vi.mock("@/lib/bilibili-cookie", () => ({
   getBiliAnonCookie: async () => "",
   saveBiliAnonCookie: async () => {},
   extractBilibiliAnonCookie: () => null,
+  fetchAnonCookieFromSpi: async () => "",
 }));
 // signWbiParams 返回 null 走裸查询串，顺带避开 nav 密钥的网络请求
 vi.mock("@/lib/bilibili-wbi", () => ({
