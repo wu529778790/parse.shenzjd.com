@@ -87,15 +87,17 @@ describe("快手出口选择", () => {
     expect(kuaishouRelayEndpoint()).toBe("");
   });
 
-  it("只配 BILIBILI_RELAY_URL 时复用同一台中继", () => {
+  it("只配 BILIBILI_RELAY_URL 不启用快手中继（160KB 跨境回传是负优化）", () => {
+    // 2026-11-24 实测：中继 12.3/34.3/27.3s vs 直连 10.2/10.8/7.0s，
+    // 中继只压低了上游首字节，大响应体的回程更慢
     process.env.BILIBILI_RELAY_URL = "http://123.207.66.24:9443";
-    expect(kuaishouRelayEndpoint()).toBe("http://123.207.66.24:9443");
+    expect(kuaishouRelayEndpoint()).toBe("");
   });
 
-  it("KUAISHOU_RELAY_URL 优先于 BILIBILI_RELAY_URL，且去掉尾斜杠", () => {
+  it("显式配置 KUAISHOU_RELAY_URL 才启用，并去掉尾斜杠", () => {
     process.env.BILIBILI_RELAY_URL = "http://123.207.66.24:9443";
-    process.env.KUAISHOU_RELAY_URL = "http://10.0.0.2:9443/";
-    expect(kuaishouRelayEndpoint()).toBe("http://10.0.0.2:9443");
+    process.env.KUAISHOU_RELAY_URL = "http://123.207.66.24:9443/";
+    expect(kuaishouRelayEndpoint()).toBe("http://123.207.66.24:9443");
   });
 
   it("指向旧 SCF 信封中继时不接（协议不同、白名单不含快手域名）", () => {

@@ -1,20 +1,23 @@
 /**
- * 快手请求统一出口：优先走国内中继，未配置时等同原生 fetch。
+ * 快手请求出口：**默认直连**，只有显式配置 `KUAISHOU_RELAY_URL` 才走国内中继。
  *
- * 为什么要中继（2026-11-24 线上实测）：
+ * 背景与一次翻车（2026-11-24，同日上线当日回滚）：
  * 快手解析要拉移动分享页 `m.gifshow.com/fw/photo/<id>`（约 160KB，是唯一能
- * 解析出数据的形态，PC 页对数据中心出口直接反爬）。从本站出口（新加坡）
- * 同一条 URL 要 4.9–11.3s（TTFB 0.8–3.9s、有效带宽 ~50KB/s），而从广州中继机
- * 只要 1.1s。`fetchPage` 的 15s 超时因此被击穿：72h 内快手失败 161 次
- * （占平台流量 62% 的快手上 21.5% 失败率），成功请求 p50 也高达 12.4s，
- * 用户重试进一步放大流量（749 次请求只对应 267 个唯一链接）。
+ * 解析出数据的形态）。72h 线上快手失败 161 次（占平台流量 62% 的平台上
+ * 21.5% 失败率），成功 p50 12.4s。当时判断是跨境慢，遂改走广州中继。
  *
- * 出口选择：
- * - `KUAISHOU_RELAY_URL`，缺省回退 `BILIBILI_RELAY_URL`（同一台中继，广州
- *   轻量云，直通协议见 passthrough-relay.js）；
- * - `KUAISHOU_RELAY_TOKEN`，缺省回退 `BILIBILI_RELAY_TOKEN`；
- * - 都没配、或地址指向旧的 SCF 信封中继（`*.tencentscf.com`，白名单里没有
- *   快手域名且响应体会被网关截断）时，退化为原生 fetch——行为与改动前一致。
+ * 但上线后实测（新加坡出口 → 广州中继 → 快手）：
+ *   中继  total 12.3s / 34.3s / 27.3s（ttfb 1.1s / 2.1s / 1.1s）
+ *   直连  total 10.2s / 10.8s /  7.0s（ttfb 3.1s / 2.8s / 2.9s）
+ * 中继确实把**上游首字节**从 ~3s 压到 ~1s，但 160KB 响应体还要从广州跨境
+ * 回传给新加坡，这段回程比原本的跨境直连更慢——总耗时反而翻倍，15s 超时
+ * 会打得更频繁。所以中继对「大响应体」是一次负优化，不能靠它提速快手。
+ *
+ * 结论：默认直连（与改动前一致），等中继侧做「代提取」把小字段带回来
+ * （relay 的 `?extract=` 机制，160KB → 约 1KB）再显式开启：
+ *   KUAISHOU_RELAY_URL=http://123.207.66.24:9443
+ *   KUAISHOU_RELAY_TOKEN=<same as BILIBILI_RELAY_TOKEN>
+ * 地址指向旧 SCF 信封中继（`*.tencentscf.com`）时一律不用。
  */
 
 import { logger } from "@/lib/api-utils";
@@ -44,14 +47,13 @@ export function resetKuaishouRelayState() {
   relayDisabledUntil = 0;
 }
 
-/** 中继根地址（空串 = 不走中继） */
+/** 中继根地址（空串 = 不走中继；刻意不回退 BILIBILI_RELAY_URL，见文件头实测） */
 export function kuaishouRelayEndpoint() {
   const explicit = (process.env.KUAISHOU_RELAY_URL || "").trim();
-  const base = explicit || (process.env.BILIBILI_RELAY_URL || "").trim();
-  if (!base) return "";
+  if (!explicit) return "";
   // 旧 SCF 信封中继：协议不同、白名单不含快手域名，直接不用
-  if (/\.tencentscf\.com(?::\d+)?(?:\/|$)/i.test(base)) return "";
-  return base.replace(/\/+$/, "");
+  if (/\.tencentscf\.com(?::\d+)?(?:\/|$)/i.test(explicit)) return "";
+  return explicit.replace(/\/+$/, "");
 }
 
 function relayToken() {
