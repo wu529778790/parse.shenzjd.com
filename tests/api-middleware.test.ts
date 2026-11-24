@@ -77,6 +77,24 @@ describe("api-middleware", () => {
     expect(parseSpy).not.toHaveBeenCalled();
   });
 
+  it("缺协议头的链接自动补 https:// 后再交给解析器", async () => {
+    // 线上 72h 25 次：「www.acfun.cn/v/ac16803480」直接 400「无效的URL格式」
+    const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });
+    const handler = createApiHandler(parseSpy, { shouldCache: false });
+
+    const req = new Request(
+      "http://127.0.0.1/api/parse?url=" +
+        encodeURIComponent("www.acfun.cn/v/ac16803480")
+    );
+    const res = await handler(req);
+    await res.json();
+
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+    expect(parseSpy.mock.calls[0][0]).toBe(
+      "https://www.acfun.cn/v/ac16803480"
+    );
+  });
+
   it("returns CORS header for allowed origin (*.shenzjd.com)", async () => {
     vi.spyOn(apiUtils, "getCachedResponse").mockReturnValue(null);
     const parseSpy = vi.fn().mockResolvedValue({ code: 1, msg: "ok" });

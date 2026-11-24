@@ -4,6 +4,7 @@ import {
   setCacheResponse,
   rateLimit,
   isValidUrl,
+  normalizeInputUrl,
   sanitizeUrl,
   getClientIP,
   getCorsHeaders,
@@ -234,7 +235,10 @@ export const createApiHandler = (
     }
 
     const { searchParams } = new URL(request.url);
-    const url = searchParams.get("url");
+    const rawUrl = searchParams.get("url");
+    // 补全协议头：用户常直接粘贴「www.acfun.cn/v/ac16803480」（缺 https://），
+    // 72h 线上 25 次因 `new URL()` 抛错被拒。只补「域名/路径」形态，见 normalizeInputUrl。
+    const url = rawUrl ? normalizeInputUrl(rawUrl) : rawUrl;
 
     if (!url) {
       return Response.json(

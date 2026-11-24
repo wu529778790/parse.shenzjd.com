@@ -160,6 +160,30 @@ export const isValidUrl = (string) => {
   }
 };
 
+/**
+ * 补全用户输入的协议头。
+ *
+ * 线上实证（2026-11-21~24 72h 内 25 次）：用户直接粘贴
+ * 「www.acfun.cn/v/ac16803480」这类没有 scheme 的链接，`new URL()` 直接抛错，
+ * 用户只拿到「无效的URL格式」，完全不知道哪里错了。
+ *
+ * 规则收得很窄：
+ * - 已带协议的（http/https 等）一律原样返回，不覆盖用户的选择；
+ * - 只有「字母数字开头的域名标签 + 至少一个点 + 字母顶级域（可带端口）」才补
+ *   https://，裸 IPv4（如 127.0.0.1:8080/x）不会被补全——不给试探内网的输入
+ *   顺手打开口子；
+ * - 其余输入原样返回，仍由 isValidUrl 报错。
+ */
+export const normalizeInputUrl = (input) => {
+  const raw = String(input ?? "").trim();
+  if (!raw) return raw;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+  if (/^[a-z0-9][a-z0-9-]*(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d{1,5})?(\/|$)/i.test(raw)) {
+    return `https://${raw}`;
+  }
+  return raw;
+};
+
 // URL 清理函数 - 防止SSRF攻击
 export const sanitizeUrl = (url) => {
   try {
