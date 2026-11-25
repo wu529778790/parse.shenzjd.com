@@ -6,6 +6,17 @@
 
 import { logger, DELETED_CONTENT_MSG } from "@/lib/api-utils";
 
+/**
+ * 调试明细日志：生产环境默认静默（线上容器日志里这些明细既刷噪音，
+ * 也把解析链路细节泄到了日志里）；排查时临时设 XHS_DEBUG=1 打开。
+ */
+const XHS_DEBUG =
+  process.env.XHS_DEBUG === "1" || process.env.NODE_ENV !== "production";
+
+function debugLog(...args) {
+  if (XHS_DEBUG) console.log("[xhs]", ...args);
+}
+
 
 /**
  * 小红书 H5 UA：**必须用移动端**。
@@ -321,8 +332,8 @@ async function xhs(url) {
   try {
     const { html, finalUrl, loginRequired } = await fetchXhsNoteHtml(url);
 
-    console.log("[xhs] finalUrl:", finalUrl);
-    console.log("[xhs] html length:", html?.length || 0);
+    debugLog("finalUrl:", finalUrl);
+    debugLog("html length:", html?.length || 0);
 
     // 已删除/不可见笔记：小红书会把短链重定向到 /explore 并附带 undertake_note_error
     // 参数（值如「该内容暂时无法查看」）。这是确定失败，直接明确告知已删除，
@@ -334,7 +345,7 @@ async function xhs(url) {
     // 短链被强制跳到登录页且重试真实笔记地址后仍被拦：
     // 该笔记需要登录态才能查看，明确提示而不是笼统的「数据结构不匹配」
     if (loginRequired || isLoginUrl(finalUrl)) {
-      console.log("[xhs] 需要登录态，无法解析:", finalUrl);
+      debugLog("需要登录态，无法解析:", finalUrl);
       return output(
         403,
         "该笔记需要登录小红书后才能查看，暂无法解析，可尝试在 App 内重新分享"
@@ -369,7 +380,7 @@ async function xhs(url) {
     let jsonRaw = extractInitialStateJson(html);
     if (!jsonRaw) {
       // 尝试打印 HTML 片段帮助调试
-      console.log("[xhs] HTML preview:", html.substring(0, 500));
+      debugLog("HTML preview:", html.substring(0, 500));
       return output(400, "未找到页面数据，小红书可能更新了页面结构");
     }
 
@@ -379,7 +390,7 @@ async function xhs(url) {
     try {
       decoded = JSON.parse(jsonRaw);
     } catch (e) {
-      console.log("[xhs] JSON parse error:", e.message);
+      debugLog("JSON parse error:", e.message);
       return output(400, "JSON数据解析失败");
     }
 
@@ -390,7 +401,7 @@ async function xhs(url) {
     const noteData = resolveNotePayload(decoded);
 
     if (!noteData || typeof noteData !== "object") {
-      console.log("[xhs] decoded keys:", Object.keys(decoded));
+      debugLog("decoded keys:", Object.keys(decoded));
       return output(400, "数据结构不匹配，请检查链接是否为有效的小红书内容");
     }
 
@@ -430,7 +441,7 @@ async function xhs(url) {
     }
 
     if (videoUrl) {
-      console.log("[xhs] videoUrl:", videoUrl);
+      debugLog("videoUrl:", videoUrl);
       // 视频内容
       data.cover = "";
       const imageList = noteData.imageList;
@@ -464,7 +475,7 @@ async function xhs(url) {
         data.images = images;
         data.type = "image";
         if (!clean) {
-          console.log("[xhs] 无水印直链不可用，回退 H5 带水印变体");
+          debugLog("无水印直链不可用，回退 H5 带水印变体");
         }
         return output(200, "解析成功", data);
       }

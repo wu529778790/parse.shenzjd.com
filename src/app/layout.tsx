@@ -91,8 +91,11 @@ export default function RootLayout({
     <html lang="zh-CN" className="scroll-smooth">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" type="image/svg+xml" href="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/blog/imgx-20260828-215653-2ha5.svg" />
-        <link rel="apple-touch-icon" href="https://cdn.jsdmirror.com/gh/wu529778790/img.shenzjd.com@master/blog/imgx-20260828-220754-822r.png" />
+        {/* 图标全部本地化：/favicon.ico 兜住浏览器默认探测路径（此前 404），
+            不再依赖 jsdmirror CDN，首屏少两次跨域请求 */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/svg+xml" href="/brand/logo-mark.svg" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         {/* 右侧悬浮公众号+赞赏码浮窗：@wu529778790/floating-qr Web Component 版
             一行 <script> 引入，自动注册 <floating-qr> 并注入默认浮窗（right-center，
             默认隐藏移动端、关闭后刷新重现），无需额外标签/JS */}
