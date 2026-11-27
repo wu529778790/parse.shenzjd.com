@@ -15,12 +15,11 @@
  */
 export const runtime = "nodejs";
 
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import { isBlockedIP, getClientIP, logger } from "@/lib/api-utils";
 import { fixDouyinFtyp } from "@/lib/douyin-extract";
 import { isBilibiliVideoUrl } from "@/lib/bilibili-cdn";
 import { biliStreamFetch } from "@/lib/bilibili-fetch";
+import { isUnsafeTarget } from "@/lib/ssrf-guard";
 
 function isXhsHost(hostname) {
   return hostname === "xhscdn.com" || hostname.endsWith(".xhscdn.com");
@@ -68,109 +67,11 @@ function describeFetchError(error) {
 }
 
 /* ---------------- 目标地址加固（防 SSRF） ----------------
- * 本路由没有任何登录态，只校了协议就等于开放了一个服务器侧代理：任何人都能借它
+ * 守卫实现已抽到 src/lib/ssrf-guard.js（2026-11-27 与 image 代理共用）：
+ * 本路由没有任何登录态，只校了协议就等于开放了一个服务器侧代理，任何人都能借它
  * 访问 169.254.169.254 云元数据、127.0.0.1 上的管理端口、10.x/172.16-31.x/192.168.x
- * 内网服务，而且响应体会被原样回吐。这里按「字面量直判 + 域名 DNS 复查」拦截。
- * 注：校验与 fetch 各自解析一次 DNS 存在 TOCTOU 窗口，属尽力而为的防护。
+ * 内网服务，而且响应体会被原样回吐。
  */
-const BLOCKED_HOST_SUFFIXES = [
-  ".localhost",
-  ".local",
-  ".internal",
-  ".localdomain",
-  ".home.arpa",
-];
-
-function ipv4ToInt(ip) {
-  const parts = ip.split(".");
-  if (parts.length !== 4) return null;
-  let n = 0;
-  for (const p of parts) {
-    if (!/^\d{1,3}$/.test(p)) return null;
-    const v = Number(p);
-    if (v > 255) return null;
-    n = n * 256 + v;
-  }
-  return n;
-}
-
-function inCidr(n, base, bits) {
-  const size = 2 ** (32 - bits);
-  return n >= base && n < base + size;
-}
-
-function isPrivateIPv4(ip) {
-  const n = ipv4ToInt(ip);
-  if (n === null) return true; // 解析不出来按不安全处理
-  return (
-    inCidr(n, ipv4ToInt("0.0.0.0"), 8) || // 本网络
-    inCidr(n, ipv4ToInt("10.0.0.0"), 8) ||
-    inCidr(n, ipv4ToInt("100.64.0.0"), 10) || // CGNAT
-    inCidr(n, ipv4ToInt("127.0.0.0"), 8) ||
-    inCidr(n, ipv4ToInt("169.254.0.0"), 16) || // 链路本地（云元数据）
-    inCidr(n, ipv4ToInt("172.16.0.0"), 12) ||
-    inCidr(n, ipv4ToInt("192.0.0.0"), 24) ||
-    inCidr(n, ipv4ToInt("192.0.2.0"), 24) ||
-    inCidr(n, ipv4ToInt("192.168.0.0"), 16) ||
-    inCidr(n, ipv4ToInt("198.18.0.0"), 15) ||
-    inCidr(n, ipv4ToInt("198.51.100.0"), 24) ||
-    inCidr(n, ipv4ToInt("203.0.113.0"), 24) ||
-    inCidr(n, ipv4ToInt("224.0.0.0"), 4) || // 组播
-    inCidr(n, ipv4ToInt("240.0.0.0"), 4) // 保留 + 广播
-  );
-}
-
-function isPrivateIPv6(ip) {
-  const addr = ip.toLowerCase().split("%")[0];
-  if (addr === "::1" || addr === "::") return true;
-  // IPv4-mapped：::ffff:127.0.0.1 与 ::ffff:7f00:1 两种写法
-  const mappedDotted = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mappedDotted) return isPrivateIPv4(mappedDotted[1]);
-  const mappedHex = addr.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (mappedHex) {
-    const hi = parseInt(mappedHex[1], 16);
-    const lo = parseInt(mappedHex[2], 16);
-    return isPrivateIPv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
-  }
-  if (/^f[cd][0-9a-f]{2}:/.test(addr)) return true; // fc00::/7 唯一本地
-  if (/^fe[89ab][0-9a-f]:/.test(addr)) return true; // fe80::/10 链路本地
-  if (/^ff[0-9a-f]{2}:/.test(addr)) return true; // ff00::/8 组播
-  return false;
-}
-
-async function resolvesToPrivateAddress(hostname) {
-  try {
-    const records = await lookup(hostname, { all: true, verbatim: true });
-    if (!records.length) return true;
-    return records.some((r) =>
-      r.family === 6 ? isPrivateIPv6(r.address) : isPrivateIPv4(r.address)
-    );
-  } catch (e) {
-    // 解析失败不拦：紧接着的 fetch 用同一个解析器，同样会失败，不存在绕过收益。
-    logger.warn(
-      `video-proxy 目标域名解析失败（交给 fetch 兜底）: host=${hostname} err=${e.code || e.message}`
-    );
-    return false;
-  }
-}
-
-async function isUnsafeTarget(hostname) {
-  const host = String(hostname || "")
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
-  if (!host) return true;
-  if (
-    host === "localhost" ||
-    BLOCKED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))
-  ) {
-    return true;
-  }
-  const family = isIP(host);
-  if (family === 4) return isPrivateIPv4(host);
-  if (family === 6) return isPrivateIPv6(host);
-  return resolvesToPrivateAddress(host);
-}
-
 export async function GET(request) {
   // IP 黑名单：视频代理返回二进制流，无法套用解析接口的 JSON 蜜罐，
   // 此处对黑名单 IP 保持 403（视频代理只是前端加载资源的通道，不承载解析宣传）。
@@ -194,7 +95,7 @@ export async function GET(request) {
     return new Response("Only http(s) allowed", { status: 400 });
   }
   // 只允许代理公网地址，避免被当作内网探测/元数据读取的跳板
-  if (await isUnsafeTarget(target.hostname)) {
+  if (await isUnsafeTarget(target.hostname, "video-proxy")) {
     logger.warn(
       `video-proxy 拒绝内网/非法目标: host=${target.hostname} ip=${clientIP}`
     );
@@ -388,7 +289,7 @@ export async function GET(request) {
       finalHost = "";
     }
     if (finalHost && finalHost !== target.hostname) {
-      if (await isUnsafeTarget(finalHost)) {
+      if (await isUnsafeTarget(finalHost, "video-proxy")) {
         upstream.body?.cancel().catch(() => {});
         logger.warn(
           `video-proxy 拒绝重定向到内网目标: from=${target.hostname} to=${finalHost}`
